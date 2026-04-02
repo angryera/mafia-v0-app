@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  /* Chain-aware accent color utilities */
+  .text-chain-accent {
+    color: rgb(var(--chain-accent));
+  }
+  .bg-chain-accent {
+    background-color: rgb(var(--chain-accent));
+  }
+  .bg-chain-accent\/5 {
+    background-color: rgb(var(--chain-accent) / 0.05);
+  }
+  .bg-chain-accent\/10 {
+    background-color: rgb(var(--chain-accent) / 0.1);
+  }
+  .bg-chain-accent\/20 {
+    background-color: rgb(var(--chain-accent) / 0.2);
+  }
+  .border-chain-accent\/20 {
+    border-color: rgb(var(--chain-accent) / 0.2);
+  }
+  .border-chain-accent\/30 {
+    border-color: rgb(var(--chain-accent) / 0.3);
+  }
+  .text-chain-accent\/70 {
+    color: rgb(var(--chain-accent) / 0.7);
+  }
+  .text-chain-accent\/80 {
+    color: rgb(var(--chain-accent) / 0.8);
+  }
+}
+
+@layer base {
+  :root {
+    --background: 220 20% 4%;
+    --foreground: 45 100% 96%;
+    --card: 220 18% 7%;
+    --card-foreground: 45 100% 96%;
+    --popover: 220 18% 7%;
+    --popover-foreground: 45 100% 96%;
+    --primary: 43 96% 56%;
+    --primary-foreground: 220 20% 4%;
+    --secondary: 220 14% 12%;
+    --secondary-foreground: 45 20% 80%;
+    --muted: 220 14% 12%;
+    --muted-foreground: 220 10% 50%;
+    --accent: 43 96% 56%;
+    --accent-foreground: 220 20% 4%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 14% 16%;
+    --input: 220 14% 16%;
+    --ring: 43 96% 56%;
+    --chart-1: 43 96% 56%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Slim dark scrollbar for sidebar */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(220 14% 20%) transparent;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: hsl(220 14% 20%);
+  border-radius: 9999px;
+}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: hsl(220 14% 28%);
+}
+
+/* Chain-specific accent color: custom property for amber/pink based on chain */
+:root {
+  --chain-accent: 245 196 64;   /* amber-400 rgb */
+  --chain-accent-dim: 245 196 64;
+}
+
+[data-chain="pulsechain"] {
+  --primary: 330 90% 60%;
+  --primary-foreground: 220 20% 4%;
+  --accent: 330 90% 60%;
+  --accent-foreground: 220 20% 4%;
+  --ring: 330 90% 60%;
+  --chart-1: 330 90% 60%;
+  --chain-accent: 236 72 153;   /* pink-500 rgb */
+  --chain-accent-dim: 236 72 153;
+}
+
+/* RainbowKit overrides for dark theme */
+[data-rk] {
+  --rk-colors-accentColor: hsl(43, 96%, 56%) !important;
+  --rk-colors-accentColorForeground: hsl(220, 20%, 4%) !important;
+}
+
+[data-chain="pulsechain"] [data-rk] {
+  --rk-colors-accentColor: hsl(330, 90%, 60%) !important;
+  --rk-colors-accentColorForeground: hsl(220, 20%, 4%) !important;
+}
