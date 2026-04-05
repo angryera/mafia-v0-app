@@ -357,6 +357,14 @@ const TAB_CONFIG: Record<
     contractAddress: "",
     contractShort: "",
   },
+  "create-profile": {
+    title: "Create Profile",
+    description:
+      "Create your player profile to start playing. Choose a unique name, select your gender and country, and optionally enter a referral address.",
+    codeSample: "createProfile(name, swapTokenId, referrer, gender, country, imageId)",
+    contractAddress: "0xa08D627E071cB4b53C6D0611d77dbCB659902AA4",
+    contractShort: "0xa08D...2AA4",
+  },
 };
 
 export { TAB_CONFIG };

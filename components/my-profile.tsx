@@ -86,13 +86,14 @@ export function MyProfile() {
   });
 
   const rankLevel = rankRaw !== undefined ? Number(rankRaw) : null;
-  const rankXp = rankXpRaw !== undefined ? Math.floor(Number(rankXpRaw) / 100) : null;
+  const rankXp = rankXpRaw !== undefined ? Number(rankXpRaw) : null;
 
   // Calculate rank progress percentage
   const rankProgress = (() => {
     if (rankLevel === null || rankXp === null) return null;
-    const currentLevelXp = RANK_XP[rankLevel] ?? 0;
-    const nextLevelXp = RANK_XP[rankLevel + 1];
+    const currentLevelXp = RANK_XP[rankLevel-1] ?? 0;
+    const nextLevelXp = RANK_XP[rankLevel];
+
     // Max rank — show 100%
     if (nextLevelXp === undefined) return 100;
     const range = nextLevelXp - currentLevelXp;

@@ -85,7 +85,7 @@ interface SlotInfo {
   lastOperatingTimestamp: number;
   inventoryItemId: number;
   familyId: number;
-  stakingAmount: number;
+  stakingAmount: number | string;
   yieldPayout: number;
   owner: string;
 }

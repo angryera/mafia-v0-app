@@ -95,14 +95,14 @@ export function MarketplaceInfo() {
           Contract Functions
         </p>
         <div className="space-y-2.5">
-          {/* purchaseItem */}
+          {/* purchaseFixedItem */}
           <div className="rounded-lg bg-background/50 px-3 py-2.5">
             <p className="text-xs text-muted-foreground mb-0.5">Buy Fixed Price</p>
             <p className="font-mono text-sm text-primary break-all">
-              purchaseItem(uint256,uint256,uint256)
+              purchaseFixedItem(uint256,uint256) payable
             </p>
             <p className="mt-1 text-[10px] text-muted-foreground">
-              Purchase a fixed-price listing instantly
+              Purchase a fixed-price listing; price is read from the listing (send native value when paying in BNB/PLS)
             </p>
           </div>
 

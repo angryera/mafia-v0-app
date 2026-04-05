@@ -48,7 +48,11 @@ export type ChainConfig = {
     bodyguardTraining: `0x${string}`;
     equipment: `0x${string}`;
     mafia: `0x${string}`;
+    /** ERC1155 OG Crate (keys); balanceOf(account, 0), setApprovalForAll for map. */
+    ogCrate: `0x${string}`;
     map: `0x${string}`;
+    /** MafiaFamily — `getPlayerInfo(player)` for familyId / level / isDead. */
+    mafiaFamily: `0x${string}`;
     ocLobby: `0x${string}`;
     ocJoin: `0x${string}`;
     ocExecution: `0x${string}`;
@@ -106,8 +110,10 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
       rankStake: getAddress("0xDFfCf5D284D2bA80376BAba90F37494D60fe8820"),
       bodyguardTraining: getAddress("0xb7D6c0B1a176711C98cceF191Eb5528F2e703fd5"),
       equipment: getAddress("0xa2AA522B4CCBc95Dec0aFCa2B0c645f9C126cD24"),
-      mafia: getAddress("0x0000000000000000000000000000000000000000"), // Read from equipment contract
-      map: getAddress("0x0000000000000000000000000000000000000000"), // Read from equipment contract
+      mafia: getAddress("0x3cb3F4f43D4Be61AA92BB4EEFfe7142A13bf4111"),
+      ogCrate: getAddress("0x16B11C057cA6d354E81D58B375CB118f7930807c"),
+      map: getAddress("0x1c88060e4509c59b4064A7a9818f64AeC41ef19E"),
+      mafiaFamily: getAddress("0x1bC581fe134BdC7432eF8ba75BCeEd242F90BcD2"),
       ocLobby: getAddress("0x281C0Db67c96ee7Ad32AF25817cB3964Fc7E79cD"),
       ocJoin: getAddress("0x00D0933595F87eD8b50638796FCf5b22de3795a2"),
       ocExecution: getAddress("0xC813f8EA6668eAb88e157d00F00aeBCb2b5F56C0"),
@@ -163,8 +169,10 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
       rankStake: getAddress("0xcecf804016bd0cfDEE8F506EA273c6E5D74f6699"),
       bodyguardTraining: getAddress("0x25d25524044A74eFe1Ff279abfe9708c69f5cbcE"),
       equipment: getAddress("0x37edFc50908e194f05912EA0BC812Cd2f1Eb5bE4"),
-      mafia: getAddress("0x0000000000000000000000000000000000000000"), // Read from equipment contract
-      map: getAddress("0x0000000000000000000000000000000000000000"), // Read from equipment contract
+      mafia: getAddress("0xa27aDe5806Ded801b93499C6fA23cc8dC9AC55EA"),
+      ogCrate: getAddress("0x3325E42aA71188939216b669E8d431718e5bd790"),
+      map: getAddress("0xE571Aa670EDeEBd88887eb5687576199652A714F"),
+      mafiaFamily: getAddress("0x3363cf983ae23AF2D95a81bA4A39C36084f8BEc4"),
       ocLobby: getAddress("0xE9680c72817477f9e51596bD39821C670790a66E"),
       ocJoin: getAddress("0xE79495F0982FCC3e884E5bCC2960D6d48439fCB6"),
       ocExecution: getAddress("0x7783e026416cF3B43046f3C2D45eFFa582bA2e91"),
@@ -286,11 +294,11 @@ export const INGAME_CURRENCY_ADDRESS =
 export const INGAME_CURRENCY_ABI: Abi = [
   {
     type: "function",
-  name: "approveInGameCurrency",
-  inputs: [
-    { name: "to", type: "address", internalType: "address" },
-    { name: "amount", type: "uint256", internalType: "uint256" },
-  ],
+    name: "approveInGameCurrency",
+    inputs: [
+      { name: "to", type: "address", internalType: "address" },
+      { name: "amount", type: "uint256", internalType: "uint256" },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
@@ -301,6 +309,16 @@ export const INGAME_CURRENCY_ABI: Abi = [
       { name: "user", type: "address", internalType: "address" },
       { name: "message", type: "string", internalType: "string" },
       { name: "signature", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "allowance",
+    inputs: [
+      { name: "owner", type: "address", internalType: "address" },
+      { name: "spender", type: "address", internalType: "address" },
     ],
     outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
     stateMutability: "view",
@@ -456,50 +474,82 @@ export enum ItemCategory {
 
 export const CRATE_ITEM_CATEGORIES: CrateItemCategory[] = [
   // --- Crate rewards (0-17) ---
-  { id: ItemCategory.CASH, name: "Cash", currency: "$",
-    values: [50000, 150000, 250000, 350000, 500000, 1000000, 2500000, 4000000, 5000000, 10000000] },
-  { id: ItemCategory.BULLET, name: "Bullet",
-    values: [250, 500, 750, 1500, 3500, 5000, 7000, 15000, 20000, 30000] },
-  { id: ItemCategory.HEALTH, name: "Health",
-    values: [50, 100, 150, 200, 250, 300, 350, 500, 750, 1000] },
-  { id: ItemCategory.SHOPITEM, name: "Shop Item",
+  {
+    id: ItemCategory.CASH, name: "Cash", currency: "$",
+    values: [50000, 150000, 250000, 350000, 500000, 1000000, 2500000, 4000000, 5000000, 10000000]
+  },
+  {
+    id: ItemCategory.BULLET, name: "Bullet",
+    values: [250, 500, 750, 1500, 3500, 5000, 7000, 15000, 20000, 30000]
+  },
+  {
+    id: ItemCategory.HEALTH, name: "Health",
+    values: [50, 100, 150, 200, 250, 300, 350, 500, 750, 1000]
+  },
+  {
+    id: ItemCategory.SHOPITEM, name: "Shop Item",
     values: ["Hand Gun Colt", "Remington", "Thompson", "Molotov cocktail", "Grenade",
-             "Motorcycle", "Bullet proof vest", "Bullet proof suit", "Armored car", "Douglas M-3"] },
-  { id: ItemCategory.BUSINESS, name: "Business",
+      "Motorcycle", "Bullet proof vest", "Bullet proof suit", "Armored car", "Douglas M-3"]
+  },
+  {
+    id: ItemCategory.BUSINESS, name: "Business",
     values: ["Car crusher", "Gunstore", "Bank", "Hospital", "Detective Agency",
-             "Booze warehouse", "Narcotics warehouse", "Slotmachine", "Roulette", "Bullet factory"] },
-  { id: ItemCategory.BODYGUARD, name: "Bodyguard",
+      "Booze warehouse", "Narcotics warehouse", "Slotmachine", "Roulette", "Bullet factory"]
+  },
+  {
+    id: ItemCategory.BODYGUARD, name: "Bodyguard",
     values: ["Lvl 3 - Johnny", "Lvl 3 - Jim", "Lvl 3 - Sam", "Lvl 5 - Johnny",
-             "Lvl 6 - Jim", "Lvl 6 - Sam", "Lvl 7 - Frank", "Lvl 8 - Johnny",
-             "Lvl 10 - Sam", "Lvl 10 - Frank"] },
-  { id: ItemCategory.CREDIT, name: "Helper Credits",
-    values: [100, 250, 500, 1000, 1500, 2000, 2500, 3000, 3500, 5000] },
-  { id: ItemCategory.CAR, name: "Car", currency: "$",
-    values: [5000, 15000, 35000, 75000, 100000, 150000, 250000, 350000, 450000, 500000] },
-  { id: ItemCategory.KEY, name: "Wrapped NFTs",
-    values: ["Game Key", "Game OG"] },
-  { id: ItemCategory.KEYITEMS, name: "Keys",
+      "Lvl 6 - Jim", "Lvl 6 - Sam", "Lvl 7 - Frank", "Lvl 8 - Johnny",
+      "Lvl 10 - Sam", "Lvl 10 - Frank"]
+  },
+  {
+    id: ItemCategory.CREDIT, name: "Helper Credits",
+    values: [100, 250, 500, 1000, 1500, 2000, 2500, 3000, 3500, 5000]
+  },
+  {
+    id: ItemCategory.CAR, name: "Car", currency: "$",
+    values: [5000, 15000, 35000, 75000, 100000, 150000, 250000, 350000, 450000, 500000]
+  },
+  {
+    id: ItemCategory.KEY, name: "Wrapped NFTs",
+    values: ["Game Key", "Game OG"]
+  },
+  {
+    id: ItemCategory.KEYITEMS, name: "Keys",
     values: ["1 Game Key", "3 Game Keys", "5 Game Keys", "7 Game Keys", "10 Game Keys",
-             "15 Game Keys", "25 Game Keys", "50 Game Keys", "75 Game Keys", "100 Game Keys"] },
-  { id: ItemCategory.MAFIA, name: "MAFIA",
-    values: [10000, 15000, 20000, 30000, 50000, 100000, 250000, 500000, 1000000, 5000000] },
-  { id: ItemCategory.OGNFT, name: "OG NFTs",
+      "15 Game Keys", "25 Game Keys", "50 Game Keys", "75 Game Keys", "100 Game Keys"]
+  },
+  {
+    id: ItemCategory.MAFIA, name: "MAFIA",
+    values: [10000, 15000, 20000, 30000, 50000, 100000, 250000, 500000, 1000000, 5000000]
+  },
+  {
+    id: ItemCategory.OGNFT, name: "OG NFTs",
     values: ["1 OG NFT", "1 OG NFT", "1 OG NFT", "1 OG NFT", "1 OG NFT",
-             "1 OG NFT", "3 OG NFTs", "3 OG NFTs", "7 OG NFTs", "10 OG NFTs"] },
-  { id: ItemCategory.NOTICREDIT, name: "Noti Credits",
+      "1 OG NFT", "3 OG NFTs", "3 OG NFTs", "7 OG NFTs", "10 OG NFTs"]
+  },
+  {
+    id: ItemCategory.NOTICREDIT, name: "Noti Credits",
     values: ["1 Noti Credit", "1 Noti Credit", "1 Noti Credit", "1 Noti Credit",
-             "1 Noti Credit", "1 Noti Credit", "3 Noti Credits", "3 Noti Credits",
-             "7 Noti Credits", "10 Noti Credits"] },
+      "1 Noti Credit", "1 Noti Credit", "3 Noti Credits", "3 Noti Credits",
+      "7 Noti Credits", "10 Noti Credits"]
+  },
   { id: ItemCategory.LANDSLOT, name: "Land Slot", values: ["Land Slot"] },
-  { id: ItemCategory.BUSINESS_EXTRA, name: "Business",
+  {
+    id: ItemCategory.BUSINESS_EXTRA, name: "Business",
     values: ["Jackpot hall", "Lottery hall", "Bank", "Hospital", "Detective Agency",
-             "Booze warehouse", "Narcotics warehouse", "Slotmachine", "Roulette", "Bullet factory"] },
+      "Booze warehouse", "Narcotics warehouse", "Slotmachine", "Roulette", "Bullet factory"]
+  },
   { id: ItemCategory.CAR_ITEM, name: "Car", values: ["Car"] },
-  { id: ItemCategory.FBI_ASSETS, name: "FBI Assets",
-    values: ["FBI Training Pass", "Detective Badge", "Special Agent badge", "FBI Field office"] },
-  { id: ItemCategory.PERK_BOX, name: "Perk Box",
+  {
+    id: ItemCategory.FBI_ASSETS, name: "FBI Assets",
+    values: ["FBI Training Pass", "Detective Badge", "Special Agent badge", "FBI Field office"]
+  },
+  {
+    id: ItemCategory.PERK_BOX, name: "Perk Box",
     values: ["1 Perk Box", "3 Perk Boxes", "5 Perk Boxes", "7 Perk Boxes", "10 Perk Boxes",
-             "15 Perk Boxes", "25 Perk Boxes", "50 Perk Boxes", "75 Perk Boxes", "100 Perk Boxes"] },
+      "15 Perk Boxes", "25 Perk Boxes", "50 Perk Boxes", "75 Perk Boxes", "100 Perk Boxes"]
+  },
 
   // --- Perk Box rewards: success boosts (18-23) ---
   { id: ItemCategory.CRIME_SUCCESS, name: "Crime Success Boost", values: [] },
@@ -538,23 +588,35 @@ export const CRATE_ITEM_CATEGORIES: CrateItemCategory[] = [
   { id: ItemCategory.CREDIT_SPEND_BOOST, name: "Credit Spend Boost", values: [] },
 
   // --- Bodyguards individual (48-51) ---
-  { id: ItemCategory.BODYGUARD_JOHNNY, name: "Bodyguard Johnny",
-    values: ["Lvl 1", "Lvl 2", "Lvl 3", "Lvl 4", "Lvl 5", "Lvl 6", "Lvl 7", "Lvl 8", "Lvl 9", "Lvl 10"] },
-  { id: ItemCategory.BODYGUARD_JIM, name: "Bodyguard Jim",
-    values: ["Lvl 1", "Lvl 2", "Lvl 3", "Lvl 4", "Lvl 5", "Lvl 6", "Lvl 7", "Lvl 8", "Lvl 9", "Lvl 10"] },
-  { id: ItemCategory.BODYGUARD_SAM, name: "Bodyguard Sam",
-    values: ["Lvl 1", "Lvl 2", "Lvl 3", "Lvl 4", "Lvl 5", "Lvl 6", "Lvl 7", "Lvl 8", "Lvl 9", "Lvl 10"] },
-  { id: ItemCategory.BODYGUARD_FRANK, name: "Bodyguard Frank",
-    values: ["Lvl 1", "Lvl 2", "Lvl 3", "Lvl 4", "Lvl 5", "Lvl 6", "Lvl 7", "Lvl 8", "Lvl 9", "Lvl 10"] },
+  {
+    id: ItemCategory.BODYGUARD_JOHNNY, name: "Bodyguard Johnny",
+    values: ["Lvl 1", "Lvl 2", "Lvl 3", "Lvl 4", "Lvl 5", "Lvl 6", "Lvl 7", "Lvl 8", "Lvl 9", "Lvl 10"]
+  },
+  {
+    id: ItemCategory.BODYGUARD_JIM, name: "Bodyguard Jim",
+    values: ["Lvl 1", "Lvl 2", "Lvl 3", "Lvl 4", "Lvl 5", "Lvl 6", "Lvl 7", "Lvl 8", "Lvl 9", "Lvl 10"]
+  },
+  {
+    id: ItemCategory.BODYGUARD_SAM, name: "Bodyguard Sam",
+    values: ["Lvl 1", "Lvl 2", "Lvl 3", "Lvl 4", "Lvl 5", "Lvl 6", "Lvl 7", "Lvl 8", "Lvl 9", "Lvl 10"]
+  },
+  {
+    id: ItemCategory.BODYGUARD_FRANK, name: "Bodyguard Frank",
+    values: ["Lvl 1", "Lvl 2", "Lvl 3", "Lvl 4", "Lvl 5", "Lvl 6", "Lvl 7", "Lvl 8", "Lvl 9", "Lvl 10"]
+  },
 
   // --- Misc (52-56) ---
-  { id: ItemCategory.SUBSCRIPTION_ITEM, name: "Subscription",
+  {
+    id: ItemCategory.SUBSCRIPTION_ITEM, name: "Subscription",
     values: ["1 Month Player+", "1 Month Unlimited", "1 Month Player+", "1 Month Unlimited",
-             "2 Month Player+", "2 Month Unlimited", "3 Month Player+", "3 Month Unlimited",
-             "6 Month Player+", "6 Month Unlimited"] },
-  { id: ItemCategory.GI_CREDIT, name: "GI Credit",
+      "2 Month Player+", "2 Month Unlimited", "3 Month Player+", "3 Month Unlimited",
+      "6 Month Player+", "6 Month Unlimited"]
+  },
+  {
+    id: ItemCategory.GI_CREDIT, name: "GI Credit",
     values: ["3 GI Credits", "4 GI Credits", "5 GI Credits", "7 GI Credits", "10 GI Credits",
-             "15 GI Credits", "25 GI Credits", "50 GI Credits", "75 GI Credits", "100 GI Credits"] },
+      "15 GI Credits", "25 GI Credits", "50 GI Credits", "75 GI Credits", "100 GI Credits"]
+  },
   { id: ItemCategory.MYSTERY_BOX, name: "Mystery Box", values: ["Mystery Box"] },
   { id: ItemCategory.BOOZE_PACK, name: "Booze Pack", values: [] },
   { id: ItemCategory.NARCS_PACK, name: "Narcs Pack", values: [] },
@@ -593,10 +655,10 @@ export const TRAVEL_TYPES: {
   cost: number;
   travelTime: number;
 }[] = [
-  { id: 0, label: "Train", icon: "train", cost: 250, travelTime: 240 * 60 },
-  { id: 1, label: "Car/Motorcycle", icon: "car", cost: 750, travelTime: 120 * 60 },
-  { id: 2, label: "Airplane", icon: "plane", cost: 1750, travelTime: 60 * 60 },
-];
+    { id: 0, label: "Train", icon: "train", cost: 250, travelTime: 240 * 60 },
+    { id: 1, label: "Car/Motorcycle", icon: "car", cost: 750, travelTime: 120 * 60 },
+    { id: 2, label: "Airplane", icon: "plane", cost: 1750, travelTime: 60 * 60 },
+  ];
 
 // City enum for reference
 export const City: Record<number, string> = {
@@ -661,7 +723,7 @@ export function getCityRegion(cityId: number): string {
 export const NICKCAR_CONTRACT_ADDRESS =
   "0x60b8e0dd9566b42f9caa5538350aa0d29988373c" as const;
 
-  export const NICKCAR_CONTRACT_ABI: Abi = [
+export const NICKCAR_CONTRACT_ABI: Abi = [
   {
     type: "function",
     name: "nickCar",
@@ -875,15 +937,15 @@ export const HELPER_BOTS: {
   minAttempts: number;
   maxAttempts: number;
 }[] = [
-  { id: 0, label: "Crime Bot", description: "A stealthy robot executing street crimes with precision", startFn: "startCrimeBot", endFn: "endCrimeBot", infoFn: "userCrimeBotInfo", endType: "none", credits: 1, rank: "Low", minAttempts: 10, maxAttempts: 5000 },
-  { id: 1, label: "Car Bot", description: "Bypasses security systems to steal cars with precision", startFn: "startCarBot", endFn: "endCarBot", infoFn: "userCarBotInfo", endType: "signed", credits: 4, rank: "Medium", minAttempts: 9, maxAttempts: 1249 },
-  { id: 2, label: "Shooting Practice Bot", description: "Hones aiming skills to improve accuracy and reaction time", startFn: "startKSBot", endFn: "endKSBot", infoFn: "userKSBotInfo", endType: "none", credits: 8, rank: "Medium", minAttempts: 42, maxAttempts: 625 },
-  { id: 3, label: "Booze Smuggling Bot", description: "Smuggles booze past authorities through stealth", startFn: "startBoozeBot", endFn: "endBoozeBot", infoFn: "userBoozeBotInfo", endType: "signed", credits: 7, rank: "High", minAttempts: 29, maxAttempts: 714 },
-  { id: 4, label: "Narcotics Smuggling Bot", description: "Smuggles narcotics past authorities through stealth", startFn: "startNarcsBot", endFn: "endNarcsBot", infoFn: "userNarcsBotInfo", endType: "signed", credits: 10, rank: "High", minAttempts: 35, maxAttempts: 500 },
-  { id: 5, label: "Bullet Dealer Bot", description: "Compares prices and assists in purchasing bullets", startFn: "startBulletBot", endFn: "endBulletBot", infoFn: "userBulletBotInfo", endType: "bulletSigned", credits: 12, rank: "Medium", minAttempts: 4, maxAttempts: 416 },
-  { id: 6, label: "Race XP Bot", description: "Assists in earning race XP efficiently", startFn: "startRacingBot", endFn: "endRacingBot", infoFn: "userRacingBotInfo", endType: "none", credits: 5, rank: "Medium", minAttempts: 2, maxAttempts: 20 },
-  { id: 7, label: "Bust Out Bot", description: "Assists in earning bust out XP efficiently", startFn: "startBustOutBot", endFn: "endBustOutBot", infoFn: "userBustOutBotInfo", endType: "none", credits: 2, rank: "Medium", minAttempts: 2, maxAttempts: 100 },
-];
+    { id: 0, label: "Crime Bot", description: "A stealthy robot executing street crimes with precision", startFn: "startCrimeBot", endFn: "endCrimeBot", infoFn: "userCrimeBotInfo", endType: "none", credits: 1, rank: "Low", minAttempts: 10, maxAttempts: 5000 },
+    { id: 1, label: "Car Bot", description: "Bypasses security systems to steal cars with precision", startFn: "startCarBot", endFn: "endCarBot", infoFn: "userCarBotInfo", endType: "signed", credits: 4, rank: "Medium", minAttempts: 9, maxAttempts: 1249 },
+    { id: 2, label: "Shooting Practice Bot", description: "Hones aiming skills to improve accuracy and reaction time", startFn: "startKSBot", endFn: "endKSBot", infoFn: "userKSBotInfo", endType: "none", credits: 8, rank: "Medium", minAttempts: 42, maxAttempts: 625 },
+    { id: 3, label: "Booze Smuggling Bot", description: "Smuggles booze past authorities through stealth", startFn: "startBoozeBot", endFn: "endBoozeBot", infoFn: "userBoozeBotInfo", endType: "signed", credits: 7, rank: "High", minAttempts: 29, maxAttempts: 714 },
+    { id: 4, label: "Narcotics Smuggling Bot", description: "Smuggles narcotics past authorities through stealth", startFn: "startNarcsBot", endFn: "endNarcsBot", infoFn: "userNarcsBotInfo", endType: "signed", credits: 10, rank: "High", minAttempts: 35, maxAttempts: 500 },
+    { id: 5, label: "Bullet Dealer Bot", description: "Compares prices and assists in purchasing bullets", startFn: "startBulletBot", endFn: "endBulletBot", infoFn: "userBulletBotInfo", endType: "bulletSigned", credits: 12, rank: "Medium", minAttempts: 4, maxAttempts: 416 },
+    { id: 6, label: "Race XP Bot", description: "Assists in earning race XP efficiently", startFn: "startRacingBot", endFn: "endRacingBot", infoFn: "userRacingBotInfo", endType: "none", credits: 5, rank: "Medium", minAttempts: 2, maxAttempts: 20 },
+    { id: 7, label: "Bust Out Bot", description: "Assists in earning bust out XP efficiently", startFn: "startBustOutBot", endFn: "endBustOutBot", infoFn: "userBustOutBotInfo", endType: "none", credits: 2, rank: "Medium", minAttempts: 2, maxAttempts: 100 },
+  ];
 
 // ========== WBNB Token (for approvals) ==========
 export const WBNB_ADDRESS =
@@ -1126,6 +1188,27 @@ export const USER_PROFILE_CONTRACT_ABI: Abi = [
         ],
       },
     ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "createProfile",
+    inputs: [
+      { name: "name", type: "string", internalType: "string" },
+      { name: "swapTokenId", type: "uint256", internalType: "uint256" },
+      { name: "referrer", type: "address", internalType: "address" },
+      { name: "gender", type: "uint8", internalType: "uint8" },
+      { name: "country", type: "string", internalType: "string" },
+      { name: "imageId", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "isTakenName",
+    inputs: [{ name: "name", type: "string", internalType: "string" }],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
     stateMutability: "view",
   },
 ] as const;
@@ -1969,35 +2052,47 @@ export const ROULETTE_CONTRACT_ABI: Abi = [
 // betType 0 = Red/Black, 1 = Column (R1/R2/R3), 2 = Dozen (S1/S2/S3),
 // 3 = Half (H1/H2), 4 = Even/Odd, 5 = Straight number
 export const ROULETTE_BET_TYPES = [
-  { id: 0, label: "Red / Black", description: "18 numbers", payout: "1:1",
+  {
+    id: 0, label: "Red / Black", description: "18 numbers", payout: "1:1",
     options: [
       { value: 0, label: "Black" },
       { value: 1, label: "Red" },
-    ] },
-  { id: 1, label: "Column", description: "12 numbers (column)", payout: "2:1",
+    ]
+  },
+  {
+    id: 1, label: "Column", description: "12 numbers (column)", payout: "2:1",
     options: [
       { value: 0, label: "1st Column" },
       { value: 1, label: "2nd Column" },
       { value: 2, label: "3rd Column" },
-    ] },
-  { id: 2, label: "Dozen", description: "12 numbers (section)", payout: "2:1",
+    ]
+  },
+  {
+    id: 2, label: "Dozen", description: "12 numbers (section)", payout: "2:1",
     options: [
       { value: 0, label: "1st Dozen (1-12)" },
       { value: 1, label: "2nd Dozen (13-24)" },
       { value: 2, label: "3rd Dozen (25-36)" },
-    ] },
-  { id: 3, label: "Half", description: "18 numbers (high / low)", payout: "1:1",
+    ]
+  },
+  {
+    id: 3, label: "Half", description: "18 numbers (high / low)", payout: "1:1",
     options: [
       { value: 0, label: "Low (1-18)" },
       { value: 1, label: "High (19-36)" },
-    ] },
-  { id: 4, label: "Even / Odd", description: "18 numbers", payout: "1:1",
+    ]
+  },
+  {
+    id: 4, label: "Even / Odd", description: "18 numbers", payout: "1:1",
     options: [
       { value: 0, label: "Even" },
       { value: 1, label: "Odd" },
-    ] },
-  { id: 5, label: "Straight", description: "Single number (0-37)", payout: "35:1",
-    options: null },
+    ]
+  },
+  {
+    id: 5, label: "Straight", description: "Single number (0-37)", payout: "35:1",
+    options: null
+  },
 ] as const;
 
 // ========== Slot Machine Contract ==========
@@ -4221,11 +4316,10 @@ export const INVENTORY_MARKETPLACE_ABI: Abi = [
   },
   {
     type: "function",
-    name: "purchaseItem",
+    name: "purchaseFixedItem",
     inputs: [
       { name: "listingId", type: "uint256", internalType: "uint256" },
       { name: "swapTokenId", type: "uint256", internalType: "uint256" },
-      { name: "price", type: "uint256", internalType: "uint256" },
     ],
     outputs: [],
     stateMutability: "payable",
@@ -4460,6 +4554,82 @@ export const MARKETPLACE_ITEM_NAMES: Record<number, Record<number, string>> = {
     0: "1 Perk Box", 1: "3 Perk Boxes", 2: "5 Perk Boxes", 3: "7 Perk Boxes", 4: "10 Perk Boxes",
     5: "15 Perk Boxes", 6: "25 Perk Boxes", 7: "50 Perk Boxes", 8: "75 Perk Boxes", 9: "100 Perk Boxes",
   },
+
+  18: {
+    0: "Crime Success +100% for 6 hours", 1: "Crime Success +100% for 12 hours", 2: "Crime Success +100% for 24 hours", 3: "Crime Success +100% for 48 hours", 4: "Crime Success +100% for 72 hours", 5: "Crime Success +100% for 96 hours",
+    6: "Crime Success +75% for 6 hours", 7: "Crime Success +75% for 12 hours", 8: "Crime Success +75% for 24 hours", 9: "Crime Success +75% for 48 hours", 10: "Crime Success +75% for 72 hours", 11: "Crime Success +75% for 96 hours",
+    12: "Crime Success +50% for 6 hours", 13: "Crime Success +50% for 12 hours", 14: "Crime Success +50% for 24 hours", 15: "Crime Success +50% for 48 hours", 16: "Crime Success +50% for 72 hours", 17: "Crime Success +50% for 96 hours",
+  },
+  19: {
+    0: "Nick a car Success +100% for 6 hours", 1: "Nick a car Success +100% for 12 hours", 2: "Nick a car Success +100% for 24 hours", 3: "Nick a car Success +100% for 48 hours", 4: "Nick a car Success +100% for 72 hours", 5: "Nick a car Success +100% for 96 hours",
+    6: "Nick a car Success +75% for 6 hours", 7: "Nick a car Success +75% for 12 hours", 8: "Nick a car Success +75% for 24 hours", 9: "Nick a car Success +75% for 48 hours", 10: "Nick a car Success +75% for 72 hours", 11: "Nick a car Success +75% for 96 hours",
+    12: "Nick a car Success +50% for 6 hours", 13: "Nick a car Success +50% for 12 hours", 14: "Nick a car Success +50% for 24 hours", 15: "Nick a car Success +50% for 48 hours", 16: "Nick a car Success +50% for 72 hours", 17: "Nick a car Success +50% for 96 hours",
+  },
+  20: {
+    0: "Booze Success +100% for 6 hours", 1: "Booze Success +100% for 12 hours", 2: "Booze Success +100% for 24 hours", 3: "Booze Success +100% for 48 hours", 4: "Booze Success +100% for 72 hours", 5: "Booze Success +100% for 96 hours",
+    6: "Booze Success +75% for 6 hours", 7: "Booze Success +75% for 12 hours", 8: "Booze Success +75% for 24 hours", 9: "Booze Success +75% for 48 hours", 10: "Booze Success +75% for 72 hours", 11: "Booze Success +75% for 96 hours",
+    12: "Booze Success +50% for 6 hours", 13: "Booze Success +50% for 12 hours", 14: "Booze Success +50% for 24 hours", 15: "Booze Success +50% for 48 hours", 16: "Booze Success +50% for 72 hours", 17: "Booze Success +50% for 96 hours",
+  },
+  21: {
+    0: "Narcotics Success +100% for 6 hours", 1: "Narcotics Success +100% for 12 hours", 2: "Narcotics Success +100% for 24 hours", 3: "Narcotics Success +100% for 48 hours", 4: "Narcotics Success +100% for 72 hours", 5: "Narcotics Success +100% for 96 hours",
+    6: "Narcotics Success +75% for 6 hours", 7: "Narcotics Success +75% for 12 hours", 8: "Narcotics Success +75% for 24 hours", 9: "Narcotics Success +75% for 48 hours", 10: "Narcotics Success +75% for 72 hours", 11: "Narcotics Success +75% for 96 hours",
+    12: "Narcotics Success +50% for 6 hours", 13: "Narcotics Success +50% for 12 hours", 14: "Narcotics Success +50% for 24 hours", 15: "Narcotics Success +50% for 48 hours", 16: "Narcotics Success +50% for 72 hours", 17: "Narcotics Success +50% for 96 hours",
+  },
+  22: {
+    0: "Kill skill Success +100% for 6 hours", 1: "Kill skill Success +100% for 12 hours", 2: "Kill skill Success +100% for 24 hours", 3: "Kill skill Success +100% for 48 hours", 4: "Kill skill Success +100% for 72 hours", 5: "Kill skill Success +100% for 96 hours",
+    6: "Kill skill Success +75% for 6 hours", 7: "Kill skill Success +75% for 12 hours", 8: "Kill skill Success +75% for 24 hours", 9: "Kill skill Success +75% for 48 hours", 10: "Kill skill Success +75% for 72 hours", 11: "Kill skill Success +75% for 96 hours",
+    12: "Kill skill Success +50% for 6 hours", 13: "Kill skill Success +50% for 12 hours", 14: "Kill skill Success +50% for 24 hours", 15: "Kill skill Success +50% for 48 hours", 16: "Kill skill Success +50% for 72 hours", 17: "Kill skill Success +50% for 96 hours",
+  },
+  23: {
+    0: "Bust out Success +100% for 6 hours", 1: "Bust out Success +100% for 12 hours", 2: "Bust out Success +100% for 24 hours", 3: "Bust out Success +100% for 48 hours", 4: "Bust out Success +100% for 72 hours", 5: "Bust out Success +100% for 96 hours",
+    6: "Bust out Success +75% for 6 hours", 7: "Bust out Success +75% for 12 hours", 8: "Bust out Success +75% for 24 hours", 9: "Bust out Success +75% for 48 hours", 10: "Bust out Success +75% for 72 hours", 11: "Bust out Success +75% for 96 hours",
+    12: "Bust out Success +50% for 6 hours", 13: "Bust out Success +50% for 12 hours", 14: "Bust out Success +50% for 24 hours", 15: "Bust out Success +50% for 48 hours", 16: "Bust out Success +50% for 72 hours", 17: "Bust out Success +50% for 96 hours",
+  },
+  24: {
+    0: "Crime Cooldown -90% for 6 hours", 1: "Crime Cooldown -90% for 12 hours", 2: "Crime Cooldown -90% for 24 hours", 3: "Crime Cooldown -90% for 48 hours", 4: "Crime Cooldown -90% for 72 hours", 5: "Crime Cooldown -90% for 96 hours",
+    6: "Crime Cooldown -75% for 6 hours", 7: "Crime Cooldown -75% for 12 hours", 8: "Crime Cooldown -75% for 24 hours", 9: "Crime Cooldown -75% for 48 hours", 10: "Crime Cooldown -75% for 72 hours", 11: "Crime Cooldown -75% for 96 hours",
+    12: "Crime Cooldown -50% for 6 hours", 13: "Crime Cooldown -50% for 12 hours", 14: "Crime Cooldown -50% for 24 hours", 15: "Crime Cooldown -50% for 48 hours", 16: "Crime Cooldown -50% for 72 hours", 17: "Crime Cooldown -50% for 96 hours",
+  },
+  25: {
+    0: "Nick a car Cooldown -90% for 6 hours", 1: "Nick a car Cooldown -90% for 12 hours", 2: "Nick a car Cooldown -90% for 24 hours", 3: "Nick a car Cooldown -90% for 48 hours", 4: "Nick a car Cooldown -90% for 72 hours", 5: "Nick a car Cooldown -90% for 96 hours",
+    6: "Nick a car Cooldown -75% for 6 hours", 7: "Nick a car Cooldown -75% for 12 hours", 8: "Nick a car Cooldown -75% for 24 hours", 9: "Nick a car Cooldown -75% for 48 hours", 10: "Nick a car Cooldown -75% for 72 hours", 11: "Nick a car Cooldown -75% for 96 hours",
+    12: "Nick a car Cooldown -50% for 6 hours", 13: "Nick a car Cooldown -50% for 12 hours", 14: "Nick a car Cooldown -50% for 24 hours", 15: "Nick a car Cooldown -50% for 48 hours", 16: "Nick a car Cooldown -50% for 72 hours", 17: "Nick a car Cooldown -50% for 96 hours",
+  },
+  26: {
+    0: "Booze Cooldown -90% for 6 hours", 1: "Booze Cooldown -90% for 12 hours", 2: "Booze Cooldown -90% for 24 hours", 3: "Booze Cooldown -90% for 48 hours", 4: "Booze Cooldown -90% for 72 hours", 5: "Booze Cooldown -90% for 96 hours",
+    6: "Booze Cooldown -75% for 6 hours", 7: "Booze Cooldown -75% for 12 hours", 8: "Booze Cooldown -75% for 24 hours", 9: "Booze Cooldown -75% for 48 hours", 10: "Booze Cooldown -75% for 72 hours", 11: "Booze Cooldown -75% for 96 hours",
+    12: "Booze Cooldown -50% for 6 hours", 13: "Booze Cooldown -50% for 12 hours", 14: "Booze Cooldown -50% for 24 hours", 15: "Booze Cooldown -50% for 48 hours", 16: "Booze Cooldown -50% for 72 hours", 17: "Booze Cooldown -50% for 96 hours",
+  },
+  27: {
+    0: "Narcotics Cooldown -90% for 6 hours", 1: "Narcotics Cooldown -90% for 12 hours", 2: "Narcotics Cooldown -90% for 24 hours", 3: "Narcotics Cooldown -90% for 48 hours", 4: "Narcotics Cooldown -90% for 72 hours", 5: "Narcotics Cooldown -90% for 96 hours",
+    6: "Narcotics Cooldown -75% for 6 hours", 7: "Narcotics Cooldown -75% for 12 hours", 8: "Narcotics Cooldown -75% for 24 hours", 9: "Narcotics Cooldown -75% for 48 hours", 10: "Narcotics Cooldown -75% for 72 hours", 11: "Narcotics Cooldown -75% for 96 hours",
+    12: "Narcotics Cooldown -50% for 6 hours", 13: "Narcotics Cooldown -50% for 12 hours", 14: "Narcotics Cooldown -50% for 24 hours", 15: "Narcotics Cooldown -50% for 48 hours", 16: "Narcotics Cooldown -50% for 72 hours", 17: "Narcotics Cooldown -50% for 96 hours",
+  },
+  28: {
+    0: "Kill skill Cooldown -90% for 6 hours", 1: "Kill skill Cooldown -90% for 12 hours", 2: "Kill skill Cooldown -90% for 24 hours", 3: "Kill skill Cooldown -90% for 48 hours", 4: "Kill skill Cooldown -90% for 72 hours", 5: "Kill skill Cooldown -90% for 96 hours",
+    6: "Kill skill Cooldown -75% for 6 hours", 7: "Kill skill Cooldown -75% for 12 hours", 8: "Kill skill Cooldown -75% for 24 hours", 9: "Kill skill Cooldown -75% for 48 hours", 10: "Kill skill Cooldown -75% for 72 hours", 11: "Kill skill Cooldown -75% for 96 hours",
+    12: "Kill skill Cooldown -50% for 6 hours", 13: "Kill skill Cooldown -50% for 12 hours", 14: "Kill skill Cooldown -50% for 24 hours", 15: "Kill skill Cooldown -50% for 48 hours", 16: "Kill skill Cooldown -50% for 72 hours", 17: "Kill skill Cooldown -50% for 96 hours",
+  },
+  29: {
+    0: "Travel Cooldown -90% for 6 hours", 1: "Travel Cooldown -90% for 12 hours", 2: "Travel Cooldown -90% for 24 hours", 3: "Travel Cooldown -90% for 48 hours", 4: "Travel Cooldown -90% for 72 hours", 5: "Travel Cooldown -90% for 96 hours",
+    6: "Travel Cooldown -75% for 6 hours", 7: "Travel Cooldown -75% for 12 hours", 8: "Travel Cooldown -75% for 24 hours", 9: "Travel Cooldown -75% for 48 hours", 10: "Travel Cooldown -75% for 72 hours", 11: "Travel Cooldown -75% for 96 hours",
+    12: "Travel Cooldown -50% for 6 hours", 13: "Travel Cooldown -50% for 12 hours", 14: "Travel Cooldown -50% for 24 hours", 15: "Travel Cooldown -50% for 48 hours", 16: "Travel Cooldown -50% for 72 hours", 17: "Travel Cooldown -50% for 96 hours",
+  },
+  30: {
+    0: "Bullet Buy Cooldown -90% for 6 hours", 1: "Bullet Buy Cooldown -90% for 12 hours", 2: "Bullet Buy Cooldown -90% for 24 hours", 3: "Bullet Buy Cooldown -90% for 48 hours", 4: "Bullet Buy Cooldown -90% for 72 hours", 5: "Bullet Buy Cooldown -90% for 96 hours",
+    6: "Bullet Buy Cooldown -75% for 6 hours", 7: "Bullet Buy Cooldown -75% for 12 hours", 8: "Bullet Buy Cooldown -75% for 24 hours", 9: "Bullet Buy Cooldown -75% for 48 hours", 10: "Bullet Buy Cooldown -75% for 72 hours", 11: "Bullet Buy Cooldown -75% for 96 hours",
+    12: "Bullet Buy Cooldown -50% for 6 hours", 13: "Bullet Buy Cooldown -50% for 12 hours", 14: "Bullet Buy Cooldown -50% for 24 hours", 15: "Bullet Buy Cooldown -50% for 48 hours", 16: "Bullet Buy Cooldown -50% for 72 hours", 17: "Bullet Buy Cooldown -50% for 96 hours",
+  },
+  31: {
+    0: "Health Buy Cooldown -90% for 6 hours", 1: "Health Buy Cooldown -90% for 12 hours", 2: "Health Buy Cooldown -90% for 24 hours", 3: "Health Buy Cooldown -90% for 48 hours", 4: "Health Buy Cooldown -90% for 72 hours", 5: "Health Buy Cooldown -90% for 96 hours",
+    6: "Health Buy Cooldown -75% for 6 hours", 7: "Health Buy Cooldown -75% for 12 hours", 8: "Health Buy Cooldown -75% for 24 hours", 9: "Health Buy Cooldown -75% for 48 hours", 10: "Health Buy Cooldown -75% for 72 hours", 11: "Health Buy Cooldown -75% for 96 hours",
+    12: "Health Buy Cooldown -50% for 6 hours", 13: "Health Buy Cooldown -50% for 12 hours", 14: "Health Buy Cooldown -50% for 24 hours", 15: "Health Buy Cooldown -50% for 48 hours", 16: "Health Buy Cooldown -50% for 72 hours", 17: "Health Buy Cooldown -50% for 96 hours",
+  },
+  32: {
+    0: "Bust out Cooldown -90% for 6 hours", 1: "Bust out Cooldown -90% for 12 hours", 2: "Bust out Cooldown -90% for 24 hours", 3: "Bust out Cooldown -90% for 48 hours", 4: "Bust out Cooldown -90% for 72 hours", 5: "Bust out Cooldown -90% for 96 hours",
+    6: "Bust out Cooldown -75% for 6 hours", 7: "Bust out Cooldown -75% for 12 hours", 8: "Bust out Cooldown -75% for 24 hours", 9: "Bust out Cooldown -75% for 48 hours", 10: "Bust out Cooldown -75% for 72 hours", 11: "Bust out Cooldown -75% for 96 hours",
+    12: "Bust out Cooldown -50% for 6 hours", 13: "Bust out Cooldown -50% for 12 hours", 14: "Bust out Cooldown -50% for 24 hours", 15: "Bust out Cooldown -50% for 48 hours", 16: "Bust out Cooldown -50% for 72 hours", 17: "Bust out Cooldown -50% for 96 hours",
+  },
   // Perk Items (categoryId 33-47)
   33: { // Map Yield Boost
     0: "Map Yield Boost +100% for 6 hours", 1: "Map Yield Boost +100% for 12 hours", 2: "Map Yield Boost +100% for 24 hours", 3: "Map Yield Boost +100% for 48 hours", 4: "Map Yield Boost +100% for 72 hours", 5: "Map Yield Boost +100% for 96 hours",
@@ -4650,8 +4820,8 @@ export const RACE_LOBBY_ABI: Abi = [
     name: "createRace",
     inputs: [
       { name: "carId", type: "uint256", internalType: "uint256" },
-      { name: "prizeType", type: "uint8", internalType: "enum MafiaRaceLobby.PrizeType" },
       { name: "cashAmount", type: "uint256", internalType: "uint256" },
+      { name: "prizeType", type: "uint8", internalType: "enum MafiaRaceLobby.PrizeType" },
       { name: "message", type: "string", internalType: "string" },
       { name: "signature", type: "bytes", internalType: "bytes" },
     ],
@@ -4675,8 +4845,6 @@ export const RACE_LOBBY_ABI: Abi = [
     name: "cancelRace",
     inputs: [
       { name: "raceId", type: "uint256", internalType: "uint256" },
-      { name: "message", type: "string", internalType: "string" },
-      { name: "signature", type: "bytes", internalType: "bytes" },
     ],
     outputs: [],
     stateMutability: "nonpayable",

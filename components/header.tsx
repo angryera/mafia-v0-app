@@ -132,7 +132,8 @@ export type Tab =
   | "story-mode"
   | "xp-market"
   | "marketplace"
-  | "racing";
+  | "racing"
+  | "create-profile";
 
 type NavItem = { id: Tab; label: string; icon: React.ReactNode };
 
@@ -157,7 +158,7 @@ export function getTabFromPath(pathname: string): Tab {
     "biz-slotmachine", "biz-jackpot", "biz-safehouse", "biz-booze", "biz-narcs",
     "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
     "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "referral",
-    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing"
+    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile"
   ];
   return validTabs.includes(firstSegment as Tab) ? (firstSegment as Tab) : "crime";
 }
@@ -396,11 +397,11 @@ function XpBars() {
 
   // Rank XP: level-based ranges
   const rankLevel = rankLevelRaw !== undefined ? Number(rankLevelRaw) : null;
-  const rankXp = rankXpRaw !== undefined ? Math.floor(Number(rankXpRaw) / 100) : null;
+  const rankXp = rankXpRaw !== undefined ? Number(rankXpRaw) : null;
   const rankPercent = (() => {
     if (rankLevel === null || rankXp === null) return null;
-    const currentLevelXp = RANK_XP[rankLevel] ?? 0;
-    const nextLevelXp = RANK_XP[rankLevel + 1];
+    const currentLevelXp = RANK_XP[rankLevel-1] ?? 0;
+    const nextLevelXp = RANK_XP[rankLevel];
     if (nextLevelXp === undefined) return 100;
     const range = nextLevelXp - currentLevelXp;
     if (range <= 0) return 100;

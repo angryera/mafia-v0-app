@@ -8,6 +8,7 @@ import {
   useWaitForTransactionReceipt,
   useAccount,
   useReadContract,
+  useBalance,
 } from "wagmi";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import {
@@ -15,6 +16,7 @@ import {
   MARKETPLACE_CATEGORY_NAMES,
   MARKETPLACE_ITEM_NAMES,
   ERC20_ABI,
+  INGAME_CURRENCY_ABI,
 } from "@/lib/contract";
 import {
   useChain,
@@ -34,6 +36,8 @@ import {
   ArrowUpDown,
   X,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Package,
   Coins,
   ExternalLink,
@@ -45,7 +49,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatEther, parseEther, formatUnits, parseUnits } from "viem";
+import { formatEther, parseEther, formatUnits, parseUnits, maxUint256 } from "viem";
 import {
   Dialog,
   DialogContent,
@@ -120,6 +124,8 @@ const NON_LISTABLE_CATEGORIES = new Set([0]); // Category 0 is often cash/specia
 
 // ── Constants ───────────────────────────────────────────────────
 const GAME_CASH_ADDRESS = "0x0000000000000000000000000000000000000001" as `0x${string}`;
+/** `purchaseFixedItem` / `bidOnAuctionItem` swap index for Game Cash (not listed in swap tokens). */
+const GAME_CASH_MARKETPLACE_SWAP_TOKEN_ID = 0;
 const NATIVE_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
 const LISTING_TYPE_LABELS: Record<number, string> = {
@@ -127,14 +133,19 @@ const LISTING_TYPE_LABELS: Record<number, string> = {
   1: "Auction",
 };
 
+/** Listing duration choices (days); contract expects seconds. */
 const DURATION_OPTIONS = [
-  { label: "1 Hour", hours: 1 },
-  { label: "6 Hours", hours: 6 },
-  { label: "12 Hours", hours: 12 },
-  { label: "1 Day", hours: 24 },
-  { label: "3 Days", hours: 72 },
-  { label: "7 Days", hours: 168 },
-];
+  { label: "0.5 days", value: "0.5" },
+  { label: "3 days", value: "3" },
+  { label: "12 days", value: "12" },
+  { label: "72 days", value: "72" },
+] as const;
+
+function durationDaysToSeconds(days: string): bigint {
+  const n = Number(days);
+  if (!Number.isFinite(n) || n <= 0) return BigInt(0);
+  return BigInt(Math.round(n * 86400));
+}
 
 const STATUS_LABELS: Record<number, string> = {
   0: "Open",
@@ -150,7 +161,48 @@ const SORT_OPTIONS = [
   { value: "ending_soon", label: "Ending Soon" },
 ];
 
+const LISTINGS_PER_PAGE = 10;
+
+/** Page numbers plus ellipsis gaps, e.g. 1, 2, …, 27, 28 */
+type MarketplacePaginationItem = number | "ellipsis";
+
+function getMarketplacePaginationItems(
+  current: number,
+  total: number
+): MarketplacePaginationItem[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+
+  const pages = new Set<number>();
+  pages.add(1);
+  pages.add(2);
+  pages.add(total - 1);
+  pages.add(total);
+  for (let p = current - 1; p <= current + 1; p++) {
+    if (p >= 1 && p <= total) pages.add(p);
+  }
+
+  const sorted = [...pages].sort((a, b) => a - b);
+  const out: MarketplacePaginationItem[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i]! - sorted[i - 1]! > 1) {
+      out.push("ellipsis");
+    }
+    out.push(sorted[i]!);
+  }
+  return out;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
+/** 10^decimals as bigint — avoids `BigInt(10 ** 18)` (unsafe JS Number) and `10n **` (older TS targets). */
+function pow10BigInt(decimals: number): bigint {
+  let r = BigInt(1);
+  const ten = BigInt(10);
+  for (let i = 0; i < decimals; i++) r *= ten;
+  return r;
+}
+
 function formatTimeRemaining(expiresAt: bigint): string {
   const now = Math.floor(Date.now() / 1000);
   const diff = Number(expiresAt) - now;
@@ -177,11 +229,11 @@ function addressEquals(a: string | undefined, b: string | undefined): boolean {
 function getItemName(categoryId: number, typeId: number): string {
   const categoryItems = MARKETPLACE_ITEM_NAMES[categoryId];
   const categoryName = MARKETPLACE_CATEGORY_NAMES[categoryId] ?? `Category ${categoryId}`;
-  
+
   if (categoryItems && categoryItems[typeId] !== undefined) {
     return categoryItems[typeId];
   }
-  
+
   return `${categoryName} #${typeId}`;
 }
 
@@ -235,6 +287,7 @@ export function MarketplaceAction() {
   const [filterStatus, setFilterStatus] = useState<number>(0); // Default to open
   const [sortBy, setSortBy] = useState<string>("newest");
   const [showMyListings, setShowMyListings] = useState(false);
+  const [listingsPage, setListingsPage] = useState(1);
 
   // ── Selected Listing (Detail Modal) ───────────────────────────
   const [selectedListing, setSelectedListing] = useState<InventoryMarketplaceListing | null>(null);
@@ -259,8 +312,8 @@ export function MarketplaceAction() {
         // result is an array of listings directly
         if (result && Array.isArray(result)) {
           const mapped: InventoryMarketplaceListing[] = result.map(
-            (item: any, index: number) => ({
-              listingId: item.listingId ?? item.id ?? index,
+            (item: any) => ({
+              listingId: Number(item.listingId),
               itemId: Number(item.itemId),
               listingType: Number(item.listingType),
               startingPrice: BigInt(item.startingPrice ?? 0),
@@ -386,6 +439,31 @@ export function MarketplaceAction() {
     return result;
   }, [listings, filterCategory, filterListingType, filterStatus, sortBy, showMyListings, address]);
 
+  const listingsTotalPages = Math.max(
+    1,
+    Math.ceil(filteredListings.length / LISTINGS_PER_PAGE)
+  );
+
+  const paginatedListings = useMemo(() => {
+    const start = (listingsPage - 1) * LISTINGS_PER_PAGE;
+    return filteredListings.slice(start, start + LISTINGS_PER_PAGE);
+  }, [filteredListings, listingsPage]);
+
+  const marketplacePaginationItems = useMemo(
+    () => getMarketplacePaginationItems(listingsPage, listingsTotalPages),
+    [listingsPage, listingsTotalPages]
+  );
+
+  useEffect(() => {
+    setListingsPage(1);
+  }, [filterCategory, filterListingType, filterStatus, sortBy, showMyListings, address]);
+
+  useEffect(() => {
+    if (listingsPage > listingsTotalPages) {
+      setListingsPage(listingsTotalPages);
+    }
+  }, [listingsPage, listingsTotalPages]);
+
   // ── Refresh Selected Listing ──────────────────────────────────
   const refreshSelectedListing = useCallback(() => {
     if (selectedListing) {
@@ -403,6 +481,9 @@ export function MarketplaceAction() {
   // ── Token Info Helper ─────────────────────────────────────────
   const getTokenInfo = useCallback(
     (tokenAddress: `0x${string}`) => {
+      if (isGameCashToken(tokenAddress)) {
+        return { name: "Game Cash", decimal: 18, isNative: false };
+      }
       const isNative =
         tokenAddress === "0x0000000000000000000000000000000000000000" ||
         tokenAddress.toLowerCase() === addresses.wbnb?.toLowerCase();
@@ -581,7 +662,7 @@ export function MarketplaceAction() {
 
           {/* List Items */}
           <div className="divide-y divide-border">
-            {filteredListings.map((listing) => {
+            {paginatedListings.map((listing) => {
               const tokenInfo = getTokenInfo(listing.token);
               const itemName = getItemName(listing.item.categoryId, listing.item.typeId);
               const categoryName = MARKETPLACE_CATEGORY_NAMES[listing.item.categoryId] ?? "Item";
@@ -663,6 +744,91 @@ export function MarketplaceAction() {
               );
             })}
           </div>
+
+          {listingsTotalPages > 1 && (
+            <nav
+              className="flex flex-col gap-3 border-t border-border bg-secondary/20 px-3 py-3 sm:px-4"
+              aria-label="Listing pagination"
+            >
+              <p className="text-center text-xs tabular-nums text-muted-foreground">
+                Page {listingsPage} of {listingsTotalPages}
+                <span className="hidden sm:inline">
+                  {" "}
+                  · {(listingsPage - 1) * LISTINGS_PER_PAGE + 1}–
+                  {Math.min(listingsPage * LISTINGS_PER_PAGE, filteredListings.length)} of{" "}
+                  {filteredListings.length}
+                </span>
+              </p>
+              <div className="flex w-full items-center gap-1.5 sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => setListingsPage((p) => Math.max(1, p - 1))}
+                  disabled={listingsPage === 1}
+                  aria-label="Go to previous page"
+                  className={cn(
+                    "inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-border bg-background/80 px-2 text-sm font-medium transition-colors sm:px-3",
+                    listingsPage === 1
+                      ? "pointer-events-none opacity-40"
+                      : "hover:bg-secondary"
+                  )}
+                >
+                  <ChevronLeft className="h-4 w-4 sm:-ml-0.5" />
+                  <span className="hidden sm:inline sm:ml-1">Previous</span>
+                </button>
+                <div
+                  className={cn(
+                    "min-h-9 min-w-0 flex-1 overflow-x-auto overflow-y-hidden py-0.5",
+                    "[scrollbar-width:thin] [scrollbar-color:hsl(220_14%_28%/0.5)_transparent]"
+                  )}
+                >
+                  <div className="mx-auto flex w-max max-w-none flex-nowrap items-center justify-center gap-0.5 sm:gap-1">
+                    {marketplacePaginationItems.map((item, idx) =>
+                      item === "ellipsis" ? (
+                        <span
+                          key={`ellipsis-${idx}`}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center text-sm text-muted-foreground select-none"
+                          aria-hidden
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setListingsPage(item)}
+                          aria-label={`Page ${item}`}
+                          aria-current={item === listingsPage ? "page" : undefined}
+                          className={cn(
+                            "flex h-9 min-w-9 shrink-0 items-center justify-center rounded-md px-2 text-sm font-medium tabular-nums transition-colors",
+                            item === listingsPage
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          )}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setListingsPage((p) => Math.min(listingsTotalPages, p + 1))}
+                  disabled={listingsPage === listingsTotalPages}
+                  aria-label="Go to next page"
+                  className={cn(
+                    "inline-flex h-9 shrink-0 items-center justify-center rounded-md border border-border bg-background/80 px-2 text-sm font-medium transition-colors sm:px-3",
+                    listingsPage === listingsTotalPages
+                      ? "pointer-events-none opacity-40"
+                      : "hover:bg-secondary"
+                  )}
+                >
+                  <span className="hidden sm:inline sm:mr-1">Next</span>
+                  <ChevronRight className="h-4 w-4 sm:-mr-0.5" />
+                </button>
+              </div>
+            </nav>
+          )}
         </div>
       )}
 
@@ -713,6 +879,7 @@ function ListingDetailModal({
   swapTokens,
 }: ListingDetailModalProps) {
   const { address, isConnected } = useAccount();
+  const { authData } = useAuth();
   const { chainConfig } = useChain();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
@@ -730,36 +897,140 @@ function ListingDetailModal({
   // Find stablecoin tokens (USDT, USDC) for purchase payments
   const stableTokens = swapTokens.filter((t) => t.isStable);
   const selectedPaymentToken = swapTokens.find((t) => t.tokenId === selectedSwapTokenId);
+  const listingPricedInGameCash = Boolean(listing && isGameCashToken(listing.token));
 
-  // Calculate token amount based on USD price (listing price is in USD with 18 decimals)
-  const calculateTokenAmount = useCallback(
+  // Calculate token amount from USD price (18-dec) and swap oracle price (same as contract convention).
+  const calculateTokenAmountFloor = useCallback(
     (usdPrice: bigint, paymentToken: SwapToken | undefined): bigint => {
       if (!paymentToken || paymentToken.price === BigInt(0)) return BigInt(0);
-      // usdPrice is in 18 decimals (1e18 = $1)
-      // token price is also in 18 decimals (token price in USD)
-      // Amount = usdPrice / tokenPrice * 10^tokenDecimal
-      const amount = (usdPrice * BigInt(10 ** paymentToken.decimal)) / paymentToken.price;
-      return amount;
+      const scale = pow10BigInt(Number(paymentToken.decimal));
+      return (usdPrice * scale) / paymentToken.price;
     },
     []
   );
 
-  // Calculate the token amount needed for purchase
-  const requiredTokenAmount = useMemo(() => {
-    if (!listing || !selectedPaymentToken) return BigInt(0);
-    return calculateTokenAmount(listing.currentPrice, selectedPaymentToken);
-  }, [listing, selectedPaymentToken, calculateTokenAmount]);
+  /** Ceil division so allowance ≥ amount the market may pull (floor + mismatch → BEP20 #1002). */
+  const calculateTokenAmountCeil = useCallback(
+    (usdPrice: bigint, paymentToken: SwapToken | undefined): bigint => {
+      if (!paymentToken || paymentToken.price === BigInt(0)) return BigInt(0);
+      const scale = pow10BigInt(Number(paymentToken.decimal));
+      const num = usdPrice * scale;
+      const den = paymentToken.price;
+      return (num + den - BigInt(1)) / den;
+    },
+    []
+  );
 
-  // For MAFIA token, add 5% extra for buy/sell fee
-  const requiredApprovalAmount = useMemo(() => {
+  // Calculate the token amount needed for purchase (game cash listings: price is already in cash units)
+  const requiredTokenAmount = useMemo(() => {
+    if (!listing) return BigInt(0);
+    if (isGameCashToken(listing.token)) return listing.currentPrice;
     if (!selectedPaymentToken) return BigInt(0);
-    const isMafia = selectedPaymentToken.tokenAddress.toLowerCase() === addresses.mafia?.toLowerCase();
+    // Native value: floor matches typical “exact” listing math; ERC20/stables: ceil prevents under-approve.
+    if (selectedPaymentToken.tokenAddress === NATIVE_ADDRESS) {
+      return calculateTokenAmountFloor(listing.currentPrice, selectedPaymentToken);
+    }
+    return calculateTokenAmountCeil(listing.currentPrice, selectedPaymentToken) * BigInt(105) / BigInt(100);
+  }, [
+    listing,
+    selectedPaymentToken,
+    calculateTokenAmountFloor,
+    calculateTokenAmountCeil,
+  ]);
+
+  // For MAFIA token, add 5% extra for buy/sell fee (ERC20 path only)
+  const requiredApprovalAmount = useMemo(() => {
+    if (listingPricedInGameCash || !selectedPaymentToken) return BigInt(0);
+    const isMafia =
+      selectedPaymentToken.tokenAddress.toLowerCase() === addresses.mafia?.toLowerCase();
     if (isMafia) {
-      // Add 5% extra for MAFIA buy/sell fee
       return (requiredTokenAmount * BigInt(105)) / BigInt(100);
     }
     return requiredTokenAmount;
-  }, [requiredTokenAmount, selectedPaymentToken, addresses.mafia]);
+  }, [listingPricedInGameCash, requiredTokenAmount, selectedPaymentToken, addresses.mafia]);
+
+  /** Minimum balance needed to complete a fixed-price buy (native: exact send; ERC20: includes MAFIA fee buffer). */
+  const buyBalanceRequired = useMemo(() => {
+    if (listingPricedInGameCash) {
+      if (!listing) return BigInt(0);
+      return listing.currentPrice;
+    }
+    if (!selectedPaymentToken) return BigInt(0);
+    if (selectedPaymentToken.tokenAddress === NATIVE_ADDRESS) return requiredTokenAmount;
+    return requiredApprovalAmount;
+  }, [
+    listing,
+    listingPricedInGameCash,
+    selectedPaymentToken,
+    requiredTokenAmount,
+    requiredApprovalAmount,
+  ]);
+
+  const payWithNative =
+    !listingPricedInGameCash && selectedPaymentToken?.tokenAddress === NATIVE_ADDRESS;
+  const payWithErc20 =
+    !listingPricedInGameCash &&
+    !!selectedPaymentToken &&
+    selectedPaymentToken.tokenAddress !== NATIVE_ADDRESS;
+
+  const { data: nativeWalletBalance, refetch: refetchNativeBalance } = useBalance({
+    address,
+    chainId: chainConfig.wagmiChainId,
+    query: {
+      enabled: !!open && !!address && payWithNative,
+    },
+  });
+
+  const { data: erc20BalanceRaw, refetch: refetchErc20Balance } = useReadContract({
+    address: selectedPaymentToken?.tokenAddress as `0x${string}` | undefined,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!open && !!address && payWithErc20,
+    },
+  });
+
+  const { data: gameCashBalanceRaw, refetch: refetchGameCashBalance } = useReadContract({
+    address: addresses.ingameCurrency,
+    abi: INGAME_CURRENCY_ABI,
+    functionName: "balanceOfWithSignMsg",
+    args:
+      authData && address
+        ? [address, authData.message, authData.signature]
+        : undefined,
+    query: {
+      enabled:
+        !!open &&
+        !!address &&
+        !!authData &&
+        listingPricedInGameCash,
+    },
+  });
+
+  const buyBalanceSufficient = useMemo(() => {
+    if (buyBalanceRequired <= BigInt(0)) return true;
+    if (listingPricedInGameCash) {
+      if (!authData) return false;
+      if (gameCashBalanceRaw === undefined) return false;
+      return (gameCashBalanceRaw as bigint) >= buyBalanceRequired;
+    }
+    if (!selectedPaymentToken) return false;
+    if (selectedPaymentToken.tokenAddress === NATIVE_ADDRESS) {
+      if (nativeWalletBalance === undefined) return false;
+      return nativeWalletBalance.value >= buyBalanceRequired;
+    }
+    if (erc20BalanceRaw === undefined) return false;
+    return (erc20BalanceRaw as bigint) >= buyBalanceRequired;
+  }, [
+    buyBalanceRequired,
+    listingPricedInGameCash,
+    authData,
+    gameCashBalanceRaw,
+    selectedPaymentToken,
+    nativeWalletBalance,
+    erc20BalanceRaw,
+  ]);
 
   // ── ERC20 Allowance Check ─────────────────────────────────────
   const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
@@ -770,19 +1041,24 @@ function ListingDetailModal({
       ? [address, addresses.inventoryMarketplace]
       : undefined,
     query: {
-      enabled: !!address && !!selectedPaymentToken && selectedPaymentToken.tokenAddress !== NATIVE_ADDRESS,
+      enabled:
+        !!address &&
+        !listingPricedInGameCash &&
+        !!selectedPaymentToken &&
+        selectedPaymentToken.tokenAddress !== NATIVE_ADDRESS,
     },
   });
 
-  // Check if approved
+  // ERC20 / native readiness (Game Cash uses InGameCurrency approve instead)
   useEffect(() => {
+    if (listingPricedInGameCash) return;
     if (!selectedPaymentToken || selectedPaymentToken.tokenAddress === NATIVE_ADDRESS) {
-      setIsApproved(true); // Native token doesn't need approval
+      setIsApproved(true);
       return;
     }
     const allowance = allowanceRaw as bigint | undefined;
     setIsApproved(!!allowance && allowance >= requiredApprovalAmount);
-  }, [allowanceRaw, requiredApprovalAmount, selectedPaymentToken]);
+  }, [listingPricedInGameCash, allowanceRaw, requiredApprovalAmount, selectedPaymentToken]);
 
   // ── Write Contracts ───────────────────────────────────────────
   const {
@@ -795,6 +1071,16 @@ function ListingDetailModal({
 
   const { isLoading: approveConfirming, isSuccess: approveSuccess } =
     useWaitForTransactionReceipt({ hash: approveHash });
+
+  const {
+    writeContract: writeApproveCashSpend,
+    data: cashSpendApproveHash,
+    isPending: cashSpendApprovePending,
+    reset: resetApproveCashSpend,
+  } = useChainWriteContract();
+
+  const { isLoading: cashSpendApproveConfirming, isSuccess: cashSpendApproveSuccess } =
+    useWaitForTransactionReceipt({ hash: cashSpendApproveHash });
 
   const {
     writeContract: writeBuy,
@@ -851,15 +1137,38 @@ function ListingDetailModal({
     if (!approveHash) approveToastFired.current = false;
   }, [approveSuccess, approveHash, refetchAllowance]);
 
+  const cashSpendToastFired = useRef(false);
+  useEffect(() => {
+    if (
+      cashSpendApproveSuccess &&
+      cashSpendApproveHash &&
+      !cashSpendToastFired.current
+    ) {
+      cashSpendToastFired.current = true;
+      toast.success("Game Cash spend approved for marketplace");
+    }
+    if (!cashSpendApproveHash) cashSpendToastFired.current = false;
+  }, [cashSpendApproveSuccess, cashSpendApproveHash]);
+
   const buyToastFired = useRef(false);
   useEffect(() => {
     if (buySuccess && buyHash && !buyToastFired.current) {
       buyToastFired.current = true;
       toast.success("Item purchased successfully!");
+      void refetchErc20Balance();
+      void refetchGameCashBalance();
+      void refetchNativeBalance();
       onSuccess();
     }
     if (!buyHash) buyToastFired.current = false;
-  }, [buySuccess, buyHash, onSuccess]);
+  }, [
+    buySuccess,
+    buyHash,
+    onSuccess,
+    refetchErc20Balance,
+    refetchGameCashBalance,
+    refetchNativeBalance,
+  ]);
 
   const bidToastFired = useRef(false);
   useEffect(() => {
@@ -897,12 +1206,20 @@ function ListingDetailModal({
       setBidAmount("");
       setSelectedSwapTokenId(0);
       resetApprove();
+      resetApproveCashSpend();
       resetBuy();
       resetBid();
       resetCancel();
       resetFinish();
     }
-  }, [open, resetApprove, resetBuy, resetBid, resetCancel, resetFinish]);
+  }, [open, resetApprove, resetApproveCashSpend, resetBuy, resetBid, resetCancel, resetFinish]);
+
+  // Default payment token for USD listings (Game Cash listings do not use swap token picker)
+  useEffect(() => {
+    if (!open || !listing || isGameCashToken(listing.token)) return;
+    const native = swapTokens.find((t) => t.tokenAddress === NATIVE_ADDRESS);
+    setSelectedSwapTokenId(native?.tokenId ?? swapTokens[0]?.tokenId ?? 0);
+  }, [open, listing?.listingId, listing?.token, swapTokens]);
 
   if (!listing) return null;
 
@@ -914,60 +1231,198 @@ function ListingDetailModal({
   const isOpen = listing.status === 0;
   const isAuction = listing.listingType === 1;
 
-  // Next bid calculation
+  // Next bid: `currentPrice` is Game Cash wei, or USD (18-dec) for native/MAFIA/stables — convert to pay-token units.
   const nextBidWei = calculateNextBid(listing.currentPrice);
-  const nextBidFormatted = formatUnits(nextBidWei, tokenInfo.decimal);
+  const bidPayIsErc20 =
+    !listingPricedInGameCash &&
+    !!selectedPaymentToken &&
+    selectedPaymentToken.tokenAddress !== NATIVE_ADDRESS;
+
+  const minBidAsPayTokenWei = listingPricedInGameCash
+    ? nextBidWei
+    : !selectedPaymentToken
+      ? BigInt(0)
+      : selectedPaymentToken.tokenAddress === NATIVE_ADDRESS
+        ? calculateTokenAmountFloor(nextBidWei, selectedPaymentToken)
+        : (calculateTokenAmountCeil(nextBidWei, selectedPaymentToken) * BigInt(105)) /
+        BigInt(100);
+
+  const bidParseDecimals = listingPricedInGameCash
+    ? 18
+    : (selectedPaymentToken?.decimal ?? 18);
+
+  let parsedBidWeiForAllowance = BigInt(0);
+  if (bidAmount?.trim()) {
+    try {
+      parsedBidWeiForAllowance = parseUnits(bidAmount, bidParseDecimals);
+    } catch {
+      parsedBidWeiForAllowance = BigInt(0);
+    }
+  }
+
+  const bidApprovalThreshold = !bidPayIsErc20
+    ? BigInt(0)
+    : parsedBidWeiForAllowance > BigInt(0)
+      ? (parsedBidWeiForAllowance >= minBidAsPayTokenWei
+        ? parsedBidWeiForAllowance
+        : minBidAsPayTokenWei)
+      : minBidAsPayTokenWei;
+
+  const allowanceBn = (allowanceRaw as bigint | undefined) ?? BigInt(0);
+
+  const bidAllowanceRequired =
+    !bidPayIsErc20 || bidApprovalThreshold <= BigInt(0)
+      ? BigInt(0)
+      : selectedPaymentToken?.tokenAddress.toLowerCase() === addresses.mafia?.toLowerCase()
+        ? (bidApprovalThreshold * BigInt(105)) / BigInt(100)
+        : bidApprovalThreshold;
+
+  const bidErc20AllowanceOk = !bidPayIsErc20 || allowanceBn >= bidAllowanceRequired;
+
+  const bidDisplayDecimals = bidParseDecimals;
+  const bidDisplaySymbol = listingPricedInGameCash
+    ? "Game Cash"
+    : (selectedPaymentToken?.name ?? tokenInfo.name);
+  const minBidAmountDisplay = formatUnits(minBidAsPayTokenWei, bidDisplayDecimals);
 
   // ── Action Handlers ───────────────────────────────────────────
-  const handleApprove = () => {
+  const handleApproveErc20 = () => {
     if (!selectedPaymentToken || !isConnected) return;
+    if (selectedPaymentToken.tokenAddress === NATIVE_ADDRESS) return;
     resetApprove();
+
+    const isAuctionErc20Bid =
+      listing.listingType === 1 && bidPayIsErc20;
+    let amount = isAuctionErc20Bid ? bidApprovalThreshold : requiredApprovalAmount;
+
+    if (
+      isAuctionErc20Bid &&
+      selectedPaymentToken.tokenAddress.toLowerCase() === addresses.mafia?.toLowerCase()
+    ) {
+      amount = (amount * BigInt(105)) / BigInt(100);
+    }
+
+    if (amount <= BigInt(0)) {
+      toast.error("Nothing to approve for the current action");
+      return;
+    }
 
     writeApprove({
       address: selectedPaymentToken.tokenAddress,
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [addresses.inventoryMarketplace, requiredApprovalAmount],
+      args: [addresses.inventoryMarketplace, amount],
+    });
+  };
+
+  const handleApproveGameCashSpend = () => {
+    if (!isConnected) return;
+    resetApproveCashSpend();
+    writeApproveCashSpend({
+      address: addresses.ingameCurrency,
+      abi: INGAME_CURRENCY_ABI,
+      functionName: "approveInGameCurrency",
+      args: [addresses.inventoryMarketplace, maxUint256],
     });
   };
 
   const handleBuy = () => {
-    if (!listing || !isConnected || !selectedPaymentToken) return;
+    if (!listing || !isConnected) return;
+    if (!buyBalanceSufficient) {
+      toast.error("Insufficient balance for this purchase");
+      return;
+    }
     resetBuy();
 
-    const price = listing.currentPrice;
-    const isNativePayment = selectedPaymentToken.tokenAddress === NATIVE_ADDRESS;
-    // For native token, calculate the value to send
-    const valueToSend = isNativePayment ? requiredTokenAmount : BigInt(0);
-    
-    writeBuy({
-      address: addresses.inventoryMarketplace,
-      abi: INVENTORY_MARKETPLACE_ABI,
-      functionName: "purchaseItem",
-      args: [BigInt(listing.listingId), BigInt(selectedSwapTokenId), price],
-      value: valueToSend,
-    });
-  };
-
-  const handleBid = () => {
-    if (!listing || !isConnected || !bidAmount) return;
-    resetBid();
-
-    const bidWei = parseUnits(bidAmount, tokenInfo.decimal);
-
-    // Validate minimum bid
-    if (bidWei < nextBidWei) {
-      toast.error(`Minimum bid is ${Number(nextBidFormatted).toFixed(4)} ${tokenInfo.name}`);
+    if (listingPricedInGameCash) {
+      writeBuy({
+        address: addresses.inventoryMarketplace,
+        abi: INVENTORY_MARKETPLACE_ABI,
+        functionName: "purchaseFixedItem",
+        args: [
+          BigInt(listing.listingId),
+          BigInt(GAME_CASH_MARKETPLACE_SWAP_TOKEN_ID),
+        ],
+      });
       return;
     }
 
-    writeBid({
-      address: addresses.inventoryMarketplace,
-      abi: INVENTORY_MARKETPLACE_ABI,
-      functionName: "bidOnAuctionItem",
-      args: [BigInt(listing.listingId), BigInt(selectedSwapTokenId), bidWei],
-      value: tokenInfo.isNative ? bidWei : BigInt(0),
-    });
+    if (!selectedPaymentToken) return;
+    const isNativePayment = selectedPaymentToken.tokenAddress === NATIVE_ADDRESS;
+
+    if (isNativePayment) {
+      writeBuy({
+        address: addresses.inventoryMarketplace,
+        abi: INVENTORY_MARKETPLACE_ABI,
+        functionName: "purchaseFixedItem",
+        args: [BigInt(listing.listingId), BigInt(selectedPaymentToken.tokenId)],
+        value: requiredTokenAmount,
+      } as unknown as Parameters<typeof writeBuy>[0]);
+    } else {
+      writeBuy({
+        address: addresses.inventoryMarketplace,
+        abi: INVENTORY_MARKETPLACE_ABI,
+        functionName: "purchaseFixedItem",
+        args: [BigInt(listing.listingId), BigInt(selectedPaymentToken.tokenId)],
+      });
+    }
+  };
+
+  const handleBid = () => {
+    if (!listing || !isConnected || !bidAmount?.trim()) return;
+    if (!listingPricedInGameCash && !selectedPaymentToken) return;
+    resetBid();
+
+    let bidWei: bigint;
+    try {
+      bidWei = parseUnits(bidAmount, bidParseDecimals);
+    } catch {
+      toast.error("Invalid bid amount");
+      return;
+    }
+
+    const minBidPay = minBidAsPayTokenWei;
+    if (bidWei < minBidPay) {
+      toast.error(
+        `Minimum bid is ${Number(formatUnits(minBidPay, bidDisplayDecimals)).toFixed(6)} ${bidDisplaySymbol}`
+      );
+      return;
+    }
+
+    const payIsNative =
+      !listingPricedInGameCash &&
+      selectedPaymentToken!.tokenAddress === NATIVE_ADDRESS;
+    const erc20AllowanceNeeded =
+      !listingPricedInGameCash &&
+        !payIsNative &&
+        selectedPaymentToken!.tokenAddress.toLowerCase() === addresses.mafia?.toLowerCase()
+        ? (bidWei * BigInt(110)) / BigInt(100)
+        : bidWei;
+    if (!listingPricedInGameCash && !payIsNative && allowanceBn < erc20AllowanceNeeded) {
+      toast.error("Approve the token for the marketplace before bidding");
+      return;
+    }
+
+    const bidSwapTokenId = isGameCashToken(listing.token)
+      ? GAME_CASH_MARKETPLACE_SWAP_TOKEN_ID
+      : selectedSwapTokenId;
+
+    if (payIsNative) {
+      writeBid({
+        address: addresses.inventoryMarketplace,
+        abi: INVENTORY_MARKETPLACE_ABI,
+        functionName: "bidOnAuctionItem",
+        args: [BigInt(listing.listingId), BigInt(bidSwapTokenId), bidWei],
+        value: bidWei,
+      } as unknown as Parameters<typeof writeBid>[0]);
+    } else {
+      writeBid({
+        address: addresses.inventoryMarketplace,
+        abi: INVENTORY_MARKETPLACE_ABI,
+        functionName: "bidOnAuctionItem",
+        args: [BigInt(listing.listingId), BigInt(bidSwapTokenId), bidWei],
+      });
+    }
   };
 
   const handleCancel = () => {
@@ -995,17 +1450,35 @@ function ListingDetailModal({
   };
 
   const approveLoading = approvePending || approveConfirming;
+  const cashSpendApproveLoading =
+    cashSpendApprovePending || cashSpendApproveConfirming;
   const buyLoading = buyPending || buyConfirming;
   const bidLoading = bidPending || bidConfirming;
   const cancelLoading = cancelPending || cancelConfirming;
   const finishLoading = finishPending || finishConfirming;
-  const anyLoading = approveLoading || buyLoading || bidLoading || cancelLoading || finishLoading;
+  const anyLoading =
+    approveLoading ||
+    cashSpendApproveLoading ||
+    buyLoading ||
+    bidLoading ||
+    cancelLoading ||
+    finishLoading;
+
+  const purchaseReady =
+    (listingPricedInGameCash ? cashSpendApproveSuccess : isApproved) &&
+    buyBalanceSufficient;
 
   // ── Action Availability ────────────────────────────────────��──
-  const canBuy = isOpen && !isAuction && !isSeller && isConnected;
+  const hasBids = listing.bids.length > 0;
+  const canBuy = isOpen && !isAuction && !isSeller && !expired && isConnected;
   const canBid = isOpen && isAuction && !isSeller && !expired && isConnected;
-  const canCancel = isOpen && isSeller && isConnected;
-  const canFinish = isOpen && isAuction && expired && isConnected;
+  // Open listings with no bids can be canceled.
+  // - If not expired: only the seller can cancel.
+  // - If expired: anyone can cancel.
+  const canCancel =
+    isOpen && !hasBids && isConnected && (expired || isSeller);
+  // Expired auctions with at least one bid can be finished.
+  const canFinish = isOpen && isAuction && expired && hasBids && isConnected;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1156,44 +1629,98 @@ function ListingDetailModal({
                   </div>
                 )}
 
-                {/* Price display */}
-                {selectedPaymentToken && requiredTokenAmount > BigInt(0) && (
-                  <div className="rounded-lg bg-background/50 p-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Amount to pay:</span>
-                      <span className="font-mono font-semibold text-foreground">
-                        {Number(formatUnits(requiredTokenAmount, selectedPaymentToken.decimal)).toFixed(6)}{" "}
-                        {selectedPaymentToken.name}
-                      </span>
-                    </div>
-                    {selectedPaymentToken.tokenAddress.toLowerCase() === addresses.mafia?.toLowerCase() && (
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        +5% fee buffer for MAFIA token
-                      </p>
-                    )}
+                {isGameCashToken(listing.token) && (
+                  <div className="rounded-lg border border-border bg-background/50 p-3">
+                    <p className="text-xs font-medium text-foreground">Payment: Game Cash</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                      Approve Game Cash spend on the InGameCurrency contract for the inventory marketplace,
+                      then buy. The price is deducted from your in-game cash balance.
+                    </p>
                   </div>
                 )}
 
-                {/* Approve Button (if needed) */}
-                {!isApproved && selectedPaymentToken && selectedPaymentToken.tokenAddress !== NATIVE_ADDRESS && (
+                {/* Price display */}
+                {requiredTokenAmount > BigInt(0) &&
+                  (listingPricedInGameCash || selectedPaymentToken) && (
+                    <div className="rounded-lg bg-background/50 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">Amount to pay:</span>
+                        <span className="font-mono font-semibold text-foreground">
+                          {Number(
+                            formatUnits(
+                              requiredTokenAmount,
+                              listingPricedInGameCash
+                                ? 18
+                                : (selectedPaymentToken?.decimal ?? 18)
+                            )
+                          ).toFixed(6)}{" "}
+                          {listingPricedInGameCash ? "Game Cash" : selectedPaymentToken!.name}
+                        </span>
+                      </div>
+                      {!listingPricedInGameCash &&
+                        selectedPaymentToken?.tokenAddress.toLowerCase() ===
+                        addresses.mafia?.toLowerCase() && (
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            +5% fee buffer for MAFIA token
+                          </p>
+                        )}
+                    </div>
+                  )}
+
+                {buyBalanceRequired > BigInt(0) && !buyBalanceSufficient && (
+                  <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+                    {listingPricedInGameCash && !authData
+                      ? "Sign in with your wallet (signature) to load your Game Cash balance."
+                      : "Insufficient balance for this purchase."}
+                  </p>
+                )}
+
+                {/* Approve Game Cash spend (InGameCurrency → marketplace) */}
+                {listingPricedInGameCash && !cashSpendApproveSuccess && (
                   <button
-                    onClick={handleApprove}
+                    type="button"
+                    onClick={handleApproveGameCashSpend}
                     disabled={anyLoading}
                     className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary bg-primary/10 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
                   >
-                    {approveLoading ? (
+                    {cashSpendApproveLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <ShieldCheck className="h-4 w-4" />
                     )}
-                    Approve {selectedPaymentToken.name}
+                    Approve Game Cash for marketplace
                   </button>
                 )}
 
+                {/* Approve ERC20 (MAFIA / stables) */}
+                {!listingPricedInGameCash &&
+                  !isApproved &&
+                  selectedPaymentToken &&
+                  selectedPaymentToken.tokenAddress !== NATIVE_ADDRESS && (
+                    <button
+                      type="button"
+                      onClick={handleApproveErc20}
+                      disabled={anyLoading}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary bg-primary/10 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+                    >
+                      {approveLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="h-4 w-4" />
+                      )}
+                      Approve {selectedPaymentToken.name}
+                    </button>
+                  )}
+
                 {/* Buy Button */}
                 <button
+                  type="button"
                   onClick={handleBuy}
-                  disabled={anyLoading || !isApproved || !selectedPaymentToken}
+                  disabled={
+                    anyLoading ||
+                    !purchaseReady ||
+                    (!listingPricedInGameCash && !selectedPaymentToken)
+                  }
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
                 >
                   {buyLoading ? (
@@ -1201,8 +1728,16 @@ function ListingDetailModal({
                   ) : (
                     <Coins className="h-4 w-4" />
                   )}
-                  {selectedPaymentToken && requiredTokenAmount > BigInt(0)
-                    ? `Buy for ${Number(formatUnits(requiredTokenAmount, selectedPaymentToken.decimal)).toFixed(4)} ${selectedPaymentToken.name}`
+                  {requiredTokenAmount > BigInt(0) &&
+                    (listingPricedInGameCash || selectedPaymentToken)
+                    ? `Buy for ${Number(
+                      formatUnits(
+                        requiredTokenAmount,
+                        listingPricedInGameCash
+                          ? 18
+                          : (selectedPaymentToken?.decimal ?? 18)
+                      )
+                    ).toFixed(4)} ${listingPricedInGameCash ? "Game Cash" : selectedPaymentToken!.name}`
                     : `Buy for ${formatPrice(listing.currentPrice, listing.token, tokenInfo)}`}
                 </button>
               </div>
@@ -1211,26 +1746,123 @@ function ListingDetailModal({
             {/* Bid (Auction) */}
             {canBid && (
               <div className="space-y-2">
+                {isGameCashToken(listing.token) && (
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Bids use Game Cash. Approve spend once, then place your bid.
+                  </p>
+                )}
+                {!isGameCashToken(listing.token) && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Bid with:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {nativeToken && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSwapTokenId(nativeToken.tokenId)}
+                          className={cn(
+                            "rounded-md border px-3 py-2 text-xs font-medium transition-all",
+                            selectedSwapTokenId === nativeToken.tokenId
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-background/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                          )}
+                        >
+                          {chainConfig.id === "bnb" ? "BNB" : "PLS"}
+                        </button>
+                      )}
+                      {mafiaToken && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSwapTokenId(mafiaToken.tokenId)}
+                          className={cn(
+                            "rounded-md border px-3 py-2 text-xs font-medium transition-all",
+                            selectedSwapTokenId === mafiaToken.tokenId
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-background/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                          )}
+                        >
+                          MAFIA
+                        </button>
+                      )}
+                      {stableTokens.map((token) => (
+                        <button
+                          key={token.tokenId}
+                          type="button"
+                          onClick={() => setSelectedSwapTokenId(token.tokenId)}
+                          className={cn(
+                            "rounded-md border px-3 py-2 text-xs font-medium transition-all",
+                            selectedSwapTokenId === token.tokenId
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-border bg-background/50 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                          )}
+                        >
+                          {token.name}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      ERC20 / stable bids require approving the marketplace for that token first (native
+                      excluded).
+                    </p>
+                  </div>
+                )}
+                {isGameCashToken(listing.token) && !cashSpendApproveSuccess && (
+                  <button
+                    type="button"
+                    onClick={handleApproveGameCashSpend}
+                    disabled={anyLoading}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary bg-primary/10 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+                  >
+                    {cashSpendApproveLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="h-4 w-4" />
+                    )}
+                    Approve Game Cash for marketplace
+                  </button>
+                )}
+                {bidPayIsErc20 && !bidErc20AllowanceOk && (
+                  <button
+                    type="button"
+                    onClick={handleApproveErc20}
+                    disabled={anyLoading}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-primary bg-primary/10 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+                  >
+                    {approveLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="h-4 w-4" />
+                    )}
+                    Approve {selectedPaymentToken?.name} for marketplace
+                  </button>
+                )}
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     value={bidAmount}
                     onChange={(e) => setBidAmount(e.target.value)}
-                    placeholder={`Min: ${Number(nextBidFormatted).toFixed(4)}`}
+                    placeholder={`Min: ${Number(minBidAmountDisplay).toFixed(4)} ${bidDisplaySymbol}`}
                     className="flex-1 rounded-lg border border-border bg-background/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
                     step="0.0001"
-                    min={Number(nextBidFormatted)}
+                    min={Number(minBidAmountDisplay)}
                   />
                   <button
-                    onClick={() => setBidAmount(nextBidFormatted)}
+                    type="button"
+                    onClick={() => setBidAmount(minBidAmountDisplay)}
                     className="rounded-lg border border-border bg-background/50 px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
                   >
                     Min
                   </button>
                 </div>
                 <button
+                  type="button"
                   onClick={handleBid}
-                  disabled={anyLoading || !bidAmount}
+                  disabled={
+                    anyLoading ||
+                    !bidAmount?.trim() ||
+                    (!listingPricedInGameCash && !selectedPaymentToken) ||
+                    (isGameCashToken(listing.token) && !cashSpendApproveSuccess) ||
+                    (bidPayIsErc20 && !bidErc20AllowanceOk)
+                  }
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 py-3 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50"
                 >
                   {bidLoading ? (
@@ -1310,7 +1942,6 @@ function CreateListingModal({
   addresses: any;
 }) {
   const { address, isConnected } = useAccount();
-  const { authData } = useAuth();
   const { toast } = useToast();
 
   // State for items
@@ -1324,7 +1955,7 @@ function CreateListingModal({
   const [listingType, setListingType] = useState<string>("0"); // 0 = Fixed, 1 = Auction
   const [paymentToken, setPaymentToken] = useState<string>(GAME_CASH_ADDRESS);
   const [price, setPrice] = useState<string>("");
-  const [duration, setDuration] = useState<string>("24"); // hours
+  const [duration, setDuration] = useState<string>("3"); // days (see DURATION_OPTIONS)
 
   // Create listing tx
   const {
@@ -1385,7 +2016,7 @@ function CreateListingModal({
       setPrice("");
       setListingType("0");
       setPaymentToken(GAME_CASH_ADDRESS);
-      setDuration("24");
+      setDuration("3");
     }
   }, [open, fetchUserItems, reset]);
 
@@ -1401,10 +2032,10 @@ function CreateListingModal({
   }, [isSuccess, hash, toast, onSuccess]);
 
   const handleCreateListing = () => {
-    if (!authData || !selectedItemId || !price) return;
+    if (!isConnected || !address || !selectedItemId || !price) return;
 
     const priceWei = parseEther(price);
-    const durationSeconds = BigInt(Number(duration) * 3600);
+    const durationSeconds = durationDaysToSeconds(duration);
 
     writeContract({
       address: addresses.inventoryMarketplace,
@@ -1412,12 +2043,10 @@ function CreateListingModal({
       functionName: "createListing",
       args: [
         BigInt(selectedItemId),
-        Number(listingType),
-        paymentToken as `0x${string}`,
         priceWei,
+        BigInt(listingType),
+        paymentToken as `0x${string}`,
         durationSeconds,
-        authData.message,
-        authData.signature,
       ],
     });
   };
@@ -1444,7 +2073,12 @@ function CreateListingModal({
     return [...inv, ...land];
   }, [inventoryItems, landSlots]);
 
-  const canSubmit = selectedItemId && price && Number(price) > 0 && !createLoading;
+  const canSubmit =
+    isConnected &&
+    !!selectedItemId &&
+    !!price &&
+    Number(price) > 0 &&
+    !createLoading;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1585,7 +2219,7 @@ function CreateListingModal({
               </SelectTrigger>
               <SelectContent>
                 {DURATION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.hours} value={String(opt.hours)}>
+                  <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>
                 ))}

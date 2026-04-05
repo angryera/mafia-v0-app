@@ -58,6 +58,7 @@ const CONTRACT_REGISTRY: {
       { key: "power", label: "Power" },
       { key: "rankXp", label: "Rank XP" },
       { key: "raceXp", label: "Race XP" },
+      { key: "ogCrate", label: "OG Crate (ERC1155 keys)" },
     ],
   },
   {

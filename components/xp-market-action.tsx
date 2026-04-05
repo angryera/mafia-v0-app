@@ -40,6 +40,14 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // ────────────────────────────────────────────────────────────────
 // Types
@@ -161,17 +169,43 @@ export function XpMarketAction() {
     }));
   }, [swapData]);
 
-  // For CREATING listings: Allow In-game Cash, BNB/PLS (native), and MAFIA tokens
-  const listingTokens = swapTokens.filter((t) => {
-    if (!t.isEnabled) return false;
-    // Allow native token (BNB/PLS)
-    if (t.tokenAddress === ZERO_ADDRESS) return true;
-    // Allow MAFIA token
-    if (t.tokenAddress.toLowerCase() === addresses.mafia.toLowerCase()) return true;
-    // Allow In-game Cash token
-    if (t.tokenAddress.toLowerCase() === addresses.cash.toLowerCase()) return true;
-    return false;
-  });
+  const swapTokenByAddress = useMemo(() => {
+    const map = new Map<string, SwapToken>();
+    for (const token of swapTokens) {
+      map.set(token.tokenAddress.toLowerCase(), token);
+    }
+    return map;
+  }, [swapTokens]);
+
+  // For CREATING listings: only allow native token (BNB/PLS) and MAFIA.
+  // These options are always available and are not sourced from swap token list.
+  const listingTokens = useMemo<SwapToken[]>(() => {
+    const nativeFromSwap = swapTokenByAddress.get(ZERO_ADDRESS.toLowerCase());
+    const mafiaFromSwap = swapTokenByAddress.get(addresses.mafia.toLowerCase());
+
+    return [
+      nativeFromSwap ?? {
+        name: chainConfig.id === "bnb" ? "BNB" : "PLS",
+        tokenAddress: ZERO_ADDRESS,
+        isStable: false,
+        isEnabled: true,
+        price: BigInt(0),
+        decimal: 18,
+        tokenId: 0,
+        formattedPrice: 0,
+      },
+      mafiaFromSwap ?? {
+        name: "MAFIA",
+        tokenAddress: addresses.mafia,
+        isStable: false,
+        isEnabled: true,
+        price: BigInt(0),
+        decimal: 18,
+        tokenId: 1,
+        formattedPrice: 0,
+      },
+    ];
+  }, [swapTokenByAddress, chainConfig.id, addresses.mafia]);
 
   // For PURCHASING listings: Allow BNB, MAFIA, USDT, USDC (stables)
   const purchaseTokens = swapTokens.filter((t) => {
@@ -184,7 +218,7 @@ export function XpMarketAction() {
     if (t.isStable) return true;
     return false;
   });
-  
+
   const selectedTokenInfo = listingTokens.find(
     (t) => t.tokenAddress === selectedToken
   );
@@ -193,9 +227,6 @@ export function XpMarketAction() {
   const nativeToken = listingTokens.find((t) => t.tokenAddress === ZERO_ADDRESS);
   const mafiaToken = listingTokens.find(
     (t) => t.tokenAddress.toLowerCase() === addresses.mafia.toLowerCase()
-  );
-  const cashToken = listingTokens.find(
-    (t) => t.tokenAddress.toLowerCase() === addresses.cash.toLowerCase()
   );
 
   // Fetch user XP data
@@ -241,7 +272,7 @@ export function XpMarketAction() {
 
   // Derived user XP info
   const rankNumber = rankLevelRaw !== undefined ? Number(rankLevelRaw) : null;
-  const rankXp = rankXpRaw !== undefined ? Math.floor(Number(rankXpRaw) / 100) : null;
+  const rankXp = rankXpRaw !== undefined ? Number(rankXpRaw) : null;
   const ksXp = killXpRaw !== undefined ? Number(killXpRaw) : null;
   const bustOutSkillXp = bustXpRaw !== undefined ? Number(bustXpRaw) : null;
   const raceXp = raceXpRaw !== undefined ? Number(raceXpRaw) : null;
@@ -513,7 +544,6 @@ export function XpMarketAction() {
           swapLoading={swapLoading}
           nativeToken={nativeToken}
           mafiaToken={mafiaToken}
-          cashToken={cashToken}
           xpPointInfo={xpPointInfo}
           estimatedUsd={estimatedUsd}
           isXpTypeAvailable={isXpTypeAvailable}
@@ -555,7 +585,6 @@ interface CreateListingPanelProps {
   swapLoading: boolean;
   nativeToken: SwapToken | undefined;
   mafiaToken: SwapToken | undefined;
-  cashToken: SwapToken | undefined;
   xpPointInfo: string | null;
   estimatedUsd: number | null;
   isXpTypeAvailable: boolean;
@@ -587,7 +616,6 @@ function CreateListingPanel({
   swapLoading,
   nativeToken,
   mafiaToken,
-  cashToken,
   xpPointInfo,
   estimatedUsd,
   isXpTypeAvailable,
@@ -632,7 +660,7 @@ function CreateListingPanel({
           </label>
           <div className="relative">
             <button
-              onClick={() => setXpTypeMenuOpen((prev) => !prev)}
+              onClick={() => setXpTypeMenuOpen(!xpTypeMenuOpen)}
               className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-4 py-3 text-left transition-colors hover:border-primary/30"
             >
               <span className={cn(
@@ -695,30 +723,12 @@ function CreateListingPanel({
           )}
         </div>
 
-        {/* Bid Asset selector - In-game Cash, BNB/PLS, and MAFIA */}
+        {/* Bid Asset selector - Native token and MAFIA */}
         <div>
           <label className="mb-2 block text-sm font-medium text-foreground">
             Payment Token
           </label>
           <div className="flex gap-2">
-            {cashToken && (
-              <button
-                onClick={() => setSelectedToken(cashToken.tokenAddress)}
-                className={cn(
-                  "flex-1 rounded-lg border px-3 py-3 text-sm font-medium transition-all",
-                  selectedToken === cashToken.tokenAddress
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground"
-                )}
-              >
-                <div className="flex flex-col items-center gap-1">
-                  <span>CASH</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    ${cashToken.formattedPrice.toFixed(4)}
-                  </span>
-                </div>
-              </button>
-            )}
             {nativeToken && (
               <button
                 onClick={() => setSelectedToken(nativeToken.tokenAddress)}
@@ -732,7 +742,7 @@ function CreateListingPanel({
                 <div className="flex flex-col items-center gap-1">
                   <span>{chainConfig.id === "bnb" ? "BNB" : "PLS"}</span>
                   <span className="text-[10px] text-muted-foreground">
-                    ${nativeToken.formattedPrice.toFixed(2)}
+                    {nativeToken.formattedPrice.toFixed(2)}
                   </span>
                 </div>
               </button>
@@ -750,7 +760,7 @@ function CreateListingPanel({
                 <div className="flex flex-col items-center gap-1">
                   <span>MAFIA</span>
                   <span className="text-[10px] text-muted-foreground">
-                    ${mafiaToken.formattedPrice.toFixed(4)}
+                    {mafiaToken.formattedPrice.toFixed(4)}
                   </span>
                 </div>
               </button>
@@ -930,79 +940,437 @@ function CreateListingPanel({
 // ────────────────────────────────────────────────────────────────
 
 const ITEMS_PER_PAGE = 10;
+type ListingsFilter = "active" | "finishable" | "expired";
 
 function ViewListingsPanel() {
   const { chainConfig } = useChain();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
   const { address } = useAccount();
+  const { toast } = useToast();
   const [listings, setListings] = useState<XPListing[]>([]);
   const [listingsLoading, setListingsLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
-  const [showExpired, setShowExpired] = useState(false);
+  const [listingsFilter, setListingsFilter] = useState<ListingsFilter>("active");
+  const [showMyListings, setShowMyListings] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [cancelingListingId, setCancelingListingId] = useState<bigint | null>(null);
+  const [finishingListingId, setFinishingListingId] = useState<bigint | null>(null);
+  const [biddingListing, setBiddingListing] = useState<XPListing | null>(null);
+
+  const {
+    writeContract: writeCancelListing,
+    data: cancelHash,
+    isPending: cancelPending,
+    error: cancelError,
+    reset: resetCancel,
+  } = useChainWriteContract();
+  const { isLoading: cancelConfirming, isSuccess: isCancelSuccess } =
+    useWaitForTransactionReceipt({ hash: cancelHash });
+  const {
+    writeContract: writeFinishListing,
+    data: finishHash,
+    isPending: finishPending,
+    error: finishError,
+    reset: resetFinish,
+  } = useChainWriteContract();
+  const { isLoading: finishConfirming, isSuccess: isFinishSuccess } =
+    useWaitForTransactionReceipt({ hash: finishHash });
+  const {
+    writeContract: writeBid,
+    data: bidHash,
+    isPending: bidPending,
+    error: bidError,
+    reset: resetBid,
+  } = useChainWriteContract();
+  const { isLoading: bidConfirming, isSuccess: isBidSuccess } =
+    useWaitForTransactionReceipt({ hash: bidHash });
+  const {
+    writeContract: writeApproveBidToken,
+    data: approveBidTokenHash,
+    isPending: approveBidTokenPending,
+    error: approveBidTokenError,
+    reset: resetApproveBidToken,
+  } = useChainWriteContract();
+  const { isLoading: approveBidTokenConfirming, isSuccess: isApproveBidTokenSuccess } =
+    useWaitForTransactionReceipt({ hash: approveBidTokenHash });
+
+  const { data: swapData } = useReadContract({
+    address: addresses.xpMarket,
+    abi: XP_MARKET_ABI,
+    functionName: "getSwapTokens",
+    chainId: chainConfig.wagmiChainId,
+  });
+
+  const swapTokens: SwapToken[] = useMemo(() => {
+    if (!swapData) return [];
+    const result = swapData as unknown as readonly [
+      readonly {
+        name: string;
+        decimal: number;
+        tokenAddress: `0x${string}`;
+        price: bigint;
+        isStable: boolean;
+        isEnabled: boolean;
+      }[],
+      readonly bigint[],
+    ];
+    if (!result[0] || !result[1]) return [];
+    return result[0].map((t, index) => ({
+      name: t.name,
+      tokenAddress: t.tokenAddress,
+      isStable: t.isStable,
+      isEnabled: t.isEnabled,
+      price: result[1][index],
+      decimal: Number(t.decimal),
+      tokenId: index,
+      formattedPrice: Number(formatUnits(result[1][index], 18)),
+    }));
+  }, [swapData]);
+
+  const swapTokenByAddress = useMemo(() => {
+    const map = new Map<string, SwapToken>();
+    for (const token of swapTokens) {
+      map.set(token.tokenAddress.toLowerCase(), token);
+    }
+    return map;
+  }, [swapTokens]);
+
+  const isMafiaBidToken =
+    !!biddingListing &&
+    biddingListing.listingToken.toLowerCase() === addresses.mafia.toLowerCase();
+  const { data: mafiaBidAllowanceRaw, refetch: refetchMafiaBidAllowance } = useReadContract({
+    address: addresses.mafia,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: address ? [address, addresses.xpMarket] : undefined,
+    chainId: chainConfig.wagmiChainId,
+    query: {
+      enabled: !!address && !!biddingListing && isMafiaBidToken,
+    },
+  });
 
   // Fetch listings using window.XpMarket.getXpListings (v9 SDK - only accepts pageSize)
-  useEffect(() => {
-    const fetchListings = async () => {
-      setListingsLoading(true);
-      try {
-        // Check if window.XpMarket is available
-        if (typeof window !== "undefined" && (window as any).XpMarket?.getXpListings) {
-          const result = await (window as any).XpMarket.getXpListings({
-            chain: chainConfig.id,
-            pageSize: 100, // Fetch up to 100 listings
-          });
-          
-          if (result && Array.isArray(result)) {
-            // Map the result to our XPListing type
-            const mappedListings: XPListing[] = result.map((item: any) => ({
-              id: BigInt(item.id),
-              xpType: Number(item.xpType),
-              listingType: Number(item.listingType),
-              status: Number(item.status),
-              xpPoint: BigInt(item.xpPoint),
-              owner: item.owner as `0x${string}`,
-              buyer: item.buyer as `0x${string}`,
-              startPrice: BigInt(item.startPrice),
-              currentPrice: BigInt(item.currentPrice),
-              endTimestamp: BigInt(item.endTimestamp),
-              listingToken: item.listingToken as `0x${string}`,
-              bids: (item.bids || []).map((bid: any) => ({
-                bidder: bid.bidder as `0x${string}`,
-                price: BigInt(bid.price),
-                timestamp: BigInt(bid.timestamp),
-              })),
-            }));
-            setListings(mappedListings);
-            setTotalCount(mappedListings.length);
-          }
-        }
-      } catch (error) {
-        console.error("[v0] Error fetching XP listings:", error);
-      } finally {
-        setListingsLoading(false);
-      }
-    };
+  const fetchListings = useCallback(async () => {
+    setListingsLoading(true);
+    try {
+      // Check if window.XpMarket is available
+      if (typeof window !== "undefined" && (window as any).XpMarket?.getXpListings) {
+        const result = await (window as any).XpMarket.getXpListings({
+          chain: chainConfig.id,
+          pageSize: 100, // Fetch up to 100 listings
+        });
 
-    fetchListings();
+        if (result && Array.isArray(result)) {
+          // Map the result to our XPListing type
+          const mappedListings: XPListing[] = result.map((item: any) => ({
+            id: BigInt(item.id),
+            xpType: Number(item.xpType),
+            listingType: Number(item.listingType),
+            status: Number(item.status),
+            xpPoint: BigInt(item.xpPoint),
+            owner: item.owner as `0x${string}`,
+            buyer: item.buyer as `0x${string}`,
+            startPrice: BigInt(item.startPrice),
+            currentPrice: BigInt(item.currentPrice),
+            endTimestamp: BigInt(item.endTimestamp),
+            listingToken: item.listingToken as `0x${string}`,
+            bids: (item.bids || []).map((bid: any) => ({
+              bidder: bid.bidder as `0x${string}`,
+              price: BigInt(bid.price),
+              timestamp: BigInt(bid.timestamp),
+            })),
+          }));
+          setListings(mappedListings);
+          setTotalCount(mappedListings.length);
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching XP listings:", error);
+    } finally {
+      setListingsLoading(false);
+    }
   }, [chainConfig.id]);
+
+  useEffect(() => {
+    fetchListings();
+  }, [fetchListings]);
+
+  useEffect(() => {
+    if (isCancelSuccess && cancelHash) {
+      toast({
+        title: "Listing Cancelled",
+        description: "Your XP listing was cancelled successfully.",
+      });
+      setCancelingListingId(null);
+      fetchListings();
+      resetCancel();
+    }
+  }, [isCancelSuccess, cancelHash, toast, fetchListings, resetCancel]);
+
+  useEffect(() => {
+    if (!cancelError) return;
+    toast({
+      variant: "destructive",
+      title: "Cancel Failed",
+      description: cancelError.message.includes("User rejected")
+        ? "Transaction rejected by user."
+        : cancelError.message.split("\n")[0],
+    });
+    setCancelingListingId(null);
+  }, [cancelError, toast]);
+
+  useEffect(() => {
+    if (isFinishSuccess && finishHash) {
+      toast({
+        title: "Listing Finished",
+        description: "Auction has been finished successfully.",
+      });
+      setFinishingListingId(null);
+      fetchListings();
+      resetFinish();
+    }
+  }, [isFinishSuccess, finishHash, toast, fetchListings, resetFinish]);
+
+  useEffect(() => {
+    if (!finishError) return;
+    toast({
+      variant: "destructive",
+      title: "Finish Failed",
+      description: finishError.message.includes("User rejected")
+        ? "Transaction rejected by user."
+        : finishError.message.split("\n")[0],
+    });
+    setFinishingListingId(null);
+  }, [finishError, toast]);
+
+  useEffect(() => {
+    if (isBidSuccess && bidHash) {
+      toast({
+        title: "Bid Submitted",
+        description: "Your bid has been placed successfully.",
+      });
+      setBiddingListing(null);
+      fetchListings();
+      resetBid();
+    }
+  }, [isBidSuccess, bidHash, toast, fetchListings, resetBid]);
+
+  useEffect(() => {
+    if (!bidError) return;
+    toast({
+      variant: "destructive",
+      title: "Bid Failed",
+      description: bidError.message.includes("User rejected")
+        ? "Transaction rejected by user."
+        : bidError.message.split("\n")[0],
+    });
+  }, [bidError, toast]);
+
+  useEffect(() => {
+    if (isApproveBidTokenSuccess && approveBidTokenHash) {
+      toast({
+        title: "MAFIA Approved",
+        description: "You can now place your bid.",
+      });
+      refetchMafiaBidAllowance();
+    }
+  }, [isApproveBidTokenSuccess, approveBidTokenHash, toast, refetchMafiaBidAllowance]);
+
+  useEffect(() => {
+    if (!approveBidTokenError) return;
+    toast({
+      variant: "destructive",
+      title: "Approval Failed",
+      description: approveBidTokenError.message.includes("User rejected")
+        ? "Transaction rejected by user."
+        : approveBidTokenError.message.split("\n")[0],
+    });
+  }, [approveBidTokenError, toast]);
+
+  const handleCancelListing = useCallback(
+    (listingId: bigint) => {
+      if (!address) {
+        toast({
+          variant: "destructive",
+          title: "Wallet Required",
+          description: "Connect wallet to cancel listing.",
+        });
+        return;
+      }
+
+      setCancelingListingId(listingId);
+      resetCancel();
+      writeCancelListing({
+        address: addresses.xpMarket,
+        abi: XP_MARKET_ABI,
+        functionName: "cancelListing",
+        args: [listingId],
+        chainId: chainConfig.wagmiChainId,
+      });
+    },
+    [address, toast, resetCancel, writeCancelListing, addresses.xpMarket, chainConfig.wagmiChainId],
+  );
+
+  const handleFinishListing = useCallback(
+    (listingId: bigint) => {
+      if (!address) {
+        toast({
+          variant: "destructive",
+          title: "Wallet Required",
+          description: "Connect wallet to finish listing.",
+        });
+        return;
+      }
+
+      setFinishingListingId(listingId);
+      resetFinish();
+      writeFinishListing({
+        address: addresses.xpMarket,
+        abi: XP_MARKET_ABI,
+        functionName: "finishAuctionItem",
+        args: [listingId],
+        chainId: chainConfig.wagmiChainId,
+      });
+    },
+    [address, toast, resetFinish, writeFinishListing, addresses.xpMarket, chainConfig.wagmiChainId],
+  );
+
+  const selectedSwapToken = useMemo(() => {
+    if (!biddingListing) return undefined;
+    return swapTokenByAddress.get(biddingListing.listingToken.toLowerCase());
+  }, [biddingListing, swapTokenByAddress]);
+
+  const isNativeBidToken = biddingListing?.listingToken === ZERO_ADDRESS;
+  const bidSwapTokenId =
+    biddingListing
+      ? isNativeBidToken
+        ? 0
+        : selectedSwapToken?.tokenId
+      : undefined;
+  const bidTokenSymbol = useMemo(() => {
+    if (!biddingListing) return "TOKEN";
+    if (isNativeBidToken) return chainConfig.id === "bnb" ? "BNB" : "PLS";
+    if (biddingListing.listingToken.toLowerCase() === addresses.mafia.toLowerCase()) return "MAFIA";
+    if (biddingListing.listingToken.toLowerCase() === addresses.cash.toLowerCase()) return "CASH";
+    return selectedSwapToken?.name || "TOKEN";
+  }, [biddingListing, isNativeBidToken, chainConfig.id, addresses.mafia, addresses.cash, selectedSwapToken]);
+  const bidTokenDecimals = selectedSwapToken?.decimal ?? 18;
+  const bidTimeLeft = biddingListing
+    ? Math.max(0, Number(biddingListing.endTimestamp) - Math.floor(Date.now() / 1000))
+    : 0;
+  const nextBidPrice =
+    biddingListing
+      ? (biddingListing.currentPrice * BigInt(105) + BigInt(99)) / BigInt(100)
+      : BigInt(0);
+  const mafiaBidAllowance = (mafiaBidAllowanceRaw as bigint | undefined) ?? BigInt(0);
+  const mafiaApprovalReady =
+    !isMafiaBidToken ||
+    mafiaBidAllowance >= nextBidPrice ||
+    isApproveBidTokenSuccess;
+  const mafiaApprovalLoading = approveBidTokenPending || approveBidTokenConfirming;
+  const canPlaceBid =
+    !!address &&
+    !!biddingListing &&
+    biddingListing.owner.toLowerCase() !== address.toLowerCase() &&
+    biddingListing.status === 0 &&
+    Number(biddingListing.endTimestamp) >= Math.floor(Date.now() / 1000) &&
+    bidSwapTokenId !== undefined &&
+    mafiaApprovalReady;
+
+  const handleOpenBid = useCallback((listing: XPListing) => {
+    setBiddingListing(listing);
+    resetApproveBidToken();
+  }, [resetApproveBidToken]);
+
+  const handleApproveMafiaBid = useCallback(() => {
+    if (!isMafiaBidToken || !biddingListing) return;
+
+    resetApproveBidToken();
+    writeApproveBidToken({
+      address: addresses.mafia,
+      abi: ERC20_ABI,
+      functionName: "approve",
+      args: [addresses.xpMarket, nextBidPrice],
+      chainId: chainConfig.wagmiChainId,
+    });
+  }, [
+    isMafiaBidToken,
+    biddingListing,
+    resetApproveBidToken,
+    writeApproveBidToken,
+    addresses.mafia,
+    addresses.xpMarket,
+    chainConfig.wagmiChainId,
+    nextBidPrice,
+  ]);
+
+  const handlePlaceBid = useCallback(() => {
+    if (!biddingListing || bidSwapTokenId === undefined || !canPlaceBid) return;
+
+    resetBid();
+    if (isNativeBidToken) {
+      writeBid({
+        address: addresses.xpMarket,
+        abi: XP_MARKET_ABI,
+        functionName: "bidOnAuctionItem",
+        args: [biddingListing.id, BigInt(bidSwapTokenId), nextBidPrice],
+        chainId: chainConfig.wagmiChainId,
+        value: nextBidPrice,
+      } as any);
+      return;
+    }
+
+    writeBid({
+      address: addresses.xpMarket,
+      abi: XP_MARKET_ABI,
+      functionName: "bidOnAuctionItem",
+      args: [biddingListing.id, BigInt(bidSwapTokenId), nextBidPrice],
+      chainId: chainConfig.wagmiChainId,
+    });
+  }, [
+    biddingListing,
+    bidSwapTokenId,
+    canPlaceBid,
+    resetBid,
+    writeBid,
+    addresses.xpMarket,
+    chainConfig.wagmiChainId,
+    nextBidPrice,
+    isNativeBidToken,
+  ]);
 
   // Filter listings based on active/expired status
   const now = Math.floor(Date.now() / 1000);
-  
-  const filteredListings = useMemo(() => {
-    // status = 0 means active listing, but we also check if time has expired
+
+  const statusFilteredListings = useMemo(() => {
+    // status = 0 means listing is still open on-chain.
     const activeStatus = listings.filter((l) => l.status === 0);
-    
-    if (showExpired) {
-      // Show expired: time has passed but status is still 0 (not finalized)
-      return activeStatus.filter((l) => Number(l.endTimestamp) < now);
-    } else {
-      // Show active: time has not passed
-      return activeStatus.filter((l) => Number(l.endTimestamp) >= now);
+
+    switch (listingsFilter) {
+      case "active":
+        return activeStatus.filter((l) => Number(l.endTimestamp) >= now);
+      case "finishable":
+        // Expired listings with bids that can be finalized.
+        return activeStatus.filter(
+          (l) => Number(l.endTimestamp) < now && l.bids.length > 0,
+        );
+      case "expired":
+        // Expired listings with no bids.
+        return activeStatus.filter(
+          (l) => Number(l.endTimestamp) < now && l.bids.length === 0,
+        );
+      default:
+        return activeStatus;
     }
-  }, [listings, showExpired, now]);
+  }, [listings, listingsFilter, now]);
+
+  const filteredListings = useMemo(() => {
+    if (!showMyListings) return statusFilteredListings;
+    if (!address) return [];
+    const account = address.toLowerCase();
+    return statusFilteredListings.filter((l) => l.owner.toLowerCase() === account);
+  }, [statusFilteredListings, showMyListings, address]);
 
   // Pagination
   const totalPages = Math.max(1, Math.ceil(filteredListings.length / ITEMS_PER_PAGE));
@@ -1014,33 +1382,79 @@ function ViewListingsPanel() {
   // Reset page when filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [showExpired]);
+  }, [listingsFilter, showMyListings, address]);
 
-  const activeCount = listings.filter((l) => l.status === 0 && Number(l.endTimestamp) >= now).length;
-  const expiredCount = listings.filter((l) => l.status === 0 && Number(l.endTimestamp) < now).length;
+  const scopedListings = useMemo(() => {
+    if (!showMyListings) return listings;
+    if (!address) return [] as XPListing[];
+    const account = address.toLowerCase();
+    return listings.filter((l) => l.owner.toLowerCase() === account);
+  }, [listings, showMyListings, address]);
+
+  const activeCount = scopedListings.filter(
+    (l) => l.status === 0 && Number(l.endTimestamp) >= now
+  ).length;
+  const finishableCount = scopedListings.filter(
+    (l) => l.status === 0 && Number(l.endTimestamp) < now && l.bids.length > 0
+  ).length;
+  const expiredCount = scopedListings.filter(
+    (l) => l.status === 0 && Number(l.endTimestamp) < now && l.bids.length === 0
+  ).length;
+  const myListingsCount = address
+    ? listings.filter((l) => l.owner.toLowerCase() === address.toLowerCase()).length
+    : 0;
+  const myCaseCount = address
+    ? statusFilteredListings.filter((l) => l.owner.toLowerCase() === address.toLowerCase()).length
+    : 0;
 
   return (
     <div className="rounded-xl border border-border bg-card p-6">
       <div className="flex flex-col gap-4 mb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <List className="h-5 w-5 text-primary" />
             <h3 className="text-lg font-semibold text-foreground">
               XP Listings
             </h3>
           </div>
-          <span className="text-xs text-muted-foreground">
-            {filteredListings.length} {showExpired ? "expired" : "active"} / {totalCount} total
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {filteredListings.length} {listingsFilter} / {scopedListings.length} scoped
+            </span>
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-background/50 p-1">
+              <button
+                onClick={() => setShowMyListings(false)}
+                className={cn(
+                  "rounded-md px-2.5 py-1.5 text-xs font-medium transition-all",
+                  !showMyListings
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setShowMyListings(true)}
+                className={cn(
+                  "rounded-md px-2.5 py-1.5 text-xs font-medium transition-all",
+                  showMyListings
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Mine ({myCaseCount}/{myListingsCount})
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Active/Expired Toggle */}
+        {/* Listings Filter */}
         <div className="flex items-center gap-3 rounded-lg border border-border bg-background/50 p-2">
           <button
-            onClick={() => setShowExpired(false)}
+            onClick={() => setListingsFilter("active")}
             className={cn(
               "flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all",
-              !showExpired
+              listingsFilter === "active"
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground"
             )}
@@ -1049,10 +1463,22 @@ function ViewListingsPanel() {
             Active ({activeCount})
           </button>
           <button
-            onClick={() => setShowExpired(true)}
+            onClick={() => setListingsFilter("finishable")}
             className={cn(
               "flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all",
-              showExpired
+              listingsFilter === "finishable"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Gavel className="h-4 w-4" />
+            Finishable ({finishableCount})
+          </button>
+          <button
+            onClick={() => setListingsFilter("expired")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all",
+              listingsFilter === "expired"
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground"
             )}
@@ -1061,6 +1487,7 @@ function ViewListingsPanel() {
             Expired ({expiredCount})
           </button>
         </div>
+
       </div>
 
       {listingsLoading ? (
@@ -1073,12 +1500,13 @@ function ViewListingsPanel() {
             <Gavel className="h-6 w-6 text-muted-foreground" />
           </div>
           <p className="text-sm text-muted-foreground">
-            No {showExpired ? "expired" : "active"} listings
+            {showMyListings ? "No my" : "No"} {listingsFilter} listings
           </p>
           <p className="text-xs text-muted-foreground/60 mt-1">
-            {showExpired 
-              ? "Expired listings will appear here once auctions end."
-              : "Be the first to list your XP on the market!"}
+            {showMyListings && !address && "Connect your wallet to view your listings."}
+            {listingsFilter === "active" && "Be the first to list your XP on the market!"}
+            {listingsFilter === "finishable" && "Listings with bids appear here after expiry and can be finalized by anyone."}
+            {listingsFilter === "expired" && "Listings with no bids appear here after expiry."}
           </p>
         </div>
       ) : (
@@ -1090,6 +1518,15 @@ function ViewListingsPanel() {
                 listing={listing}
                 explorer={explorer}
                 isOwn={address?.toLowerCase() === listing.owner.toLowerCase()}
+                onOpenBid={handleOpenBid}
+                onCancelListing={handleCancelListing}
+                onFinishListing={handleFinishListing}
+                isCanceling={
+                  cancelingListingId === listing.id && (cancelPending || cancelConfirming)
+                }
+                isFinishing={
+                  finishingListingId === listing.id && (finishPending || finishConfirming)
+                }
                 chainConfig={chainConfig}
                 mafiaAddress={addresses.mafia}
                 cashAddress={addresses.cash}
@@ -1144,6 +1581,120 @@ function ViewListingsPanel() {
           )}
         </>
       )}
+
+      <Dialog
+        open={!!biddingListing}
+        onOpenChange={(open) => !open && setBiddingListing(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Place Bid</DialogTitle>
+            <DialogDescription>
+              Bid 5% higher than the current listing price.
+            </DialogDescription>
+          </DialogHeader>
+
+          {biddingListing && (
+            <div className="space-y-3 py-2">
+              <div className="rounded-lg border border-border bg-background/50 p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Listing ID</span>
+                  <span className="font-mono">#{biddingListing.id.toString()}</span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-muted-foreground">Owner</span>
+                  <span className="font-mono">
+                    {biddingListing.owner.slice(0, 8)}...{biddingListing.owner.slice(-6)}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-muted-foreground">XP Type</span>
+                  <span className="font-medium">
+                    {XP_TYPES.find((t) => t.id === biddingListing.xpType)?.label || `Type ${biddingListing.xpType}`}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-muted-foreground">Token</span>
+                  <span className="font-medium">{bidTokenSymbol}</span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-muted-foreground">Current Price</span>
+                  <span className="font-mono">
+                    {Number(formatUnits(biddingListing.currentPrice, bidTokenDecimals)).toFixed(4)} {bidTokenSymbol}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-muted-foreground">Your Bid (min)</span>
+                  <span className="font-mono text-primary">
+                    {Number(formatUnits(nextBidPrice, bidTokenDecimals)).toFixed(4)} {bidTokenSymbol}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-muted-foreground">Bids</span>
+                  <span className="font-medium">{biddingListing.bids.length}</span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
+                  <span className="text-muted-foreground">Ends In</span>
+                  <span className="font-medium">
+                    {bidTimeLeft <= 0
+                      ? "Expired"
+                      : `${Math.floor(bidTimeLeft / 3600)}h ${Math.floor((bidTimeLeft % 3600) / 60)}m`}
+                  </span>
+                </div>
+              </div>
+
+              {bidSwapTokenId === undefined && (
+                <p className="text-xs text-red-400">
+                  Listing token is not currently supported for bidding.
+                </p>
+              )}
+
+              {isMafiaBidToken && !mafiaApprovalReady && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                  <p className="text-xs text-amber-400">
+                    MAFIA approval required before bidding.
+                  </p>
+                  <button
+                    onClick={handleApproveMafiaBid}
+                    disabled={mafiaApprovalLoading}
+                    className={cn(
+                      "mt-2 rounded-md px-3 py-1.5 text-xs font-medium",
+                      mafiaApprovalLoading
+                        ? "bg-secondary text-muted-foreground cursor-not-allowed"
+                        : "bg-amber-500/20 text-amber-300 hover:bg-amber-500/30",
+                    )}
+                  >
+                    {mafiaApprovalLoading
+                      ? "Approving..."
+                      : `Approve ${Number(formatUnits(nextBidPrice, bidTokenDecimals)).toFixed(4)} MAFIA`}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <button
+              onClick={() => setBiddingListing(null)}
+              className="rounded-md border border-border px-3 py-2 text-sm text-foreground hover:bg-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handlePlaceBid}
+              disabled={!canPlaceBid || bidPending || bidConfirming || mafiaApprovalLoading}
+              className={cn(
+                "rounded-md px-3 py-2 text-sm font-medium",
+                !canPlaceBid || bidPending || bidConfirming || mafiaApprovalLoading
+                  ? "bg-secondary text-muted-foreground cursor-not-allowed"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90",
+              )}
+            >
+              {bidPending || bidConfirming ? "Bidding..." : "Place Bid"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1156,17 +1707,38 @@ interface ListingCardProps {
   listing: XPListing;
   explorer: string;
   isOwn: boolean;
+  onOpenBid: (listing: XPListing) => void;
+  onCancelListing: (listingId: bigint) => void;
+  onFinishListing: (listingId: bigint) => void;
+  isCanceling: boolean;
+  isFinishing: boolean;
   chainConfig: ReturnType<typeof useChain>["chainConfig"];
   mafiaAddress: `0x${string}`;
   cashAddress: `0x${string}`;
 }
 
-function ListingCard({ listing, explorer, isOwn, chainConfig, mafiaAddress, cashAddress }: ListingCardProps) {
+function ListingCard({
+  listing,
+  explorer,
+  isOwn,
+  onOpenBid,
+  onCancelListing,
+  onFinishListing,
+  isCanceling,
+  isFinishing,
+  chainConfig,
+  mafiaAddress,
+  cashAddress,
+}: ListingCardProps) {
   const xpType = XP_TYPES.find((t) => t.id === listing.xpType);
   const now = Math.floor(Date.now() / 1000);
   const endTime = Number(listing.endTimestamp);
   const isExpired = endTime < now;
   const timeLeft = endTime - now;
+  const hasBids = listing.bids.length > 0;
+  const canCancel = isOwn && listing.status === 0 && !hasBids;
+  const canFinish = listing.status === 0 && isExpired && hasBids;
+  const canBid = !isOwn && listing.status === 0 && !isExpired;
 
   // Get token name based on listing token
   const getTokenName = () => {
@@ -1185,7 +1757,7 @@ function ListingCard({ listing, explorer, isOwn, chainConfig, mafiaAddress, cash
   // Format XP point information
   const formatXpInfo = () => {
     const xpPoint = Number(listing.xpPoint);
-    
+
     switch (listing.xpType) {
       case 0: // Rank XP
         // Find rank level from xpPoint - RANK_XP is array indexed by rank-1
@@ -1197,7 +1769,7 @@ function ListingCard({ listing, explorer, isOwn, chainConfig, mafiaAddress, cash
           }
         }
         const rankName = RANK_NAMES[rankNumber] || `Level ${rankNumber}`;
-        
+
         // Calculate percent to next rank
         const currentLevelIndex = rankNumber - 1;
         const nextLevelIndex = rankNumber;
@@ -1217,28 +1789,28 @@ function ListingCard({ listing, explorer, isOwn, chainConfig, mafiaAddress, cash
           sub: `${percent.toFixed(2)}% to next rank`,
           xpValue: xpPoint.toLocaleString(),
         };
-      
+
       case 1: // Kill Skill XP
         return {
           main: `Kill Skill`,
           sub: `${(xpPoint / 10000).toFixed(4)}%`,
           xpValue: xpPoint.toLocaleString(),
         };
-      
+
       case 2: // Bustout XP
         return {
           main: `Bustout`,
           sub: `${(xpPoint / 5000).toFixed(4)}%`,
           xpValue: xpPoint.toLocaleString(),
         };
-      
+
       case 3: // Race XP
         return {
           main: `Race`,
           sub: `${(xpPoint / MAX_RACE_XP).toFixed(4)}%`,
           xpValue: xpPoint.toLocaleString(),
         };
-      
+
       default:
         return {
           main: `Unknown`,
@@ -1263,12 +1835,16 @@ function ListingCard({ listing, explorer, isOwn, chainConfig, mafiaAddress, cash
 
   return (
     <div
+      onClick={() => {
+        if (canBid) onOpenBid(listing);
+      }}
       className={cn(
         "rounded-lg border p-4 transition-all",
         isOwn
           ? "border-primary/30 bg-primary/5"
           : "border-border bg-background/50",
-        isExpired && "opacity-60"
+        isExpired && !canFinish && "opacity-60",
+        canBid && "cursor-pointer hover:border-primary/40 hover:bg-primary/5",
       )}
     >
       <div className="flex items-start justify-between gap-4">
@@ -1288,7 +1864,7 @@ function ListingCard({ listing, explorer, isOwn, chainConfig, mafiaAddress, cash
               </span>
             )}
           </div>
-          
+
           {/* XP Information */}
           <div className="mb-1.5 rounded-md bg-secondary/30 px-2 py-1.5">
             <div className="flex items-center justify-between">
@@ -1314,13 +1890,12 @@ function ListingCard({ listing, explorer, isOwn, chainConfig, mafiaAddress, cash
         <div className="text-right shrink-0">
           {/* Price with token name */}
           <div className="flex items-center gap-1 justify-end">
-            <DollarSign className="h-3.5 w-3.5 text-primary" />
             <p className="font-mono text-sm font-semibold text-foreground">
               {Number(formatUnits(listing.currentPrice, 18)).toFixed(4)}
             </p>
             <span className="text-xs text-primary font-medium">{tokenName}</span>
           </div>
-          
+
           {/* Start price */}
           {listing.startPrice !== listing.currentPrice && (
             <p className="text-[10px] text-muted-foreground mt-0.5">
@@ -1349,6 +1924,74 @@ function ListingCard({ listing, explorer, isOwn, chainConfig, mafiaAddress, cash
             {listing.bids.length} bid{listing.bids.length !== 1 ? "s" : ""} -
             Current: {listing.bids[listing.bids.length - 1]?.bidder.slice(0, 6)}...
           </p>
+        </div>
+      )}
+
+      {canCancel && (
+        <div className="mt-3 pt-2 border-t border-border">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancelListing(listing.id);
+            }}
+            disabled={isCanceling}
+            className={cn(
+              "w-full rounded-md px-3 py-2 text-xs font-medium transition-all",
+              isCanceling
+                ? "bg-secondary text-muted-foreground cursor-not-allowed"
+                : "bg-red-500/10 text-red-400 hover:bg-red-500/20",
+            )}
+          >
+            {isCanceling ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Cancelling...
+              </span>
+            ) : (
+              "Cancel Listing"
+            )}
+          </button>
+        </div>
+      )}
+
+      {canFinish && (
+        <div className="mt-3 pt-2 border-t border-border">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onFinishListing(listing.id);
+            }}
+            disabled={isFinishing}
+            className={cn(
+              "w-full rounded-md px-3 py-2 text-xs font-medium transition-all",
+              isFinishing
+                ? "bg-secondary text-muted-foreground cursor-not-allowed"
+                : "bg-green-500/10 text-green-400 hover:bg-green-500/20",
+            )}
+          >
+            {isFinishing ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Finishing...
+              </span>
+            ) : (
+              "Finish Listing"
+            )}
+          </button>
+        </div>
+      )}
+
+      {canBid && (
+        <div className="mt-3 pt-2 border-t border-border">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenBid(listing);
+            }}
+            className="w-full rounded-md bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20"
+          >
+            Place Bid
+          </button>
         </div>
       )}
     </div>

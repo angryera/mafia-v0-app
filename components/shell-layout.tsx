@@ -2,8 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { TopBar, Sidebar, getTabFromPath } from "@/components/header";
-import type { Tab } from "@/components/header";
-import { useChain } from "@/components/chain-provider";
+import { ProfileGate } from "@/components/profile-gate";
 
 interface ShellLayoutProps {
   children: React.ReactNode;
@@ -12,7 +11,6 @@ interface ShellLayoutProps {
 export function ShellLayout({ children }: ShellLayoutProps) {
   const pathname = usePathname();
   const activeTab = getTabFromPath(pathname);
-  const { chainConfig } = useChain();
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -29,7 +27,7 @@ export function ShellLayout({ children }: ShellLayoutProps) {
 
         {/* Scrollable content area */}
         <main className="flex-1 overflow-y-auto">
-          {children}
+          <ProfileGate>{children}</ProfileGate>
         </main>
       </div>
     </div>

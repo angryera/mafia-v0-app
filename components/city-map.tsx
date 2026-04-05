@@ -7,12 +7,40 @@ import React, {
   useEffect,
   useMemo,
 } from "react";
+import { Loader2, MapPin } from "lucide-react";
+import { useAccount } from "wagmi";
 import { cn } from "@/lib/utils";
+import { useChain } from "@/components/chain-provider";
+import {
+  CityMapMySlotsPanel,
+  type MySlotRow,
+} from "@/components/city-map-my-slots";
+import { slotHasOwner, type ParsedSlotInfo } from "@/lib/city-map-types";
+import { getSlotBuildingLabel } from "@/lib/city-slot-config";
+import { CityMapSlotDetail } from "@/components/city-map-slot-detail";
+import { CityMapLandClaim } from "@/components/city-map-land-claim";
+import { City } from "@/lib/contract";
 
-// ────────────────────────────────────────────────────────────────
-// Types
-// ────────────────────────────────────────────────────────────────
-type CellType = "empty" | "user" | "family-hq" | "protocol";
+export type { ParsedSlotInfo };
+
+declare global {
+  interface Window {
+    MafiaMap?: {
+      getSlots: (opts: {
+        chain: string;
+        cityId: number;
+      }) => Promise<ParsedSlotInfo[]>;
+    };
+  }
+}
+
+type CellType =
+  | "empty"
+  | "user"
+  | "family-hq"
+  | "protocol"
+  | "business"
+  | "raid";
 
 interface CellData {
   x: number;
@@ -20,6 +48,7 @@ interface CellData {
   type: CellType;
   owner?: string;
   name?: string;
+  slot?: ParsedSlotInfo;
 }
 
 const GRID_COLS = 50;
@@ -30,6 +59,9 @@ const CELL_STEP = CELL_SIZE + CELL_GAP;
 
 const GRID_W = GRID_COLS * CELL_STEP - CELL_GAP;
 const GRID_H = GRID_ROWS * CELL_STEP - CELL_GAP;
+
+/** Ignore tile click after pointer moved this far (pan / span). */
+const PAN_CLICK_SUPPRESS_PX = 6;
 
 // ────────────────────────────────────────────────────────────────
 // Color & label config per type
@@ -47,7 +79,7 @@ const TYPE_META: Record<
   user: {
     fill: "hsl(172 66% 40%)",
     fillHover: "hsl(172 66% 50%)",
-    label: "User Owned",
+    label: "User slot",
     dot: "bg-[hsl(172_66%_40%)]",
   },
   "family-hq": {
@@ -59,162 +91,205 @@ const TYPE_META: Record<
   protocol: {
     fill: "hsl(43 96% 56%)",
     fillHover: "hsl(43 96% 66%)",
-    label: "Protocol Owned",
+    label: "Protocol",
     dot: "bg-[hsl(43_96%_56%)]",
+  },
+  business: {
+    fill: "hsl(210 70% 45%)",
+    fillHover: "hsl(210 70% 55%)",
+    label: "Business",
+    dot: "bg-[hsl(210_70%_45%)]",
+  },
+  raid: {
+    fill: "hsl(12 76% 48%)",
+    fillHover: "hsl(12 76% 58%)",
+    label: "Raid spot",
+    dot: "bg-[hsl(12_76%_48%)]",
   },
 };
 
-// ────────────────────────────────────────────────────────────────
-// Deterministic mock data seeded by coords
-// ────────────────────────────────────────────────────────────────
-function pseudoRandom(x: number, y: number): number {
-  let h = (x * 374761393 + y * 668265263 + 1274126177) | 0;
-  h = ((h ^ (h >> 13)) * 1274126177) | 0;
-  return (h >>> 0) / 4294967296;
+const SLOT_TYPE_LABELS: Record<number, string> = {
+  1: "User slot",
+  2: "Protocol",
+  3: "Business",
+  4: "Family HQ",
+  5: "Raid spot",
+};
+
+const LEGEND_ORDER: CellType[] = [
+  "empty",
+  "user",
+  "business",
+  "protocol",
+  "family-hq",
+  "raid",
+];
+
+function slotTypeToCellType(slotType: number): CellType {
+  switch (slotType) {
+    case 1:
+      return "user";
+    case 2:
+      return "protocol";
+    case 3:
+      return "business";
+    case 4:
+      return "family-hq";
+    case 5:
+      return "raid";
+    default:
+      return "empty";
+  }
 }
 
-const FAMILY_NAMES = [
-  "Corleone",
-  "Gambino",
-  "Lucchese",
-  "Bonanno",
-  "Colombo",
-  "Genovese",
-  "Barzini",
-  "Tattaglia",
-];
+function shortAddress(addr: string): string {
+  if (!addr || addr.length < 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
 
-const BIZ_NAMES = [
-  "Downtown Bank",
-  "Night Club",
-  "Auto Garage",
-  "Arms Depot",
-  "Smuggler's Den",
-  "Casino Royale",
-  "Harbor Warehouse",
-  "Penthouse Suite",
-  "Steel Works",
-  "Underground Lab",
-];
-
-function generateGrid(): CellData[] {
+function generateEmptyGrid(): CellData[] {
   const cells: CellData[] = [];
   for (let y = 0; y < GRID_ROWS; y++) {
     for (let x = 0; x < GRID_COLS; x++) {
-      const r = pseudoRandom(x, y);
-      let type: CellType = "empty";
-      let owner: string | undefined;
-      let name: string | undefined;
-
-      if (r < 0.12) {
-        type = "user";
-        const ownerHash = Math.floor(pseudoRandom(x + 99, y + 77) * 0xffffff)
-          .toString(16)
-          .padStart(6, "0");
-        owner = `0x${ownerHash}...${ownerHash.slice(0, 4)}`;
-        name =
-          BIZ_NAMES[
-            Math.floor(pseudoRandom(x + 11, y + 23) * BIZ_NAMES.length)
-          ];
-      } else if (r < 0.16) {
-        type = "family-hq";
-        name =
-          FAMILY_NAMES[
-            Math.floor(pseudoRandom(x + 33, y + 44) * FAMILY_NAMES.length)
-          ] + " HQ";
-        owner = name;
-      } else if (r < 0.22) {
-        type = "protocol";
-        name = "Protocol Asset";
-        owner = "PlayMafia Protocol";
-      }
-
-      cells.push({ x, y, type, owner, name });
+      cells.push({ x, y, type: "empty" });
     }
   }
   return cells;
 }
 
-// ────────────────────────────────────────────────────────────────
-// Popover component
-// ────────────────────────────────────────────────────────────────
-function CellPopover({
-  cell,
-  position,
-  onClose,
-}: {
-  cell: CellData;
-  position: { x: number; y: number };
-  onClose: () => void;
-}) {
-  const meta = TYPE_META[cell.type];
-  const popoverRef = useRef<HTMLDivElement>(null);
+function applySlotsToGrid(
+  base: CellData[],
+  slots: ParsedSlotInfo[]
+): CellData[] {
+  const next = base.map((c) => ({ ...c }));
+  for (const slot of slots) {
+    if (
+      slot.x < 0 ||
+      slot.x >= GRID_COLS ||
+      slot.y < 0 ||
+      slot.y >= GRID_ROWS
+    ) {
+      continue;
+    }
+    const idx = slot.y * GRID_COLS + slot.x;
+    const cellType = slotTypeToCellType(slot.slotType);
+    if (cellType === "empty") continue;
+
+    const owned = slotHasOwner(slot);
+    // User-slot tiles with no on-chain owner are vacant plots — same look as empty grid.
+    const displayType =
+      cellType === "user" && !owned ? "empty" : cellType;
+
+    const building = getSlotBuildingLabel(slot);
+    const label =
+      building ||
+      SLOT_TYPE_LABELS[slot.slotType] ||
+      `Type ${slot.slotType}`;
+
+    next[idx] = {
+      x: slot.x,
+      y: slot.y,
+      type: displayType,
+      name: displayType === "empty" && cellType === "user" ? undefined : label,
+      owner: owned ? shortAddress(slot.owner) : undefined,
+      slot,
+    };
+  }
+  return next;
+}
+
+function useMafiaMapScript() {
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(e.target as Node)
-      ) {
-        onClose();
-      }
+    if (typeof window !== "undefined" && window.MafiaMap) {
+      setReady(true);
+      return;
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [onClose]);
+    const existing = document.querySelector('script[src="/js/mafia-map.js"]');
+    if (existing) {
+      existing.addEventListener("load", () => setReady(true));
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "/js/mafia-map.js";
+    script.async = true;
+    script.onload = () => setReady(true);
+    script.onerror = () => console.warn("MafiaMap script failed to load");
+    document.head.appendChild(script);
+  }, []);
 
-  return (
-    <div
-      ref={popoverRef}
-      className="pointer-events-auto absolute z-50 w-56 rounded-lg border border-border bg-popover p-3 shadow-xl"
-      style={{
-        left: position.x,
-        top: position.y,
-      }}
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <span
-          className="h-3 w-3 rounded-sm shrink-0"
-          style={{ backgroundColor: meta.fill }}
-        />
-        <span className="text-xs font-semibold text-foreground">
-          {meta.label}
-        </span>
-      </div>
-
-      <div className="space-y-1.5 text-xs">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Coords</span>
-          <span className="font-mono text-foreground">
-            ({cell.x}, {cell.y})
-          </span>
-        </div>
-        {cell.name && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Name</span>
-            <span className="text-foreground truncate ml-2 max-w-[120px]">
-              {cell.name}
-            </span>
-          </div>
-        )}
-        {cell.owner && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Owner</span>
-            <span className="font-mono text-foreground truncate ml-2 max-w-[120px]">
-              {cell.owner}
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return ready;
 }
 
 // ────────────────────────────────────────────────────────────────
 // Canvas grid
 // ────────────────────────────────────────────────────────────────
+type MapFocusSlot = { cityId: number; x: number; y: number };
+
+function isMySlot(
+  slot: ParsedSlotInfo | undefined,
+  address: string | undefined
+): boolean {
+  if (!address || !slot || !slotHasOwner(slot)) return false;
+  return slot.owner.toLowerCase() === address.toLowerCase();
+}
+
 export function CityMap() {
-  const cells = useMemo(generateGrid, []);
+  const { chainConfig } = useChain();
+  const { address } = useAccount();
+  const mapScriptReady = useMafiaMapScript();
+
+  const [mySlotsOpen, setMySlotsOpen] = useState(false);
+  const [mapFocusSlot, setMapFocusSlot] = useState<MapFocusSlot | null>(null);
+
+  const requestFocusSlot = useCallback(
+    (cid: number, x: number, y: number) => {
+      setMapFocusSlot({ cityId: cid, x, y });
+    },
+    []
+  );
+
+  const clearFocusSlot = useCallback(() => setMapFocusSlot(null), []);
+
+  const emptyTemplate = useMemo(() => generateEmptyGrid(), []);
+
+  const [cells, setCells] = useState<CellData[]>(() => generateEmptyGrid());
+  const [cityId, setCityId] = useState(1);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+
+  const reloadSlots = useCallback(async () => {
+    if (!mapScriptReady || !window.MafiaMap?.getSlots) {
+      setSlotsLoading(false);
+      setCells(emptyTemplate);
+      return;
+    }
+    setSlotsLoading(true);
+    setSlotsError(null);
+    try {
+      const slots = await window.MafiaMap!.getSlots({
+        chain: chainConfig.id,
+        cityId,
+      });
+      setCells(applySlotsToGrid(emptyTemplate, slots));
+    } catch (e) {
+      console.error("[CityMap] getSlots failed:", e);
+      setSlotsError("Could not load map slots");
+      setCells(emptyTemplate);
+    } finally {
+      setSlotsLoading(false);
+    }
+  }, [mapScriptReady, chainConfig.id, cityId, emptyTemplate]);
+
+  useEffect(() => {
+    if (!mapScriptReady || !window.MafiaMap?.getSlots) {
+      setSlotsLoading(false);
+      setCells(emptyTemplate);
+      return;
+    }
+    void reloadSlots();
+  }, [mapScriptReady, chainConfig.id, cityId, emptyTemplate, reloadSlots]);
 
   // Transform state
   const [scale, setScale] = useState(1);
@@ -223,15 +298,20 @@ export function CityMap() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [translateStart, setTranslateStart] = useState({ x: 0, y: 0 });
 
-  // Popover state
+  // Tile detail overlay
   const [selectedCell, setSelectedCell] = useState<CellData | null>(null);
-  const [popoverPos, setPopoverPos] = useState({ x: 0, y: 0 });
 
   // Hover state
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scaleRef = useRef(scale);
+  const translateRef = useRef(translate);
+  scaleRef.current = scale;
+  translateRef.current = translate;
+  /** True when the current pointer sequence moved enough to count as a pan (suppress click). */
+  const panGestureRef = useRef(false);
 
   // Center grid on mount
   useEffect(() => {
@@ -248,6 +328,29 @@ export function CityMap() {
       y: (rect.height - GRID_H * initScale) / 2,
     });
   }, []);
+
+  useEffect(() => {
+    if (!mapFocusSlot) return;
+    if (cityId !== mapFocusSlot.cityId) {
+      setCityId(mapFocusSlot.cityId);
+    }
+  }, [mapFocusSlot, cityId]);
+
+  useEffect(() => {
+    if (!mapFocusSlot || !containerRef.current) return;
+    if (cityId !== mapFocusSlot.cityId) return;
+    if (slotsLoading) return;
+    const container = containerRef.current;
+    const rect = container.getBoundingClientRect();
+    const cx = (mapFocusSlot.x + 0.5) * CELL_STEP;
+    const cy = (mapFocusSlot.y + 0.5) * CELL_STEP;
+    const s = scaleRef.current;
+    setTranslate({
+      x: rect.width / 2 - cx * s,
+      y: rect.height / 2 - cy * s,
+    });
+    clearFocusSlot();
+  }, [mapFocusSlot, cityId, slotsLoading, clearFocusSlot]);
 
   // Draw canvas
   const draw = useCallback(
@@ -281,9 +384,19 @@ export function CityMap() {
           CELL_SIZE,
           CELL_SIZE
         );
+        if (isMySlot(cell.slot, address)) {
+          ctx.strokeStyle = "rgba(250, 204, 21, 0.95)";
+          ctx.lineWidth = 2;
+          ctx.strokeRect(
+            cell.x * CELL_STEP + 0.5,
+            cell.y * CELL_STEP + 0.5,
+            CELL_SIZE - 1,
+            CELL_SIZE - 1
+          );
+        }
       }
     },
-    [cells]
+    [cells, address]
   );
 
   // Redraw on hover change
@@ -291,10 +404,44 @@ export function CityMap() {
     draw(hoveredIdx);
   }, [draw, hoveredIdx]);
 
+  /** Wheel zoom must use a non-passive listener so the page does not scroll (React onWheel is passive). */
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const s = scaleRef.current;
+      const t = translateRef.current;
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      const newScale = Math.min(Math.max(s * factor, 0.3), 5);
+      setTranslate({
+        x: mx - (mx - t.x) * (newScale / s),
+        y: my - (my - t.y) * (newScale / s),
+      });
+      setScale(newScale);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCell) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [selectedCell]);
+
   // ── Pan handlers ──
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (e.button !== 0) return;
+      panGestureRef.current = false;
       setIsDragging(true);
       setDragStart({ x: e.clientX, y: e.clientY });
       setTranslateStart(translate);
@@ -320,6 +467,14 @@ export function CityMap() {
       }
 
       if (!isDragging) return;
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      if (
+        dx * dx + dy * dy >=
+        PAN_CLICK_SUPPRESS_PX * PAN_CLICK_SUPPRESS_PX
+      ) {
+        panGestureRef.current = true;
+      }
       setTranslate({
         x: translateStart.x + (e.clientX - dragStart.x),
         y: translateStart.y + (e.clientY - dragStart.y),
@@ -332,32 +487,13 @@ export function CityMap() {
     setIsDragging(false);
   }, []);
 
-  // ── Zoom handler ──
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
-      e.preventDefault();
-      const container = containerRef.current;
-      if (!container) return;
-
-      const rect = container.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
-
-      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
-      const newScale = Math.min(Math.max(scale * factor, 0.3), 5);
-
-      setTranslate({
-        x: mx - (mx - translate.x) * (newScale / scale),
-        y: my - (my - translate.y) * (newScale / scale),
-      });
-      setScale(newScale);
-    },
-    [scale, translate]
-  );
-
   // ── Click handler ──
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
+      if (panGestureRef.current) {
+        panGestureRef.current = false;
+        return;
+      }
       if (!canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
       const cx = (e.clientX - rect.left) / scale;
@@ -373,18 +509,7 @@ export function CityMap() {
       const cell = cells[gy * GRID_COLS + gx];
       if (!cell) return;
 
-      // Position popover relative to container
-      const containerRect = containerRef.current!.getBoundingClientRect();
-      let px = e.clientX - containerRect.left + 12;
-      let py = e.clientY - containerRect.top - 60;
-
-      // Keep popover in bounds
-      if (px + 224 > containerRect.width) px = px - 248;
-      if (py < 8) py = 8;
-      if (py + 120 > containerRect.height) py = containerRect.height - 128;
-
       setSelectedCell(cell);
-      setPopoverPos({ x: px, y: py });
     },
     [cells, scale]
   );
@@ -434,28 +559,98 @@ export function CityMap() {
     setSelectedCell(null);
   }, []);
 
-  // Counts for legend
   const counts = useMemo(() => {
-    const c = { empty: 0, user: 0, "family-hq": 0, protocol: 0 };
+    const c: Record<CellType, number> = {
+      empty: 0,
+      user: 0,
+      "family-hq": 0,
+      protocol: 0,
+      business: 0,
+      raid: 0,
+    };
     for (const cell of cells) c[cell.type]++;
     return c;
   }, [cells]);
 
+  const occupiedCount = useMemo(
+    () => cells.filter((c) => c.slot && slotHasOwner(c.slot)).length,
+    [cells]
+  );
+
+  /** User slot type with no on-chain owner — land can be claimed into these plots. */
+  const vacantUserPlotCount = useMemo(
+    () =>
+      cells.filter(
+        (c) => c.slot?.slotType === 1 && !slotHasOwner(c.slot)
+      ).length,
+    [cells]
+  );
+
+  const mySlotsRows = useMemo((): MySlotRow[] => {
+    if (!address) return [];
+    const out: MySlotRow[] = [];
+    for (const c of cells) {
+      if (!c.slot || !isMySlot(c.slot, address)) continue;
+      out.push({ cityId, x: c.x, y: c.y, slot: c.slot });
+    }
+    out.sort((a, b) => a.y - b.y || a.x - b.x);
+    return out;
+  }, [cells, address, cityId]);
+
+  const cityLabel = City[cityId] ?? `City #${cityId}`;
+
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-2.5">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>City</span>
+          <select
+            value={cityId}
+            onChange={(e) => setCityId(Number(e.target.value))}
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+          >
+            {Array.from({ length: 11 }, (_, i) => (
+              <option key={i} value={i}>
+                {City[i] ?? `City #${i}`} ({i})
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => setMySlotsOpen(true)}
+          className="flex items-center gap-1.5 rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
+        >
+          <MapPin className="h-3.5 w-3.5" />
+          My slots
+        </button>
+        <CityMapLandClaim
+          cityId={cityId}
+          vacantUserPlotCount={vacantUserPlotCount}
+          onSuccess={() => void reloadSlots()}
+        />
+        <span className="text-xs text-muted-foreground">
+          Chain:{" "}
+          <span className="font-mono text-foreground">{chainConfig.id}</span>
+        </span>
+        {slotsError && (
+          <span className="text-xs text-amber-500">{slotsError}</span>
+        )}
+      </div>
+
       {/* Map viewport */}
       <div
         ref={containerRef}
         className={cn(
           "relative overflow-hidden rounded-xl border border-border bg-card",
           "h-[calc(100vh-220px)] min-h-[400px]",
+          "overscroll-contain touch-manipulation",
           isDragging ? "cursor-grabbing" : "cursor-grab"
         )}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
-        onWheel={handleWheel}
         onClick={handleClick}
       >
         {/* Transformed canvas */}
@@ -477,9 +672,7 @@ export function CityMap() {
             Legend
           </p>
           <div className="flex flex-col gap-1">
-            {(
-              ["empty", "user", "family-hq", "protocol"] as CellType[]
-            ).map((t) => (
+            {LEGEND_ORDER.map((t) => (
               <div key={t} className="flex items-center gap-2">
                 <span
                   className={cn("h-2.5 w-2.5 rounded-sm", TYPE_META[t].dot)}
@@ -492,8 +685,26 @@ export function CityMap() {
                 </span>
               </div>
             ))}
+            {address && (
+              <div className="mt-1.5 flex items-center gap-2 border-t border-border/60 pt-1.5">
+                <span
+                  className="h-2.5 w-2.5 rounded-sm border-2 border-amber-400 bg-transparent"
+                  aria-hidden
+                />
+                <span className="text-[11px] text-foreground">Your slots</span>
+              </div>
+            )}
           </div>
         </div>
+
+        {slotsLoading && (
+          <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-background/50 backdrop-blur-[1px]">
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-card/95 px-4 py-2.5 text-sm text-foreground shadow-lg">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              Loading slots…
+            </div>
+          </div>
+        )}
 
         {/* Zoom controls */}
         <div className="absolute right-3 bottom-3 flex flex-col gap-1">
@@ -564,23 +775,60 @@ export function CityMap() {
             <span className="font-mono text-xs text-foreground">
               ({cells[hoveredIdx].x}, {cells[hoveredIdx].y})
             </span>
-            {cells[hoveredIdx].type !== "empty" && (
+            {(cells[hoveredIdx].type !== "empty" ||
+              (cells[hoveredIdx].slot?.slotType === 1 &&
+                !slotHasOwner(cells[hoveredIdx].slot))) && (
               <span className="ml-2 text-xs text-muted-foreground">
-                {TYPE_META[cells[hoveredIdx].type].label}
+                {cells[hoveredIdx].slot?.slotType === 1 &&
+                !slotHasOwner(cells[hoveredIdx].slot)
+                  ? "Vacant user plot"
+                  : TYPE_META[cells[hoveredIdx].type].label}
               </span>
             )}
           </div>
         )}
 
-        {/* Cell popover */}
-        {selectedCell && (
-          <CellPopover
-            cell={selectedCell}
-            position={popoverPos}
-            onClose={() => setSelectedCell(null)}
-          />
-        )}
       </div>
+
+      <CityMapMySlotsPanel
+        open={mySlotsOpen}
+        onClose={() => setMySlotsOpen(false)}
+        requestFocusSlot={requestFocusSlot}
+        cityLabel={cityLabel}
+        rows={mySlotsRows}
+        slotsLoading={slotsLoading}
+        slotsError={slotsError}
+        onRefresh={() => void reloadSlots()}
+      />
+
+      {selectedCell && (
+        <>
+          <div
+            role="presentation"
+            className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm"
+            aria-hidden
+            onClick={() => setSelectedCell(null)}
+            onWheel={(e) => e.preventDefault()}
+          />
+          <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 pointer-events-none">
+            <div
+              className="pointer-events-auto w-full max-w-md max-h-[90vh] flex flex-col min-h-0"
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              <CityMapSlotDetail
+                cell={selectedCell}
+                cityId={cityId}
+                typeMeta={{
+                  fill: TYPE_META[selectedCell.type].fill,
+                  label: TYPE_META[selectedCell.type].label,
+                }}
+                onClose={() => setSelectedCell(null)}
+                onActionSuccess={() => void reloadSlots()}
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Summary bar */}
       <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-4 py-3">
@@ -598,9 +846,7 @@ export function CityMap() {
         </span>
         <span className="text-xs text-muted-foreground">
           Occupied:{" "}
-          <span className="font-mono text-foreground">
-            {counts.user + counts["family-hq"] + counts.protocol}
-          </span>
+          <span className="font-mono text-foreground">{occupiedCount}</span>
         </span>
         <span className="ml-auto text-[11px] text-muted-foreground">
           Scroll to zoom, drag to pan, click for details

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   useAccount,
   useReadContract,
@@ -16,7 +16,7 @@ import {
   ERC20_ABI,
   TRAVEL_DESTINATIONS,
 } from "@/lib/contract";
-import { formatEther, parseEther, maxUint256 } from "viem";
+import { decodeEventLog, formatEther, parseEther, maxUint256 } from "viem";
 import {
   Flag,
   AlertCircle,
@@ -122,6 +122,11 @@ interface ProfileData {
   isActive: boolean;
 }
 
+type RawRace = Partial<Record<keyof Race, unknown>> & {
+  creatorCarDamagePercent?: unknown;
+  opponentCarDamagePercent?: unknown;
+};
+
 declare global {
   interface Window {
     MafiaInventory?: {
@@ -132,6 +137,12 @@ declare global {
         maxItems: number;
         onProgress?: (info: { fetched: number; batchIndex: number }) => void;
       }) => Promise<CarItem[]>;
+    };
+    MafiaRaceLobby?: {
+      getRaces: (opts: {
+        chain: string;
+        pageSize: number;
+      }) => Promise<RawRace[]>;
     };
   }
 }
@@ -168,6 +179,37 @@ function useInventoryScript() {
 
 // ── Constants ───────────────────────────────────────────────────
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const RACES_PER_PAGE = 9;
+const NEXT_RACE_TIME_ABI = [
+  {
+    type: "function",
+    name: "nextRaceTime",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+] as const;
+
+const RACE_FINISHED_EVENT_ABI = [
+  {
+    type: "event",
+    name: "RaceFinished",
+    inputs: [
+      { name: "raceId", type: "uint256", indexed: false },
+      { name: "winner", type: "address", indexed: false },
+      { name: "result", type: "uint8", indexed: false },
+      { name: "creator", type: "address", indexed: false },
+      { name: "opponent", type: "address", indexed: false },
+      { name: "winnerCashProfit", type: "uint256", indexed: false },
+      { name: "creatorCarId", type: "uint256", indexed: false },
+      { name: "opponentCarId", type: "uint256", indexed: false },
+      { name: "creatorHealthLost", type: "uint256", indexed: false },
+      { name: "opponentHealthLost", type: "uint256", indexed: false },
+      { name: "timestamp", type: "uint256", indexed: false },
+    ],
+    anonymous: false,
+  },
+] as const;
 
 // ── Helpers ─────────────────────────────────────────────────────
 function getCityName(cityId: number): string {
@@ -218,6 +260,71 @@ function getResultLabel(result: number): string {
   }
 }
 
+function isOpenLobbyStatus(status: number): boolean {
+  // Current flow: create -> Started, join -> Finished.
+  // Keep Pending for backward compatibility with older records.
+  return status === RaceStatus.Started || status === RaceStatus.Pending;
+}
+
+function toSafeBigInt(value: unknown): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return BigInt(Math.trunc(value));
+  }
+  if (typeof value === "string" && value.length > 0) {
+    try {
+      return BigInt(value);
+    } catch {
+      return BigInt(0);
+    }
+  }
+  return BigInt(0);
+}
+
+function toSafeNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "bigint") return Number(value);
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+function toSafeAddress(value: unknown): string {
+  return typeof value === "string" && value.length > 0 ? value : ZERO_ADDRESS;
+}
+
+function normalizeRace(raw: RawRace): Race {
+  return {
+    id: toSafeBigInt(raw.id),
+    startTime: toSafeBigInt(raw.startTime),
+    endTime: toSafeBigInt(raw.endTime),
+    creator: toSafeAddress(raw.creator),
+    opponent: toSafeAddress(raw.opponent),
+    winner: toSafeAddress(raw.winner),
+    creatorCarId: toSafeBigInt(raw.creatorCarId),
+    opponentCarId: toSafeBigInt(raw.opponentCarId),
+    creatorHealthLost: toSafeBigInt(
+      raw.creatorHealthLost ?? raw.creatorCarDamagePercent,
+    ),
+    opponentHealthLost: toSafeBigInt(
+      raw.opponentHealthLost ?? raw.opponentCarDamagePercent,
+    ),
+    cityId: toSafeNumber(raw.cityId),
+    prizeType: toSafeNumber(raw.prizeType),
+    result: toSafeNumber(raw.result),
+    status: toSafeNumber(raw.status),
+    cashAmount: toSafeBigInt(raw.cashAmount),
+  };
+}
+
+function formatHealthLost(value: bigint): string {
+  // SDK returns health loss in wei-scaled units (1e18).
+  const amount = Number(formatEther(value));
+  return amount.toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+
 function formatAddress(address: string): string {
   if (!address || address === ZERO_ADDRESS) return "-";
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -227,6 +334,25 @@ function formatTime(timestamp: bigint): string {
   if (!timestamp || timestamp === 0n) return "-";
   const date = new Date(Number(timestamp) * 1000);
   return date.toLocaleString();
+}
+
+function getNextRaceTimeLabel(timestamp: bigint): string {
+  if (!timestamp || timestamp <= 0n) return "-";
+  const nextTimeMs = Number(timestamp) * 1000;
+  if (!Number.isFinite(nextTimeMs)) return "-";
+  if (Date.now() >= nextTimeMs) return "Ready now";
+  return new Date(nextTimeMs).toLocaleString();
+}
+
+function isRaceTimeLocked(timestamp: bigint): boolean {
+  if (!timestamp || timestamp <= 0n) return false;
+  const nextTimeMs = Number(timestamp) * 1000;
+  if (!Number.isFinite(nextTimeMs)) return false;
+  return Date.now() < nextTimeMs;
+}
+
+function getRaceTimeLockReason(timestamp: bigint): string {
+  return `Next race available at ${getNextRaceTimeLabel(timestamp)}.`;
 }
 
 type WinnerState = "PENDING" | "UNSET" | "CREATOR" | "OPPONENT" | "UNKNOWN";
@@ -263,6 +389,7 @@ function getWinnerDisplay(race: Race): string {
 function getActionAvailability(
   race: Race,
   account: string | undefined,
+  currentCityId?: number,
 ): { canJoin: boolean; canCancel: boolean; reason?: string } {
   if (!account) {
     return { canJoin: false, canCancel: false, reason: "Connect wallet" };
@@ -270,9 +397,15 @@ function getActionAvailability(
 
   const status = Number(race.status);
   const isCreator = race.creator.toLowerCase() === account.toLowerCase();
-  const isOpponent = race.opponent.toLowerCase() === account.toLowerCase();
 
-  if (status === RaceStatus.Pending) {
+  if (isOpenLobbyStatus(status)) {
+    if (typeof currentCityId === "number" && race.cityId !== currentCityId) {
+      return {
+        canJoin: false,
+        canCancel: isCreator,
+        reason: `You are in ${getCityName(currentCityId)}. Travel to ${getCityName(race.cityId)} to join.`,
+      };
+    }
     return {
       canJoin: !isCreator && race.opponent === ZERO_ADDRESS,
       canCancel: isCreator,
@@ -286,18 +419,28 @@ function getActionAvailability(
 function RaceCard({
   race,
   account,
+  currentCityId,
+  nextRaceTime,
   onJoin,
   onCancel,
   onViewDetails,
 }: {
   race: Race;
   account: string | undefined;
+  currentCityId: number;
+  nextRaceTime: bigint;
   onJoin: () => void;
   onCancel: () => void;
   onViewDetails: () => void;
 }) {
   const status = getStatusLabel(Number(race.status));
-  const { canJoin, canCancel } = getActionAvailability(race, account);
+  const { canJoin, canCancel, reason } = getActionAvailability(
+    race,
+    account,
+    currentCityId,
+  );
+  const raceLocked = isRaceTimeLocked(nextRaceTime);
+  const canJoinNow = canJoin && !raceLocked;
   const isFinished = Number(race.status) === RaceStatus.Finished;
   const winnerState = getWinnerState(race);
 
@@ -373,7 +516,7 @@ function RaceCard({
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {canJoin && (
+        {canJoinNow && (
           <Button size="sm" onClick={onJoin} className="flex-1 h-8 text-xs gap-1.5">
             <Play className="h-3.5 w-3.5" />
             Join Race
@@ -401,9 +544,12 @@ function RaceCard({
             View Details
           </Button>
         )}
-        {!canJoin && !canCancel && !isFinished && (
+        {!canJoinNow && !canCancel && !isFinished && (
           <div className="flex-1 text-center text-xs text-muted-foreground py-2">
-            {Number(race.status) === RaceStatus.Started ? "Race in progress..." : "No actions available"}
+            {(raceLocked ? getRaceTimeLockReason(nextRaceTime) : reason) ??
+              (isOpenLobbyStatus(Number(race.status))
+                ? "Waiting for opponent..."
+                : "No actions available")}
           </div>
         )}
       </div>
@@ -419,6 +565,7 @@ function CreateRaceDialog({
   carsLoading,
   cityId,
   cashBalance,
+  nextRaceTime,
   onSuccess,
 }: {
   open: boolean;
@@ -427,6 +574,7 @@ function CreateRaceDialog({
   carsLoading: boolean;
   cityId: number;
   cashBalance: bigint;
+  nextRaceTime: bigint;
   onSuccess: () => void;
 }) {
   const { address } = useAccount();
@@ -499,7 +647,9 @@ function CreateRaceDialog({
 
   const needsApproval = prizeType === "1" && cashAmountWei > 0n;
   const hasEnoughAllowance = allowance !== undefined && allowance >= cashAmountWei;
+  const isCashApprovalReady = hasEnoughAllowance || approveSuccess;
   const hasEnoughCash = cashBalance >= cashAmountWei;
+  const raceLocked = isRaceTimeLocked(nextRaceTime);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -573,6 +723,14 @@ function CreateRaceDialog({
 
     // Validation order per prompt requirements:
 
+    if (raceLocked) {
+      toast({
+        title: "Race Cooldown Active",
+        description: getRaceTimeLockReason(nextRaceTime),
+      });
+      return;
+    }
+
     // 1. Check active lobby guard
     if (hasActiveLobby) {
       toast({
@@ -624,7 +782,7 @@ function CreateRaceDialog({
       }
 
       // Check allowance
-      if (!hasEnoughAllowance) {
+      if (!isCashApprovalReady) {
         toast({
           title: "Approval Required",
           description: "Please approve cash spend first.",
@@ -654,13 +812,14 @@ function CreateRaceDialog({
 
   const canSubmit = (() => {
     if (isWorking) return false;
+    if (raceLocked) return false;
     if (hasActiveLobby) return false;
     if (!selectedCarId) return false;
     if (!prizeType) return false;
     if (prizeType === "1") {
       if (!cashAmount || Number(cashAmount) <= 0) return false;
       if (!hasEnoughCash) return false;
-      if (!hasEnoughAllowance) return false;
+      if (!isCashApprovalReady) return false;
     }
     return true;
   })();
@@ -678,6 +837,17 @@ function CreateRaceDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-2">
+          {raceLocked && (
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-yellow-400" />
+                <p className="text-sm text-yellow-400">
+                  {getRaceTimeLockReason(nextRaceTime)}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Active Lobby Warning */}
           {hasActiveLobby && (
             <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
@@ -796,7 +966,7 @@ function CreateRaceDialog({
             <div
               className={cn(
                 "rounded-lg border p-3",
-                hasEnoughAllowance
+                isCashApprovalReady
                   ? "border-green-500/30 bg-green-500/5"
                   : approveError
                     ? "border-red-400/30 bg-red-400/5"
@@ -807,12 +977,12 @@ function CreateRaceDialog({
                 <div
                   className={cn(
                     "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                    hasEnoughAllowance
+                    isCashApprovalReady
                       ? "bg-green-500/20 text-green-400"
                       : "bg-chain-accent/20 text-chain-accent",
                   )}
                 >
-                  {hasEnoughAllowance ? (
+                  {isCashApprovalReady ? (
                     <ShieldCheck className="h-3.5 w-3.5" />
                   ) : (
                     "1"
@@ -822,20 +992,20 @@ function CreateRaceDialog({
                   <p
                     className={cn(
                       "text-sm font-semibold",
-                      hasEnoughAllowance ? "text-green-400" : "text-foreground",
+                      isCashApprovalReady ? "text-green-400" : "text-foreground",
                     )}
                   >
-                    {hasEnoughAllowance
+                    {isCashApprovalReady
                       ? "Cash Spend Approved"
                       : "Approve Cash Spend"}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {hasEnoughAllowance
+                    {isCashApprovalReady
                       ? "Approval confirmed. You can now create your race."
                       : "You must approve cash spend before creating the race."}
                   </p>
 
-                  {!hasEnoughAllowance && (
+                  {!isCashApprovalReady && (
                     <Button
                       size="sm"
                       onClick={handleApprove}
@@ -909,13 +1079,17 @@ function JoinRaceDialog({
   onOpenChange,
   race,
   cars,
+  currentCityId,
+  nextRaceTime,
   onSuccess,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   race: Race | null;
   cars: CarItem[];
-  onSuccess: () => void;
+  currentCityId: number;
+  nextRaceTime: bigint;
+  onSuccess: (raceId?: bigint, finishedRace?: Race) => void;
 }) {
   const addresses = useChainAddresses();
   const { authData } = useAuth();
@@ -942,7 +1116,7 @@ function JoinRaceDialog({
     error,
     reset,
   } = useChainWriteContract();
-  const { isLoading: isConfirming, isSuccess } =
+  const { data: joinReceipt, isLoading: isConfirming, isSuccess } =
     useWaitForTransactionReceipt({ hash });
 
   // Filter cars in the same city as the race
@@ -963,14 +1137,58 @@ function JoinRaceDialog({
   // Handle success
   useEffect(() => {
     if (isSuccess && hash) {
+      let finishedRaceFromEvent: Race | undefined;
+
+      if (joinReceipt) {
+        for (const log of joinReceipt.logs) {
+          if (log.address.toLowerCase() !== addresses.raceLobby.toLowerCase()) {
+            continue;
+          }
+
+          try {
+            const decoded = decodeEventLog({
+              abi: RACE_FINISHED_EVENT_ABI,
+              data: log.data,
+              topics: log.topics,
+              strict: false,
+            });
+
+            if (decoded.eventName !== "RaceFinished") continue;
+
+            const eventArgs = (decoded.args ?? {}) as Record<string, unknown>;
+            const eventRaceId = toSafeBigInt(eventArgs.raceId);
+
+            if (!race || eventRaceId !== race.id) continue;
+
+            finishedRaceFromEvent = {
+              ...race,
+              id: eventRaceId,
+              winner: toSafeAddress(eventArgs.winner),
+              result: toSafeNumber(eventArgs.result),
+              creator: toSafeAddress(eventArgs.creator),
+              opponent: toSafeAddress(eventArgs.opponent),
+              creatorCarId: toSafeBigInt(eventArgs.creatorCarId),
+              opponentCarId: toSafeBigInt(eventArgs.opponentCarId),
+              creatorHealthLost: toSafeBigInt(eventArgs.creatorHealthLost),
+              opponentHealthLost: toSafeBigInt(eventArgs.opponentHealthLost),
+              endTime: toSafeBigInt(eventArgs.timestamp),
+              status: RaceStatus.Finished,
+            };
+            break;
+          } catch {
+            // Ignore unrelated logs and continue scanning.
+          }
+        }
+      }
+
       toast({
         title: "Joined Race",
         description: `You have joined race #${race?.id ? Number(race.id) : ""}.`,
       });
       onOpenChange(false);
-      onSuccess();
+      onSuccess(race?.id, finishedRaceFromEvent);
     }
-  }, [isSuccess, hash, race, toast, onOpenChange, onSuccess]);
+  }, [isSuccess, hash, race, toast, onOpenChange, onSuccess, joinReceipt, addresses.raceLobby]);
 
   // Toast on approve success
   useEffect(() => {
@@ -984,6 +1202,8 @@ function JoinRaceDialog({
 
   if (!race) return null;
 
+  const isDifferentCity = race.cityId !== currentCityId;
+  const raceLocked = isRaceTimeLocked(nextRaceTime);
   const needsApproval = race.prizeType === PrizeType.GameCash && race.cashAmount > 0n;
   const approveLoading = approvePending || approveConfirming;
   const isWorking = isPending || isConfirming;
@@ -999,7 +1219,7 @@ function JoinRaceDialog({
   }
 
   function handleJoin() {
-    if (!authData || !selectedCarId || !race) return;
+    if (!authData || !selectedCarId || !race || isDifferentCity || raceLocked) return;
 
     writeContract({
       address: addresses.raceLobby,
@@ -1016,6 +1236,8 @@ function JoinRaceDialog({
 
   const canSubmit = (() => {
     if (isWorking) return false;
+    if (raceLocked) return false;
+    if (isDifferentCity) return false;
     if (!selectedCarId) return false;
     if (needsApproval && !approveSuccess) return false;
     return true;
@@ -1032,6 +1254,22 @@ function JoinRaceDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-2">
+          {raceLocked && (
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
+              <p className="text-sm text-yellow-400">
+                {getRaceTimeLockReason(nextRaceTime)}
+              </p>
+            </div>
+          )}
+
+          {isDifferentCity && (
+            <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
+              <p className="text-sm text-yellow-400">
+                You are in {getCityName(currentCityId)}. Travel to {getCityName(race.cityId)} to join this race.
+              </p>
+            </div>
+          )}
+
           {/* Race Info */}
           <div className="rounded-lg border border-border bg-background/50 p-3">
             <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1239,7 +1477,7 @@ function CancelRaceDialog({
       address: addresses.raceLobby,
       abi: RACE_LOBBY_ABI,
       functionName: "cancelRace",
-      args: [race.id, authData.message, authData.signature],
+      args: [race.id],
     });
   }
 
@@ -1367,25 +1605,26 @@ function RaceDetailsDialog({
             </div>
           </div>
 
-          {/* Winner (for finished races) */}
-          {Number(race.status) === RaceStatus.Finished && (
-            <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Trophy className="h-4 w-4 text-green-400" />
-                <span className="text-sm font-medium text-green-400">Winner</span>
+          {/* Winner (for finished races, except both crashed) */}
+          {Number(race.status) === RaceStatus.Finished &&
+            Number(race.result) !== RaceResult.BothCrash && (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Trophy className="h-4 w-4 text-green-400" />
+                  <span className="text-sm font-medium text-green-400">Winner</span>
+                </div>
+                <p className="text-sm">
+                  {winnerState === "CREATOR" && "Creator"}
+                  {winnerState === "OPPONENT" && "Opponent"}
+                  {winnerState === "UNSET" && "Not Set"}
+                  {winnerState === "UNKNOWN" && formatAddress(race.winner)}
+                  {winnerState === "PENDING" && "Pending"}
+                </p>
+                {race.winner && race.winner !== ZERO_ADDRESS && (
+                  <p className="text-xs font-mono text-muted-foreground mt-1">{race.winner}</p>
+                )}
               </div>
-              <p className="text-sm">
-                {winnerState === "CREATOR" && "Creator"}
-                {winnerState === "OPPONENT" && "Opponent"}
-                {winnerState === "UNSET" && "Not Set"}
-                {winnerState === "UNKNOWN" && formatAddress(race.winner)}
-                {winnerState === "PENDING" && "Pending"}
-              </p>
-              {race.winner && race.winner !== ZERO_ADDRESS && (
-                <p className="text-xs font-mono text-muted-foreground mt-1">{race.winner}</p>
-              )}
-            </div>
-          )}
+            )}
 
           {/* Health Lost */}
           {Number(race.status) === RaceStatus.Finished && (
@@ -1394,11 +1633,15 @@ function RaceDetailsDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2">
                   <Heart className="h-3.5 w-3.5 text-red-400" />
-                  <span className="text-xs">Creator: {Number(race.creatorHealthLost)}</span>
+                  <span className="text-xs">
+                    Creator: {formatHealthLost(race.creatorHealthLost)}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Heart className="h-3.5 w-3.5 text-red-400" />
-                  <span className="text-xs">Opponent: {Number(race.opponentHealthLost)}</span>
+                  <span className="text-xs">
+                    Opponent: {formatHealthLost(race.opponentHealthLost)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1450,17 +1693,22 @@ export function RacingAction() {
   // View state
   const [showHistory, setShowHistory] = useState(false);
   const [showMyRaces, setShowMyRaces] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [joinRace, setJoinRace] = useState<Race | null>(null);
   const [cancelRace, setCancelRace] = useState<Race | null>(null);
   const [detailsRace, setDetailsRace] = useState<Race | null>(null);
+  const [pendingResultRaceId, setPendingResultRaceId] = useState<bigint | null>(null);
 
   // Data state
+  const [allRaces, setAllRaces] = useState<Race[]>([]);
+  const [racesLoading, setRacesLoading] = useState(true);
   const [cars, setCars] = useState<CarItem[]>([]);
   const [carsLoading, setCarsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const hasLoadedRacesRef = useRef(false);
 
   // Get user profile for city
   const { data: profileRaw } = useReadContract({
@@ -1478,33 +1726,47 @@ export function RacingAction() {
   const cityId = profile?.cityId ?? 0;
   const cityName = getCityName(cityId);
 
-  // Get race count for the city
-  const { data: raceCountRaw } = useReadContract({
-    address: addresses.raceLobby,
-    abi: RACE_LOBBY_ABI,
-    functionName: "getRaceCount",
-    args: [cityId],
-    query: {
-      enabled: addresses.raceLobby !== ZERO_ADDRESS,
-      refetchInterval: 30000,
-    },
-  });
+  // Get races from SDK race lobbies
+  const fetchRaces = useCallback(async () => {
+    if (!scriptReady) return;
+    if (!window.MafiaRaceLobby) {
+      setAllRaces([]);
+      setRacesLoading(false);
+      return;
+    }
 
-  const raceCount = raceCountRaw ? Number(raceCountRaw) : 0;
+    setRacesLoading(true);
+    try {
+      const races = await window.MafiaRaceLobby.getRaces({
+        chain: chainConfig.id === "bnb" ? "bnb" : "pls",
+        pageSize: 200,
+      });
 
-  // Get races
-  const { data: racesRaw, isLoading: racesLoading, refetch: refetchRaces } = useReadContract({
-    address: addresses.raceLobby,
-    abi: RACE_LOBBY_ABI,
-    functionName: "getRaces",
-    args: [cityId, 0n, BigInt(Math.min(raceCount, 100))],
-    query: {
-      enabled: addresses.raceLobby !== ZERO_ADDRESS && raceCount > 0,
-      refetchInterval: 30000,
-    },
-  });
+      const list = Array.isArray(races) ? races : [];
+      const statusCounts = { pending: 0, started: 0, finished: 0, cancelled: 0 };
+      list.forEach((r) => {
+        const status = toSafeNumber(r.status);
+        if (status === RaceStatus.Pending) statusCounts.pending++;
+        else if (status === RaceStatus.Started) statusCounts.started++;
+        else if (status === RaceStatus.Finished) statusCounts.finished++;
+        else if (status === RaceStatus.Cancelled) statusCounts.cancelled++;
+      });
 
-  const allRaces = (racesRaw as Race[] | undefined) ?? [];
+      const normalized = list
+        .map((r) => normalizeRace(r));
+
+      setAllRaces(normalized);
+    } catch (err) {
+      console.error("Failed to fetch race lobbies:", err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load race lobbies.",
+      });
+    } finally {
+      setRacesLoading(false);
+    }
+  }, [scriptReady, chainConfig.id, cityId, toast]);
 
   // Get user cash balance
   const { data: cashBalanceRaw, refetch: refetchCashBalance } = useReadContract({
@@ -1517,6 +1779,20 @@ export function RacingAction() {
     query: { enabled: !!authData && !!address },
   });
   const cashBalance = (cashBalanceRaw as bigint) ?? 0n;
+
+  // Next race time per account
+  const { data: nextRaceTimeRaw, refetch: refetchNextRaceTime } = useReadContract({
+    address: addresses.raceLobby,
+    abi: NEXT_RACE_TIME_ABI,
+    functionName: "nextRaceTime",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address && addresses.raceLobby !== ZERO_ADDRESS,
+      refetchInterval: 30000,
+    },
+  });
+  const nextRaceTime = (nextRaceTimeRaw as bigint | undefined) ?? 0n;
+  const raceLocked = isRaceTimeLocked(nextRaceTime);
 
   // Filter races based on view mode
   const filteredRaces = useMemo(() => {
@@ -1531,9 +1807,7 @@ export function RacingAction() {
       );
     } else {
       races = races.filter(
-        (r) =>
-          Number(r.status) === RaceStatus.Pending ||
-          Number(r.status) === RaceStatus.Started
+        (r) => isOpenLobbyStatus(Number(r.status))
       );
     }
 
@@ -1552,6 +1826,22 @@ export function RacingAction() {
 
     return races;
   }, [allRaces, showHistory, showMyRaces, address]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRaces.length / RACES_PER_PAGE));
+  const paginatedRaces = useMemo(() => {
+    const start = (currentPage - 1) * RACES_PER_PAGE;
+    return filteredRaces.slice(start, start + RACES_PER_PAGE);
+  }, [filteredRaces, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [showHistory, showMyRaces, address, filteredRaces.length]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   // Fetch cars
   const fetchCars = useCallback(async () => {
@@ -1589,16 +1879,42 @@ export function RacingAction() {
     }
   }, [scriptReady, address, fetchCars, refreshKey]);
 
+  // Load race lobbies once on initial page load
+  useEffect(() => {
+    if (!scriptReady || !window.MafiaRaceLobby || hasLoadedRacesRef.current) return;
+    hasLoadedRacesRef.current = true;
+    fetchRaces();
+  }, [scriptReady, fetchRaces]);
+
   const handleRefresh = useCallback(() => {
-    refetchRaces();
+    fetchRaces();
     refetchCashBalance();
+    refetchNextRaceTime();
     fetchCars();
     setRefreshKey((k) => k + 1);
-  }, [refetchRaces, refetchCashBalance, fetchCars]);
+  }, [fetchRaces, refetchCashBalance, refetchNextRaceTime, fetchCars]);
 
-  const handleSuccess = useCallback(() => {
+  const handleSuccess = useCallback((raceId?: bigint, finishedRace?: Race) => {
+    if (finishedRace) {
+      setDetailsRace(finishedRace);
+      setPendingResultRaceId(null);
+    } else if (typeof raceId === "bigint") {
+      setPendingResultRaceId(raceId);
+    }
     handleRefresh();
   }, [handleRefresh]);
+
+  useEffect(() => {
+    if (pendingResultRaceId === null) return;
+
+    const updatedRace = allRaces.find((r) => r.id === pendingResultRaceId);
+    if (!updatedRace) return;
+
+    if (Number(updatedRace.status) === RaceStatus.Finished) {
+      setDetailsRace(updatedRace);
+      setPendingResultRaceId(null);
+    }
+  }, [pendingResultRaceId, allRaces]);
 
   // Not connected state
   if (!isConnected) {
@@ -1670,6 +1986,10 @@ export function RacingAction() {
             {filteredRaces.length} race{filteredRaces.length !== 1 ? "s" : ""}{" "}
             {showHistory ? "in history" : "active"}
           </p>
+          <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5" />
+            Next race time: {getNextRaceTimeLabel(nextRaceTime)}
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -1691,6 +2011,7 @@ export function RacingAction() {
           <Button
             size="sm"
             onClick={() => setCreateDialogOpen(true)}
+            disabled={raceLocked}
             className="h-9 gap-1.5"
           >
             <Plus className="h-4 w-4" />
@@ -1751,16 +2072,44 @@ export function RacingAction() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredRaces.map((race) => (
+            {paginatedRaces.map((race) => (
               <RaceCard
                 key={Number(race.id)}
                 race={race}
                 account={address}
+                currentCityId={cityId}
+                nextRaceTime={nextRaceTime}
                 onJoin={() => setJoinRace(race)}
                 onCancel={() => setCancelRace(race)}
                 onViewDetails={() => setDetailsRace(race)}
               />
             ))}
+          </div>
+        )}
+
+        {!racesLoading && filteredRaces.length > 0 && totalPages > 1 && (
+          <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground">
+              Page {currentPage} of {totalPages}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -1773,6 +2122,7 @@ export function RacingAction() {
         carsLoading={carsLoading}
         cityId={cityId}
         cashBalance={cashBalance}
+        nextRaceTime={nextRaceTime}
         onSuccess={handleSuccess}
       />
 
@@ -1781,6 +2131,8 @@ export function RacingAction() {
         onOpenChange={(open) => !open && setJoinRace(null)}
         race={joinRace}
         cars={cars}
+        currentCityId={cityId}
+        nextRaceTime={nextRaceTime}
         onSuccess={handleSuccess}
       />
 
