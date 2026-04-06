@@ -1,45 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useAccount, useReadContract, useWaitForTransactionReceipt } from "wagmi";
-import { useRouter } from "next/navigation";
-import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
-import {
-  OC_LOBBY_ABI,
-  OC_JOIN_ABI,
-  OC_LOBBY_STATUS,
-  OC_LOBBY_STATUS_LABELS,
-  OC_ASSET_EXPECTATION,
-  OC_ASSET_EXPECTATION_LABELS,
-  OC_ROLE_NAMES,
-  OC_MIN_HEALTH,
-  OC_MAX_CASH,
-  RANK_NAMES,
-  TRAVEL_DESTINATIONS,
-  HEALTH_ABI,
-  INGAME_CURRENCY_ABI,
-} from "@/lib/contract";
-import { parseEther, formatEther, maxUint256, decodeAbiParameters, createPublicClient, http } from "viem";
-import {
-  Users,
-  Plus,
-  RefreshCw,
-  Loader2,
-  MapPin,
-  Crown,
-  Clock,
-  AlertCircle,
-  Filter,
-  ArrowUpDown,
-  ChevronRight,
-  User,
-  DollarSign,
-  Shield,
-  ExternalLink,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -58,8 +21,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
+import {
+  HEALTH_ABI,
+  INGAME_CURRENCY_ABI,
+  OC_ASSET_EXPECTATION_LABELS,
+  OC_JOIN_ABI,
+  OC_LOBBY_ABI,
+  OC_LOBBY_STATUS,
+  OC_LOBBY_STATUS_LABELS,
+  OC_MAX_CASH,
+  OC_MIN_HEALTH,
+  parseOcRewardAmount,
+  RANK_NAMES,
+  TRAVEL_DESTINATIONS
+} from "@/lib/contract";
+import { cn } from "@/lib/utils";
+import {
+  AlertCircle,
+  ArrowUpDown,
+  ChevronRight,
+  Crown,
+  DollarSign,
+  ExternalLink,
+  Filter,
+  Loader2,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Shield,
+  Users
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { createPublicClient, formatEther, http, maxUint256, parseEther } from "viem";
+import { useAccount, useReadContract, useWaitForTransactionReceipt } from "wagmi";
 
 // ── Types ───────────────────────────────────────────────────────
 interface Member {
@@ -128,9 +125,10 @@ function parseCrimeLobby(data: unknown): CrimeLobby {
     currentRewardIndex: Number(d.currentRewardIndex),
     rewards: ((d.rewards as unknown[]) || []).map((r: unknown) => {
       const reward = r as Record<string, unknown>;
+      const typeId = Number(reward.typeId);
       return {
-        typeId: Number(reward.typeId),
-        amount: Number(formatEther(reward.amount as bigint)),
+        typeId,
+        amount: parseOcRewardAmount(typeId, reward.amount as bigint),
       };
     }),
   };
@@ -547,7 +545,7 @@ export function OrganizedCrimeAction() {
 
       const results = await Promise.all(promises);
       const validLobbies = results.filter((l): l is CrimeLobby => l !== null);
-      
+
       setLobbies(validLobbies);
     } catch (error) {
       console.error("Error loading lobbies:", error);
@@ -767,7 +765,7 @@ async function fetchLobby(
         impactScore: Number(m.impactScore),
         deductedScore: Number(m.deductedScore),
         assetAddresses: m.assetAddresses,
-        assetAmounts: m.assetAmounts.map((a) => Number(a)),
+        assetAmounts: m.assetAmounts.map((a) => Number(formatEther(a))),
       })),
       isSuccess: result.isSuccess,
       city: result.city,
@@ -783,7 +781,7 @@ async function fetchLobby(
       currentRewardIndex: result.currentRewardIndex,
       rewards: result.rewards.map((r) => ({
         typeId: r.typeId,
-        amount: Number(r.amount),
+        amount: parseOcRewardAmount(r.typeId, r.amount),
       })),
     };
   } catch (error) {

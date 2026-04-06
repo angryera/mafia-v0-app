@@ -1,59 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useAccount, useReadContract, useWaitForTransactionReceipt } from "wagmi";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
-import {
-  OC_LOBBY_ABI,
-  OC_JOIN_ABI,
-  OC_EXECUTION_ABI,
-  OC_LOBBY_STATUS,
-  OC_LOBBY_STATUS_LABELS,
-  OC_ASSET_EXPECTATION_LABELS,
-  OC_ROLE_NAMES,
-  OC_MIN_HEALTH,
-  OC_MAX_BULLETS,
-  RANK_NAMES,
-  TRAVEL_DESTINATIONS,
-  HEALTH_ABI,
-  BULLET_ABI,
-  INGAME_CURRENCY_ABI,
-  SHOP_ITEM_STATS,
-  USER_PROFILE_CONTRACT_ABI,
-  RANK_ABI,
-} from "@/lib/contract";
-import { parseEther, formatEther, maxUint256 } from "viem";
-import {
-  Users,
-  ArrowLeft,
-  RefreshCw,
-  Loader2,
-  MapPin,
-  Crown,
-  Clock,
-  AlertCircle,
-  ChevronRight,
-  User,
-  DollarSign,
-  Shield,
-  ExternalLink,
-  Car,
-  Crosshair,
-  Bomb,
-  UserCheck,
-  Play,
-  X,
-  CheckCircle2,
-  XCircle,
-  Gift,
-  Trash2,
-  LogOut,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
+import { OrganizedCrimeOutcome } from "@/components/organized-crime-outcome";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -72,10 +23,53 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { OrganizedCrimeOutcome } from "@/components/organized-crime-outcome";
+import {
+  BULLET_ABI,
+  OC_ASSET_EXPECTATION_LABELS,
+  OC_EXECUTION_ABI,
+  OC_JOIN_ABI,
+  OC_LOBBY_ABI,
+  OC_LOBBY_STATUS,
+  OC_LOBBY_STATUS_LABELS,
+  OC_MAX_BULLETS,
+  OC_REWARD_CONFIG,
+  OC_ROLE_NAMES,
+  parseOcRewardAmount,
+  RANK_ABI,
+  RANK_NAMES,
+  SHOP_ITEM_STATS,
+  TRAVEL_DESTINATIONS,
+  USER_PROFILE_CONTRACT_ABI
+} from "@/lib/contract";
+import { cn } from "@/lib/utils";
+import {
+  AlertCircle,
+  ArrowLeft,
+  Bomb,
+  Car,
+  CheckCircle2,
+  Clock,
+  Crosshair,
+  Crown,
+  ExternalLink,
+  Loader2,
+  LogOut,
+  MapPin,
+  Play,
+  RefreshCw,
+  Shield,
+  Trash2,
+  UserCheck,
+  Users,
+  X
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { formatEther, maxUint256, parseEther } from "viem";
+import { useAccount, useReadContract, useWaitForTransactionReceipt } from "wagmi";
 
 // ── Types ───────────────────────────────────────────────────────
 interface Member {
@@ -171,9 +165,10 @@ function parseCrimeLobby(data: unknown): CrimeLobby {
     currentRewardIndex: Number(d.currentRewardIndex),
     rewards: ((d.rewards as unknown[]) || []).map((r: unknown) => {
       const reward = r as Record<string, unknown>;
+      const typeId = Number(reward.typeId);
       return {
-        typeId: Number(reward.typeId),
-        amount: Number(formatEther(reward.amount as bigint)),
+        typeId,
+        amount: parseOcRewardAmount(typeId, reward.amount as bigint),
       };
     }),
   };
@@ -999,7 +994,11 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
   }, [lobby?.status, canFinish, refetchNonceStatus]);
 
   // Computed values
-  const isLeader = lobby && address?.toLowerCase() === lobby.leader.toLowerCase();
+  const isLeader = Boolean(
+    lobby &&
+    address &&
+    lobby.leader.toLowerCase() === address.toLowerCase()
+  );
   const isWaiting = lobby?.status === OC_LOBBY_STATUS.WAITING;
   const isStarted = lobby?.status === OC_LOBBY_STATUS.STARTED;
   const isFinished = lobby?.status === OC_LOBBY_STATUS.FINISHED;
@@ -1150,7 +1149,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
           <Button variant="outline" size="icon" onClick={() => refetchLobby()}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          
+
           {/* Leader actions */}
           {isLeader && isWaiting && allSlotsFilled && (
             <Button onClick={handleStartLobby} disabled={isActionPending}>
@@ -1162,7 +1161,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
               Start Operation
             </Button>
           )}
-          
+
           {isLeader && isStarted && canFinish && (
             <Button onClick={handleFinishLobby} disabled={isActionPending}>
               {isActionPending ? (
@@ -1180,7 +1179,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
               Waiting for blocks...
             </Button>
           )}
-          
+
           {isLeader && isWaiting && (
             <Button variant="destructive" onClick={handleCancelLobby} disabled={isActionPending}>
               {isActionPending ? (
@@ -1234,6 +1233,45 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
         <Progress value={(filledSlots / 5) * 100} className="h-2" />
       </div>
 
+      {/* Possible reward ranges (matches on-chain Reward typeId roll bounds) */}
+      {!isFinished && (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h3 className="font-medium text-foreground mb-1">Possible reward amounts</h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            Each success reward entry uses a type id and an amount within these min–max bounds.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="py-2 pr-4 font-medium">Reward type</th>
+                  <th className="py-2 pr-4 font-medium">Min</th>
+                  <th className="py-2 font-medium">Max</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(
+                  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const
+                ).map((typeId) => {
+                  const row = OC_REWARD_CONFIG[typeId];
+                  if (!row) return null;
+                  const isCash = typeId === 0;
+                  const fmt = (n: number) =>
+                    isCash ? `$${n.toLocaleString()}` : n.toLocaleString();
+                  return (
+                    <tr key={typeId} className="border-b border-border/60 last:border-0">
+                      <td className="py-2 pr-4 text-foreground">{row.name}</td>
+                      <td className="py-2 pr-4 tabular-nums">{fmt(row.min)}</td>
+                      <td className="py-2 tabular-nums">{fmt(row.max)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Member slots */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2, 3, 4].map((roleIndex) => {
@@ -1245,7 +1283,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
               key={roleIndex}
               roleIndex={roleIndex}
               member={member}
-              isLeader={isLeader ?? false}
+              isLeader={isLeader}
               canJoin={canJoinLobby}
               canKick={isLeader && isWaiting}
               canLeave={isWaiting && isCurrentUserInLobby}

@@ -6,10 +6,8 @@ import { useChainAddresses, useChainExplorer } from "@/components/chain-provider
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import {
   OC_EXECUTION_ABI,
-  OC_REWARD_CONFIG,
   OC_HEALTH_LOSS,
   OC_JAIL_HOURS,
-  SHOP_ITEM_STATS,
 } from "@/lib/contract";
 import { OC_RESULT_DESCRIPTION } from "@/lib/oc-result-description";
 import {
@@ -91,7 +89,7 @@ function getRewardTypeLabel(typeId: number, amount: number): string {
     case 2:
       return `${amount} Booze item${amount === 1 ? "" : "s"}`;
     case 3:
-      return `${amount} Narc item${amount === 1 ? "" : "s"}`;
+      return `${amount} Narcs item${amount === 1 ? "" : "s"}`;
     case 4:
       return `${amount} Helper credit${amount === 1 ? "" : "s"}`;
     case 5:
@@ -107,21 +105,6 @@ function getRewardTypeLabel(typeId: number, amount: number): string {
     default:
       return `Reward ${typeId}: ${amount}`;
   }
-}
-
-function calculateRewardAmount(typeId: number, sizePercent: number): number {
-  const config = OC_REWARD_CONFIG[typeId];
-  if (!config) return 0;
-
-  const { min, max } = config;
-  let amount = min + (max - min) * (sizePercent / 100);
-
-  // Round to nearest multiple of min for booze and narcs
-  if (typeId === 2 || typeId === 3) {
-    amount = amount - (amount % min);
-  }
-
-  return Math.round(amount);
 }
 
 // ── Outcome Card ────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import { type Abi, getAddress } from "viem";
+import { type Abi, formatEther, getAddress } from "viem";
 
 // ========== Chain Configuration ==========
 export type ChainId = "bnb" | "pulsechain";
@@ -3710,18 +3710,29 @@ export const OC_ROLE_NAMES: Record<number, string> = {
   4: "Team Expert",
 };
 
+/** On-chain `Reward.typeId` → possible amount range (success rolls). Cash uses wei on-chain; others are integer counts. */
 export const OC_REWARD_CONFIG: Record<number, { min: number; max: number; name: string }> = {
-  0: { min: 1_000_000, max: 45_000_000, name: "Cash" },
-  1: { min: 1, max: 20, name: "Keys" },
-  2: { min: 75, max: 7500, name: "Booze" },
-  3: { min: 50, max: 5000, name: "Narcs" },
-  4: { min: 100, max: 3000, name: "Helper Credits" },
-  5: { min: 1, max: 400, name: "GI Credits" },
-  6: { min: 1, max: 30, name: "Perk Box" },
-  7: { min: 1, max: 10, name: "Mystery Box" },
-  8: { min: 500, max: 100000, name: "Bullets" },
-  9: { min: 100, max: 5000, name: "Health" },
+  0: { min: 100_000, max: 5_000_000, name: "Cash" },
+  1: { min: 1, max: 3, name: "Keys" },
+  2: { min: 50, max: 1000, name: "Booze items" },
+  3: { min: 50, max: 800, name: "Narcs items" },
+  4: { min: 50, max: 300, name: "Helper credits" },
+  5: { min: 1, max: 50, name: "GI Credits" },
+  6: { min: 1, max: 5, name: "Perk box" },
+  7: { min: 1, max: 2, name: "Mystery boxes" },
+  8: { min: 500, max: 20_000, name: "Bullets" },
+  9: { min: 50, max: 500, name: "Health" },
 };
+
+/** `MafiaOCLobby.Reward`: amount is ether-denominated only for cash (typeId 0). */
+export const OC_REWARD_CASH_TYPE_ID = 0;
+
+export function parseOcRewardAmount(typeId: number, amountRaw: bigint): number {
+  if (typeId === OC_REWARD_CASH_TYPE_ID) {
+    return Number(formatEther(amountRaw));
+  }
+  return Number(amountRaw);
+}
 
 export const OC_MIN_HEALTH = 300;
 
@@ -4052,8 +4063,8 @@ export const NARCS_TYPES: Record<number, string> = {
   5: "Opium",
   6: "Heroin",
 };
-export const OC_MAX_CASH = 10_000_000;
-export const OC_MAX_BULLETS = 50_000;
+export const OC_MAX_CASH = 1_500_000;
+export const OC_MAX_BULLETS = 5_000;
 export const OC_JAIL_HOURS = 72; // 48 * 1.5
 export const OC_HEALTH_LOSS = 300;
 
