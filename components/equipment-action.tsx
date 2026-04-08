@@ -85,7 +85,7 @@ interface SlotInfo {
   lastOperatingTimestamp: number;
   inventoryItemId: number;
   familyId: number;
-  stakingAmount: number | string;
+  stakingAmount: number;
   yieldPayout: number;
   owner: string;
 }
@@ -633,7 +633,7 @@ export function EquipmentAction() {
   const [bodyguards, setBodyguards] = useState<InventoryItem[]>([]);
   const [citySlots, setCitySlots] = useState<SlotInfo[]>([]); // User's slots for selection
   const [allCitySlotsGlobal, setAllCitySlotsGlobal] = useState<SlotInfo[]>([]); // ALL slots for equipped item lookup
-  
+
   // ALL items (not filtered by owner) - needed to display equipped items info
   // since equipped items are transferred to the MafiaEquipment contract
   const [allShopItemsGlobal, setAllShopItemsGlobal] = useState<InventoryItem[]>([]);
@@ -645,7 +645,7 @@ export function EquipmentAction() {
   );
   const [editedMafiaAmount, setEditedMafiaAmount] = useState(0);
   const [mafiaInputValue, setMafiaInputValue] = useState("0");
-  
+
   // Current time for cooldown calculation (updated every second)
   const [currentTime, setCurrentTime] = useState(() => Math.floor(Date.now() / 1000));
 
@@ -718,9 +718,9 @@ export function EquipmentAction() {
         equipmentInfo.itemIds.length >= 10
           ? equipmentInfo.itemIds.slice(0, 10)
           : [
-              ...equipmentInfo.itemIds,
-              ...Array(10 - equipmentInfo.itemIds.length).fill(0),
-            ]
+            ...equipmentInfo.itemIds,
+            ...Array(10 - equipmentInfo.itemIds.length).fill(0),
+          ]
       );
       const mafiaAmt = Number(formatEther(BigInt(equipmentInfo.mafiaAmount)));
       setEditedMafiaAmount(mafiaAmt);
@@ -853,7 +853,7 @@ export function EquipmentAction() {
   const nextEquipTime = lastEquippedAt + EQUIP_COOLDOWN_SECONDS;
   const canEquipNow = currentTime >= nextEquipTime;
   const cooldownRemaining = canEquipNow ? 0 : nextEquipTime - currentTime;
-  
+
   // Format cooldown time
   const formatCooldown = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -874,9 +874,9 @@ export function EquipmentAction() {
       equipmentInfo.itemIds.length >= 10
         ? equipmentInfo.itemIds.slice(0, 10)
         : [
-            ...equipmentInfo.itemIds,
-            ...Array(10 - equipmentInfo.itemIds.length).fill(0),
-          ];
+          ...equipmentInfo.itemIds,
+          ...Array(10 - equipmentInfo.itemIds.length).fill(0),
+        ];
     for (let i = 0; i < 10; i++) {
       if (editedItemIds[i] !== currentIds[i]) return true;
     }
@@ -937,11 +937,11 @@ export function EquipmentAction() {
       args: [addresses.equipment, deltaWei],
     });
   };
-  
+
   // Check if already has allowance for the delta
   const mafiaAllowance = mafiaAllowanceRaw ? Number(formatEther(mafiaAllowanceRaw as bigint)) : 0;
   const hasAllowance = mafiaDelta <= 0 || mafiaAllowance >= mafiaDelta;
-  
+
   // MAFIA wallet balance
   const mafiaBalance = mafiaBalanceRaw ? Number(formatEther(mafiaBalanceRaw as bigint)) : 0;
 
@@ -1069,15 +1069,15 @@ export function EquipmentAction() {
           <>
             <div className="flex flex-col gap-2 mb-4">
               {Array.from({ length: 10 }).map((_, i) => (
-                  <EquipmentSlotCard
-                    key={i}
-                    slotIndex={i}
-                    equippedItemId={editedItemIds[i]}
-                    allItemsGlobal={allItemsGlobal}
-                    allSlots={allCitySlotsGlobal}
-                    selectedItemId={selectedSlotIndex}
-                    onSelect={handleSlotSelect}
-                  />
+                <EquipmentSlotCard
+                  key={i}
+                  slotIndex={i}
+                  equippedItemId={editedItemIds[i]}
+                  allItemsGlobal={allItemsGlobal}
+                  allSlots={allCitySlotsGlobal}
+                  selectedItemId={selectedSlotIndex}
+                  onSelect={handleSlotSelect}
+                />
               ))}
             </div>
 

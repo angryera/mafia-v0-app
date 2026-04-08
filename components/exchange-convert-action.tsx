@@ -69,7 +69,7 @@ interface ParsedSlotInfo {
   lastOperatingTimestamp: number;
   inventoryItemId: number;
   familyId: number;
-  stakingAmount: number | string;
+  stakingAmount: number;
   yieldPayout: number;
   owner: string;
 }

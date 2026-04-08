@@ -357,6 +357,14 @@ const TAB_CONFIG: Record<
     contractAddress: "",
     contractShort: "",
   },
+  "marketing-dao": {
+    title: "Marketing DAO",
+    description:
+      "Vote on marketing proposals using MAFIA tokens. Stake tokens to support options and help decide how marketing funds are spent.",
+    codeSample: "voteOnProposal(proposalId, optionId, amountWei)",
+    contractAddress: "0x727405987580B9C44052f8F1f82Fa268C966Ba09",
+    contractShort: "0x7274...Ba09",
+  },
   "create-profile": {
     title: "Create Profile",
     description:

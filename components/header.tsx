@@ -133,7 +133,8 @@ export type Tab =
   | "xp-market"
   | "marketplace"
   | "racing"
-  | "create-profile";
+  | "create-profile"
+  | "marketing-dao";
 
 type NavItem = { id: Tab; label: string; icon: React.ReactNode };
 
@@ -158,7 +159,7 @@ export function getTabFromPath(pathname: string): Tab {
     "biz-slotmachine", "biz-jackpot", "biz-safehouse", "biz-booze", "biz-narcs",
     "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
     "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "referral",
-    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile"
+    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao"
   ];
   return validTabs.includes(firstSegment as Tab) ? (firstSegment as Tab) : "crime";
 }
@@ -207,6 +208,7 @@ const GAME_SECTION: NavItem[] = [
   { id: "referral", label: "Referral", icon: <UserPlus className="h-4 w-4" /> },
   { id: "players", label: "Players", icon: <Users className="h-4 w-4" /> },
   { id: "families", label: "Families", icon: <Building2 className="h-4 w-4" /> },
+  { id: "marketing-dao", label: "Marketing DAO", icon: <Landmark className="h-4 w-4" /> },
   { id: "info", label: "Contracts", icon: <FileText className="h-4 w-4" /> },
   { id: "open-crate", label: "Open Crate", icon: <BoxSelect className="h-4 w-4" /> },
   { id: "open-perkbox", label: "Open Perk Box", icon: <Gift className="h-4 w-4" /> },
