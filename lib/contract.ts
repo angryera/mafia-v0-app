@@ -1,5 +1,27 @@
 import { type Abi, formatEther, getAddress } from "viem";
 
+/**
+ * Contract registry + UI metadata.
+ *
+ * Organization notes:
+ * - Keep **addresses + ABIs + UI metadata** close together per feature.
+ * - Prefer `getAddress()` for checksum normalization.
+ * - This file is intentionally a single module (no extra files).
+ *
+ * Sections:
+ * - Chain configuration + shared helpers
+ * - Core gameplay (Crime / Travel / NickCar / KillSkill / Jail)
+ * - Helper Bot
+ * - Tokens / price feeds
+ * - Shops / inventory / perks
+ * - Minigames (Roulette / Slot)
+ * - Subscriptions
+ * - Organized Crime
+ * - Markets (Smuggle / XP / Inventory marketplace)
+ * - Exchange / deposit
+ * - Misc (Safehouse / Detective agency / Rank stake / Equipment / Bodyguard training / Race)
+ */
+
 // ========== Chain Configuration ==========
 export type ChainId = "bnb" | "pulsechain";
 
@@ -709,6 +731,21 @@ export const TravelCities: TravelRegion[] = [
   },
 ];
 
+// Travel destination cities for the destinationCity parameter
+export const TRAVEL_DESTINATIONS: { id: number; label: string; country: string }[] = [
+  { id: 0, label: "Chicago", country: "USA" },
+  { id: 1, label: "Detroit", country: "USA" },
+  { id: 2, label: "New York", country: "USA" },
+  { id: 3, label: "Miami", country: "USA" },
+  { id: 4, label: "Las Vegas", country: "USA" },
+  { id: 5, label: "Medellin", country: "Colombia" },
+  { id: 6, label: "Bogota", country: "Colombia" },
+  { id: 7, label: "Caracas", country: "Venezuela" },
+  { id: 8, label: "Palermo", country: "Italy" },
+  { id: 9, label: "Messina", country: "Italy" },
+  { id: 10, label: "Napoli", country: "Italy" },
+];
+
 // Helper to get region for a city
 export function getCityRegion(cityId: number): string {
   for (const region of TravelCities) {
@@ -873,34 +910,295 @@ export const HELPERBOT_CONTRACT_ADDRESS =
 
 export const HELPERBOT_CONTRACT_ABI: Abi = [
   // Start functions - all take (uint256 attemptCount, uint256[] perkItemIds)
-  { type: "function", name: "startCrimeBot", inputs: [{ name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" }], outputs: [], stateMutability: "nonpayable" },
-  { type: "function", name: "startCarBot", inputs: [{ name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" }], outputs: [], stateMutability: "nonpayable" },
-  { type: "function", name: "startKSBot", inputs: [{ name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" }], outputs: [], stateMutability: "nonpayable" },
-  { type: "function", name: "startBoozeBot", inputs: [{ name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" }], outputs: [], stateMutability: "nonpayable" },
-  { type: "function", name: "startNarcsBot", inputs: [{ name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" }], outputs: [], stateMutability: "nonpayable" },
-  { type: "function", name: "startBulletBot", inputs: [{ name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" }], outputs: [], stateMutability: "nonpayable" },
-  { type: "function", name: "startRacingBot", inputs: [{ name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" }], outputs: [], stateMutability: "nonpayable" },
-  { type: "function", name: "startBustOutBot", inputs: [{ name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" }], outputs: [], stateMutability: "nonpayable" },
+  {
+    type: "function",
+    name: "startCrimeBot",
+    inputs: [
+      { name: "attemptCount", type: "uint256", internalType: "uint256" },
+      { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "startCarBot",
+    inputs: [
+      { name: "attemptCount", type: "uint256", internalType: "uint256" },
+      { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "startKSBot",
+    inputs: [
+      { name: "attemptCount", type: "uint256", internalType: "uint256" },
+      { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "startBoozeBot",
+    inputs: [
+      { name: "attemptCount", type: "uint256", internalType: "uint256" },
+      { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "startNarcsBot",
+    inputs: [
+      { name: "attemptCount", type: "uint256", internalType: "uint256" },
+      { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "startBulletBot",
+    inputs: [
+      { name: "attemptCount", type: "uint256", internalType: "uint256" },
+      { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "startRacingBot",
+    inputs: [
+      { name: "attemptCount", type: "uint256", internalType: "uint256" },
+      { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "startBustOutBot",
+    inputs: [
+      { name: "attemptCount", type: "uint256", internalType: "uint256" },
+      { name: "perkItemIds", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
   // End functions - no-auth variants (crime, ks, racing, bustout)
   { type: "function", name: "endCrimeBot", inputs: [], outputs: [], stateMutability: "nonpayable" },
   { type: "function", name: "endKSBot", inputs: [], outputs: [], stateMutability: "nonpayable" },
   { type: "function", name: "endRacingBot", inputs: [], outputs: [], stateMutability: "nonpayable" },
   { type: "function", name: "endBustOutBot", inputs: [], outputs: [], stateMutability: "nonpayable" },
   // End functions - signed auth variants (car, booze, narcs)
-  { type: "function", name: "endCarBot", inputs: [{ name: "message", type: "string", internalType: "string" }, { name: "signature", type: "bytes", internalType: "bytes" }], outputs: [], stateMutability: "nonpayable" },
-  { type: "function", name: "endBoozeBot", inputs: [{ name: "message", type: "string", internalType: "string" }, { name: "signature", type: "bytes", internalType: "bytes" }], outputs: [], stateMutability: "nonpayable" },
-  { type: "function", name: "endNarcsBot", inputs: [{ name: "message", type: "string", internalType: "string" }, { name: "signature", type: "bytes", internalType: "bytes" }], outputs: [], stateMutability: "nonpayable" },
+  {
+    type: "function",
+    name: "endCarBot",
+    inputs: [
+      { name: "message", type: "string", internalType: "string" },
+      { name: "signature", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "endBoozeBot",
+    inputs: [
+      { name: "message", type: "string", internalType: "string" },
+      { name: "signature", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "endNarcsBot",
+    inputs: [
+      { name: "message", type: "string", internalType: "string" },
+      { name: "signature", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
   // End bullet bot - takes (bool isAccepting, string message, bytes signature)
-  { type: "function", name: "endBulletBot", inputs: [{ name: "isAccepting", type: "bool", internalType: "bool" }, { name: "message", type: "string", internalType: "string" }, { name: "signature", type: "bytes", internalType: "bytes" }], outputs: [], stateMutability: "nonpayable" },
+  {
+    type: "function",
+    name: "endBulletBot",
+    inputs: [
+      { name: "isAccepting", type: "bool", internalType: "bool" },
+      { name: "message", type: "string", internalType: "string" },
+      { name: "signature", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
   // User info functions - read bot state for a user
-  { type: "function", name: "userCrimeBotInfo", inputs: [{ name: "user", type: "address", internalType: "address" }], outputs: [{ name: "", type: "tuple", internalType: "struct HelperBotInfo", components: [{ name: "successRate", type: "uint256", internalType: "uint256" }, { name: "startTimestamp", type: "uint256", internalType: "uint256" }, { name: "endTimestamp", type: "uint256", internalType: "uint256" }, { name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "isRunning", type: "bool", internalType: "bool" }] }], stateMutability: "view" },
-  { type: "function", name: "userCarBotInfo", inputs: [{ name: "user", type: "address", internalType: "address" }], outputs: [{ name: "", type: "tuple", internalType: "struct HelperBotInfo", components: [{ name: "successRate", type: "uint256", internalType: "uint256" }, { name: "startTimestamp", type: "uint256", internalType: "uint256" }, { name: "endTimestamp", type: "uint256", internalType: "uint256" }, { name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "isRunning", type: "bool", internalType: "bool" }] }], stateMutability: "view" },
-  { type: "function", name: "userKSBotInfo", inputs: [{ name: "user", type: "address", internalType: "address" }], outputs: [{ name: "", type: "tuple", internalType: "struct HelperBotInfo", components: [{ name: "successRate", type: "uint256", internalType: "uint256" }, { name: "startTimestamp", type: "uint256", internalType: "uint256" }, { name: "endTimestamp", type: "uint256", internalType: "uint256" }, { name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "isRunning", type: "bool", internalType: "bool" }] }], stateMutability: "view" },
-  { type: "function", name: "userBoozeBotInfo", inputs: [{ name: "user", type: "address", internalType: "address" }], outputs: [{ name: "", type: "tuple", internalType: "struct HelperBotInfo", components: [{ name: "successRate", type: "uint256", internalType: "uint256" }, { name: "startTimestamp", type: "uint256", internalType: "uint256" }, { name: "endTimestamp", type: "uint256", internalType: "uint256" }, { name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "isRunning", type: "bool", internalType: "bool" }] }], stateMutability: "view" },
-  { type: "function", name: "userNarcsBotInfo", inputs: [{ name: "user", type: "address", internalType: "address" }], outputs: [{ name: "", type: "tuple", internalType: "struct HelperBotInfo", components: [{ name: "successRate", type: "uint256", internalType: "uint256" }, { name: "startTimestamp", type: "uint256", internalType: "uint256" }, { name: "endTimestamp", type: "uint256", internalType: "uint256" }, { name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "isRunning", type: "bool", internalType: "bool" }] }], stateMutability: "view" },
-  { type: "function", name: "userBulletBotInfo", inputs: [{ name: "user", type: "address", internalType: "address" }], outputs: [{ name: "", type: "tuple", internalType: "struct HelperBotInfo", components: [{ name: "successRate", type: "uint256", internalType: "uint256" }, { name: "startTimestamp", type: "uint256", internalType: "uint256" }, { name: "endTimestamp", type: "uint256", internalType: "uint256" }, { name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "isRunning", type: "bool", internalType: "bool" }] }], stateMutability: "view" },
-  { type: "function", name: "userRacingBotInfo", inputs: [{ name: "user", type: "address", internalType: "address" }], outputs: [{ name: "", type: "tuple", internalType: "struct HelperBotInfo", components: [{ name: "successRate", type: "uint256", internalType: "uint256" }, { name: "startTimestamp", type: "uint256", internalType: "uint256" }, { name: "endTimestamp", type: "uint256", internalType: "uint256" }, { name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "isRunning", type: "bool", internalType: "bool" }] }], stateMutability: "view" },
-  { type: "function", name: "userBustOutBotInfo", inputs: [{ name: "user", type: "address", internalType: "address" }], outputs: [{ name: "", type: "tuple", internalType: "struct HelperBotInfo", components: [{ name: "successRate", type: "uint256", internalType: "uint256" }, { name: "startTimestamp", type: "uint256", internalType: "uint256" }, { name: "endTimestamp", type: "uint256", internalType: "uint256" }, { name: "attemptCount", type: "uint256", internalType: "uint256" }, { name: "isRunning", type: "bool", internalType: "bool" }] }], stateMutability: "view" },
+  {
+    type: "function",
+    name: "userCrimeBotInfo",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct HelperBotInfo",
+        components: [
+          { name: "successRate", type: "uint256", internalType: "uint256" },
+          { name: "startTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "endTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "attemptCount", type: "uint256", internalType: "uint256" },
+          { name: "isRunning", type: "bool", internalType: "bool" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "userCarBotInfo",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct HelperBotInfo",
+        components: [
+          { name: "successRate", type: "uint256", internalType: "uint256" },
+          { name: "startTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "endTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "attemptCount", type: "uint256", internalType: "uint256" },
+          { name: "isRunning", type: "bool", internalType: "bool" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "userKSBotInfo",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct HelperBotInfo",
+        components: [
+          { name: "successRate", type: "uint256", internalType: "uint256" },
+          { name: "startTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "endTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "attemptCount", type: "uint256", internalType: "uint256" },
+          { name: "isRunning", type: "bool", internalType: "bool" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "userBoozeBotInfo",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct HelperBotInfo",
+        components: [
+          { name: "successRate", type: "uint256", internalType: "uint256" },
+          { name: "startTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "endTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "attemptCount", type: "uint256", internalType: "uint256" },
+          { name: "isRunning", type: "bool", internalType: "bool" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "userNarcsBotInfo",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct HelperBotInfo",
+        components: [
+          { name: "successRate", type: "uint256", internalType: "uint256" },
+          { name: "startTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "endTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "attemptCount", type: "uint256", internalType: "uint256" },
+          { name: "isRunning", type: "bool", internalType: "bool" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "userBulletBotInfo",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct HelperBotInfo",
+        components: [
+          { name: "successRate", type: "uint256", internalType: "uint256" },
+          { name: "startTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "endTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "attemptCount", type: "uint256", internalType: "uint256" },
+          { name: "isRunning", type: "bool", internalType: "bool" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "userRacingBotInfo",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct HelperBotInfo",
+        components: [
+          { name: "successRate", type: "uint256", internalType: "uint256" },
+          { name: "startTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "endTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "attemptCount", type: "uint256", internalType: "uint256" },
+          { name: "isRunning", type: "bool", internalType: "bool" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "userBustOutBotInfo",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct HelperBotInfo",
+        components: [
+          { name: "successRate", type: "uint256", internalType: "uint256" },
+          { name: "startTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "endTimestamp", type: "uint256", internalType: "uint256" },
+          { name: "attemptCount", type: "uint256", internalType: "uint256" },
+          { name: "isRunning", type: "bool", internalType: "bool" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
 ] as const;
 
 // ========== HelperBot Info Type & Parser ==========
@@ -1243,6 +1541,26 @@ export const BULLET_ABI: Abi = [
     ],
     outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "allowances",
+    inputs: [
+      { name: "user", type: "address", internalType: "address" },
+      { name: "spender", type: "address", internalType: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "approve",
+    inputs: [
+      { name: "to", type: "address", internalType: "address" },
+      { name: "amount", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
 ] as const;
 
@@ -1664,21 +1982,6 @@ export const SHOP_CATEGORIES = [
   { key: "weapons" as const, label: "Weapons" },
   { key: "transport" as const, label: "Transport & Armor" },
   { key: "bodyguard" as const, label: "Bodyguards" },
-];
-
-// Travel destination cities for the destinationCity parameter
-export const TRAVEL_DESTINATIONS: { id: number; label: string; country: string }[] = [
-  { id: 0, label: "Chicago", country: "USA" },
-  { id: 1, label: "Detroit", country: "USA" },
-  { id: 2, label: "New York", country: "USA" },
-  { id: 3, label: "Miami", country: "USA" },
-  { id: 4, label: "Las Vegas", country: "USA" },
-  { id: 5, label: "Medellin", country: "Colombia" },
-  { id: 6, label: "Bogota", country: "Colombia" },
-  { id: 7, label: "Caracas", country: "Venezuela" },
-  { id: 8, label: "Palermo", country: "Italy" },
-  { id: 9, label: "Messina", country: "Italy" },
-  { id: 10, label: "Napoli", country: "Italy" },
 ];
 
 // ========== Inventory Contract (Open Crate / Open Perk Box) ==========
@@ -3592,6 +3895,13 @@ export const OC_EXECUTION_ABI: Abi = [
   },
   {
     type: "function",
+    name: "lobbyHealthDeduction",
+    inputs: [{ name: "lobbyId", type: "uint256", internalType: "uint256" }],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "startLobby",
     inputs: [{ name: "lobbyId", type: "uint256", internalType: "uint256" }],
     outputs: [],
@@ -3613,6 +3923,34 @@ export const OC_EXECUTION_ABI: Abi = [
   },
   {
     type: "function",
+    name: "getLobbyFinishInfos",
+    inputs: [{ name: "lobbyIds", type: "uint256[]", internalType: "uint256[]" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple[]",
+        internalType: "struct LobbyFinishInfo[]",
+        components: [
+          { name: "isSuccess", type: "bool", internalType: "bool" },
+          { name: "failureType", type: "uint8", internalType: "uint8" },
+          { name: "successChance", type: "uint256", internalType: "uint256" },
+          { name: "carDamage", type: "uint256", internalType: "uint256" },
+          { name: "cashDeduction", type: "uint256", internalType: "uint256" },
+          { name: "bulletsDeduction", type: "uint256", internalType: "uint256" },
+          { name: "bgDeduction", type: "uint256", internalType: "uint256" },
+          { name: "newBodyguardItemId", type: "uint256", internalType: "uint256" },
+          { name: "newBodyguardCategoryId", type: "uint256", internalType: "uint256" },
+          { name: "newBodyguardTypeId", type: "uint256", internalType: "uint256" },
+          { name: "rewardSizePercents", type: "uint8[]", internalType: "uint8[]" },
+          { name: "rewardTypeIds", type: "uint8[]", internalType: "uint8[]" },
+          { name: "rewardCount", type: "uint8", internalType: "uint8" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "lobbyFinishInfos",
     inputs: [{ name: "lobbyId", type: "uint256", internalType: "uint256" }],
     outputs: [
@@ -3626,6 +3964,8 @@ export const OC_EXECUTION_ABI: Abi = [
       { name: "newBodyguardItemId", type: "uint256", internalType: "uint256" },
       { name: "newBodyguardCategoryId", type: "uint256", internalType: "uint256" },
       { name: "newBodyguardTypeId", type: "uint256", internalType: "uint256" },
+      { name: "rewardSizePercents", type: "uint8[]", internalType: "uint8[]" },
+      { name: "rewardTypeIds", type: "uint8[]", internalType: "uint8[]" },
       { name: "rewardCount", type: "uint8", internalType: "uint8" },
     ],
     stateMutability: "view",

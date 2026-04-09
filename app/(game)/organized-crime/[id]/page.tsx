@@ -11,7 +11,7 @@ export default async function OrganizedCrimeDetailPage({
 
   if (isNaN(lobbyId) || lobbyId < 0) {
     return (
-      <PageWrapper title="Invalid Lobby" description="The lobby ID is invalid.">
+      <PageWrapper>
         <div className="text-center py-12">
           <p className="text-muted-foreground">Invalid lobby ID provided.</p>
         </div>
@@ -20,10 +20,7 @@ export default async function OrganizedCrimeDetailPage({
   }
 
   return (
-    <PageWrapper
-      title={`Lobby #${lobbyId}`}
-      description="View and manage organized crime lobby"
-    >
+    <PageWrapper fullWidth>
       <OrganizedCrimeDetail lobbyId={lobbyId} />
     </PageWrapper>
   );

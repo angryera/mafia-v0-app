@@ -39,6 +39,7 @@ import {
   parseOcRewardAmount,
   RANK_ABI,
   RANK_NAMES,
+  MARKETPLACE_ITEM_NAMES,
   SHOP_ITEM_STATS,
   TRAVEL_DESTINATIONS,
   USER_PROFILE_CONTRACT_ABI
@@ -111,10 +112,28 @@ interface InventoryItem {
   typeId: number;
   owner: string;
   cityId: number;
+  car?: {
+    id: number;
+    brand: string;
+    carName: string;
+    image: string;
+    qualityLvl: number;
+    basePrice: number;
+    speed: number;
+    seats: number;
+  };
+  /** Present when categoryId is 15 (cars); from getCarItemsByCategory */
+  damagePercent?: number;
 }
 
 // ── Constants ───────────────────────────────────────────────────
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+// TESTING ONLY:
+// Allows joining Organized Crime lobbies with the same account even if the contract/UI
+// would normally block it (e.g. `wasInLobby` or `isInLobby` checks).
+// Flip this back to `false` for production.
+const ALLOW_OC_REJOIN_FOR_TESTING = true;
 
 const ROLE_ICONS: Record<number, React.ReactNode> = {
   0: <Crown className="h-5 w-5" />,
@@ -214,6 +233,88 @@ function formatTimeAgo(timestamp: number): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+function getMemberSubmissionSummary(roleIndex: number, member: Member | null): string[] {
+  if (!member || member.user === ZERO_ADDRESS) return [];
+  const itemIds = member.itemIds || [];
+  const assetParts: string[] = [];
+  // `assetAmounts` meaning depends on role:
+  // - roleIndex 0 (Leader): in-game cash
+  // - roleIndex 2 (Weapon Expert): bullets
+  // For other roles, treat as generic numeric amounts.
+  if (member.assetAmounts?.length) {
+    const a0 = member.assetAmounts[0];
+    if (roleIndex === 0) {
+      assetParts.push(`Cash submitted: $${a0.toLocaleString()}`);
+    } else if (roleIndex === 2) {
+      assetParts.push(`Bullets submitted: ${a0.toLocaleString()}`);
+    } else {
+      assetParts.push(`Assets: ${member.assetAmounts.map((a) => a.toLocaleString()).join(", ")}`);
+    }
+  }
+
+  switch (roleIndex) {
+    case 0:
+      return [...assetParts];
+    case 1: {
+      const carId = itemIds[0];
+      return [
+        ...(carId ? [`Car: #${carId}`] : []),
+        ...assetParts,
+      ];
+    }
+    case 2: {
+      const weaponId = itemIds[0];
+      return [
+        ...(weaponId ? [`Weapon: #${weaponId}`] : []),
+        ...assetParts,
+      ];
+    }
+    case 3: {
+      // Expected: grenadeIds + molotovIds + armorId (order depends on on-chain packing)
+      const armorId = itemIds[itemIds.length - 1];
+      const explosives = itemIds.slice(0, Math.max(0, itemIds.length - 1));
+      return [
+        ...(armorId ? [`Armor: #${armorId}`] : []),
+        ...(explosives.length ? [`Explosives: ${explosives.map((id) => `#${id}`).join(", ")}`] : []),
+        ...assetParts,
+      ];
+    }
+    case 4: {
+      const bodyguardId = itemIds[0];
+      return [
+        ...(bodyguardId ? [`Bodyguard: #${bodyguardId}`] : []),
+        ...assetParts,
+      ];
+    }
+    default:
+      return [...assetParts, ...(itemIds.length ? [`Items: ${itemIds.join(", ")}`] : [])];
+  }
+}
+
+function getInventoryItemDisplayLabel(item: InventoryItem): string {
+  // Cars (category 15)
+  if (item.categoryId === 15) {
+    const name = item.car ? `${item.car.brand} ${item.car.carName}` : `Type ${item.typeId}`;
+    const seats = item.car?.seats ? ` • ${item.car.seats} seats` : "";
+    const dmg = typeof item.damagePercent === "number" ? ` • ${item.damagePercent}% dmg` : "";
+    return `${name}${seats}${dmg} (#${item.itemId})`;
+  }
+
+  // Shop items (category 3): weapons, armor, explosives
+  if (item.categoryId === 3) {
+    const stat = SHOP_ITEM_STATS[item.typeId];
+    return stat ? `${stat.name} (#${item.itemId})` : `Shop item type ${item.typeId} (#${item.itemId})`;
+  }
+
+  // Bodyguards: use marketplace names map if available (category 48-51,5, etc)
+  const marketplaceName = (MARKETPLACE_ITEM_NAMES as any)?.[item.categoryId]?.[item.typeId] as
+    | string
+    | undefined;
+  if (marketplaceName) return `${marketplaceName} (#${item.itemId})`;
+
+  return `Item #${item.itemId} (Cat ${item.categoryId}, Type ${item.typeId})`;
+}
+
 // ── Inventory Script Loader ─────────────────────────────────────
 function useInventoryScript() {
   const [ready, setReady] = useState(false);
@@ -292,10 +393,12 @@ function JoinRoleDialog({
   const { data: bulletAllowanceRaw, refetch: refetchBulletAllowance } = useReadContract({
     address: addresses.bullets,
     abi: BULLET_ABI,
-    functionName: "allowance",
+    functionName: "allowances",
     args: address && addresses.ocJoin ? [address, addresses.ocJoin] : undefined,
     query: { enabled: !!address && !!addresses.ocJoin && roleIndex === 2 },
   });
+
+  console.log("bulletAllowanceRaw", bulletAllowanceRaw);
 
   useEffect(() => {
     if (roleIndex === 2 && bulletAllowanceRaw !== undefined) {
@@ -363,9 +466,14 @@ function JoinRoleDialog({
         (item) => item.owner.toLowerCase() === address.toLowerCase()
       );
 
+
+      console.log(filteredItems);
       // Filter by city for cars
       if (roleIndex === 1) {
-        filteredItems = filteredItems.filter((item) => item.cityId === lobbyCity);
+        filteredItems = filteredItems
+          .filter((item) => item.cityId === lobbyCity)
+          // If car metadata is present, enforce the "5+ seats" requirement.
+          .filter((item) => (item.car?.seats ? item.car.seats >= 5 : true));
       }
 
       // Filter by type IDs if specified
@@ -500,7 +608,10 @@ function JoinRoleDialog({
 
   const getItemLabel = (item: InventoryItem): string => {
     if (roleIndex === 1) {
-      return `Car #${item.itemId} (Type ${item.typeId})`;
+      const carName = item.car ? `${item.car.brand} ${item.car.carName}` : `Type ${item.typeId}`;
+      const seats = item.car?.seats ? ` • ${item.car.seats} seats` : "";
+      const dmg = typeof item.damagePercent === "number" ? ` • ${item.damagePercent}% dmg` : "";
+      return `Car #${item.itemId} (${carName}${seats}${dmg})`;
     }
     if (roleIndex === 2 || roleIndex === 3) {
       const stat = SHOP_ITEM_STATS[item.typeId];
@@ -887,9 +998,12 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
   const explorer = useChainExplorer();
   const { authData } = useAuth();
   const { toast } = useToast();
+  const { ready: inventoryReady } = useInventoryScript();
 
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<number>(1);
+  const [submissionItemMap, setSubmissionItemMap] = useState<Map<number, InventoryItem>>(new Map());
+  const [submissionDetailsLoading, setSubmissionDetailsLoading] = useState(false);
 
   // Fetch lobby data
   const {
@@ -905,6 +1019,93 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
   });
 
   const lobby: CrimeLobby | null = lobbyDataRaw ? parseCrimeLobby(lobbyDataRaw) : null;
+
+  // Load submitted items (cars/weapons/armor/explosives/bodyguards) for filled roles.
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      if (!lobby) {
+        setSubmissionItemMap(new Map());
+        setSubmissionDetailsLoading(false);
+        return;
+      }
+
+      const neededItemIds = new Set<number>();
+      for (const m of lobby.members || []) {
+        for (const id of m?.itemIds || []) neededItemIds.add(Number(id));
+      }
+      if (neededItemIds.size === 0) {
+        setSubmissionItemMap(new Map());
+        setSubmissionDetailsLoading(false);
+        return;
+      }
+
+      if (!addresses.inventory) {
+        setSubmissionItemMap(new Map());
+        setSubmissionDetailsLoading(false);
+        return;
+      }
+
+      if (!inventoryReady) {
+        setSubmissionDetailsLoading(true);
+        return;
+      }
+
+      setSubmissionDetailsLoading(true);
+      try {
+        const MafiaInventory = (window as unknown as Record<string, unknown>).MafiaInventory as {
+          getItemsByCategory: (opts: {
+            chain: string;
+            contractAddress: string;
+            categoryId: number;
+            maxItems: number;
+            onProgress?: (info: { fetched: number; batchIndex: number }) => void;
+          }) => Promise<InventoryItem[]>;
+        };
+
+        const neededCategories = new Set<number>();
+        lobby.members.forEach((m, idx) => {
+          if (!m || m.user === ZERO_ADDRESS) return;
+          if (idx === 1) neededCategories.add(15);
+          if (idx === 2 || idx === 3) neededCategories.add(3);
+          if (idx === 4) {
+            [48, 49, 50, 51, 5].forEach((c) => neededCategories.add(c));
+          }
+        });
+
+        const all: InventoryItem[] = [];
+        for (const categoryId of neededCategories) {
+          const items = await MafiaInventory.getItemsByCategory({
+            chain: chainConfig.id === "bnb" ? "bnb" : "pls",
+            contractAddress: addresses.inventory,
+            categoryId,
+            maxItems: 20000,
+          });
+          all.push(...items);
+        }
+
+        if (cancelled) return;
+
+        const map = new Map<number, InventoryItem>();
+        for (const it of all) {
+          const id = Number(it.itemId);
+          if (neededItemIds.has(id)) map.set(id, it);
+        }
+        setSubmissionItemMap(map);
+      } catch (e) {
+        console.error("Failed to load submission items", e);
+        if (!cancelled) setSubmissionItemMap(new Map());
+      } finally {
+        if (!cancelled) setSubmissionDetailsLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [lobby?.id, lobby?.status, inventoryReady, addresses.inventory, chainConfig.id]);
 
   // Check if user was previously in this lobby
   const { data: wasInLobbyRaw } = useReadContract({
@@ -1011,8 +1212,8 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
 
   const canJoinLobby =
     isWaiting &&
-    !isInLobby &&
-    !wasInLobby &&
+    (ALLOW_OC_REJOIN_FOR_TESTING ? true : !isInLobby) &&
+    (ALLOW_OC_REJOIN_FOR_TESTING ? true : !wasInLobby) &&
     userCity === lobby?.city &&
     userRank >= (lobby?.minRank ?? 0);
 
@@ -1294,6 +1495,69 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
             />
           );
         })}
+      </div>
+
+      {/* Member submissions */}
+      <div className="rounded-xl border border-border bg-card p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h3 className="font-medium text-foreground">Member Submissions</h3>
+          {submissionDetailsLoading && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              <span>Loading item details…</span>
+            </div>
+          )}
+        </div>
+        <div className="space-y-3">
+          {[0, 1, 2, 3, 4].map((roleIndex) => {
+            const member = lobby.members[roleIndex] || null;
+            const baseLines = getMemberSubmissionSummary(roleIndex, member);
+            const submittedItemLines =
+              member && member.user !== ZERO_ADDRESS && member.itemIds?.length
+                ? member.itemIds.map((id) => {
+                  const item = submissionItemMap.get(Number(id));
+                  return item ? getInventoryItemDisplayLabel(item) : `Item #${id}`;
+                })
+                : [];
+
+            const assetLines = baseLines.filter((l) =>
+              l.includes("submitted:") || l.startsWith("Assets:")
+            );
+            // Prefer detailed submitted item labels if we have them, but keep any submitted-asset lines.
+            const lines = submittedItemLines.length ? [...assetLines, ...submittedItemLines] : baseLines;
+            const showRowLoading =
+              submissionDetailsLoading &&
+              member &&
+              member.user !== ZERO_ADDRESS &&
+              (member.itemIds?.length ?? 0) > 0 &&
+              roleIndex >= 1;
+
+            return (
+              <div key={roleIndex} className="rounded-lg border border-border/60 bg-card/50 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-foreground">{OC_ROLE_NAMES[roleIndex]}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {member && member.user !== ZERO_ADDRESS ? formatAddress(member.user) : "Empty"}
+                  </div>
+                </div>
+                {showRowLoading ? (
+                  <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                    <span>Resolving submitted items…</span>
+                  </div>
+                ) : lines.length ? (
+                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                    {lines.map((l, i) => (
+                      <li key={i}>{l}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="mt-2 text-sm text-muted-foreground">No submission</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Outcome Display (when finished) */}
