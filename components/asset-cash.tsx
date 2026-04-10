@@ -90,8 +90,8 @@ export function AssetCash() {
               Cash Balance
             </h3>
             <p className="text-xs text-muted-foreground font-mono">
-              {addresses.cash.slice(0, 6)}...
-              {addresses.cash.slice(-4)}
+              {addresses.ingameCurrency.slice(0, 6)}...
+              {addresses.ingameCurrency.slice(-4)}
             </p>
           </div>
         </div>

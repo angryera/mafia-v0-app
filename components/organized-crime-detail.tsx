@@ -398,8 +398,6 @@ function JoinRoleDialog({
     query: { enabled: !!address && !!addresses.ocJoin && roleIndex === 2 },
   });
 
-  console.log("bulletAllowanceRaw", bulletAllowanceRaw);
-
   useEffect(() => {
     if (roleIndex === 2 && bulletAllowanceRaw !== undefined) {
       const allowance = Number(formatEther(bulletAllowanceRaw as bigint));

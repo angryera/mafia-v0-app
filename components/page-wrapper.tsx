@@ -317,6 +317,14 @@ const TAB_CONFIG: Record<
     contractAddress: "0x605694A29c5258D6c7Aed642D01111c4b7036966",
     contractShort: "0x6056...6966",
   },
+  "exchange-liquidity": {
+    title: "Exchange Liquidity",
+    description:
+      "Manage your liquidity positions. Add new liquidity, withdraw earned MAFIA tokens, or remove positions entirely.",
+    codeSample: "addNewLiquidity() / withdrawMAFIA() / removeLiquidity()",
+    contractAddress: "0xB081EC0763360a9Ad4D09AF2C9ec7DC1ED5190Ae",
+    contractShort: "0xB081...90Ae",
+  },
   referral: {
     title: "Referral Program",
     description:

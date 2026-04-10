@@ -162,7 +162,7 @@ export function JailAction() {
   const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
     address: addresses.ingameCurrency,
     abi: INGAME_CURRENCY_ABI,
-    functionName: "allowance",
+    functionName: "allowances",
     args: address ? [address, addresses.jail] : undefined,
     query: { enabled: !!address },
   });

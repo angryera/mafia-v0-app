@@ -46,7 +46,6 @@ export type ChainConfig = {
     buyPerkbox: `0x${string}`;
     buyKeys: `0x${string}`;
     userProfile: `0x${string}`;
-    cash: `0x${string}`;
     bullets: `0x${string}`;
     health: `0x${string}`;
     giCredits: `0x${string}`;
@@ -109,7 +108,6 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
       buyPerkbox: getAddress("0x55849c0F5A567A49d219B00642A4648389ada6f6"),
       buyKeys: getAddress("0x1F4Eb51E87C4e2368316dba8e478Cd561FEb8B77"),
       userProfile: getAddress("0xa08D627E071cB4b53C6D0611d77dbCB659902AA4"),
-      cash: getAddress("0x0f98e19bb15e41c139b41244430047e7cd95ce46"),
       bullets: getAddress("0xa42AE5D3E84bff9cD2C734A072232D9629f2ED16"),
       health: getAddress("0xC63668378B83f3E58A9AAAe6E12Da3282F150225"),
       giCredits: getAddress("0x21b6833B76A4AD783fe681c04Fc9F3a3a0A5b0B7"),
@@ -168,7 +166,6 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
       buyPerkbox: getAddress("0xF3B4F7d0ec795B555e12BC70150dDb1081FdA403"),
       buyKeys: getAddress("0x7FE7220E6A8AAB508c60be9d48fEfacDbe6BC179"),
       userProfile: getAddress("0x7FB6A056877c1da14a63bFECdE95ebbFa854f07F"),
-      cash: getAddress("0x0000000000000000000000000000000000000000"),
       bullets: getAddress("0x98f0d50b77BCcd657ecfa2E5C1E4915c6f4565B8"),
       health: getAddress("0xA3b9a5E273a9199bbD64fFf81f369FEa0A3a0E1F"),
       giCredits: getAddress("0xEDe999DDF33851F99e450468dE7251CcE96e2A72"),
@@ -337,7 +334,7 @@ export const INGAME_CURRENCY_ABI: Abi = [
   },
   {
     type: "function",
-    name: "allowance",
+    name: "allowances",
     inputs: [
       { name: "owner", type: "address", internalType: "address" },
       { name: "spender", type: "address", internalType: "address" },
@@ -4452,6 +4449,34 @@ export const DEPOSIT_CONTRACT_ABI: Abi = [
     inputs: [{ name: "mafiaAmount", type: "uint256", internalType: "uint256" }],
     outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "addLiquidity",
+    inputs: [
+      { name: "cashAmount", type: "uint256", internalType: "uint256" },
+      { name: "cashPerMafia", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "removeLiquidity",
+    inputs: [
+      { name: "liquidityId", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "withdrawMafia",
+    inputs: [
+      { name: "liquidityId", type: "uint256", internalType: "uint256" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
 ] as const;
 

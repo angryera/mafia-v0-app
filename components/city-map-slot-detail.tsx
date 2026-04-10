@@ -344,7 +344,7 @@ export function CityMapSlotDetail({
     useReadContract({
       address: addresses.ingameCurrency,
       abi: INGAME_CURRENCY_ABI,
-      functionName: "allowance",
+      functionName: "allowances",
       args:
         address && mapAddress ? [address, mapAddress] : undefined,
       query: { enabled: gameCashAllowanceEnabled },
@@ -390,9 +390,9 @@ export function CityMapSlotDetail({
 
   const ogCrateMapReadEnabled = Boolean(
     address &&
-      mapAddress &&
-      ogCrateAddress &&
-      (crateReadsEnabled || familyHqCreateEnabled)
+    mapAddress &&
+    ogCrateAddress &&
+    (crateReadsEnabled || familyHqCreateEnabled)
   );
 
   const { data: ogCrateApprovedRaw, refetch: refetchOgCrateApproval } =

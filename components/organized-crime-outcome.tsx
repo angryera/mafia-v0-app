@@ -608,8 +608,21 @@ export function OrganizedCrimeOutcome({
                     <Minus className="h-4 w-4" />
                     <span>Bullets deduction: {fi.bulletsDeduction}%</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    No weapons/armor/explosives are lost in “failed but got away”.
+                  <div className="flex items-center gap-2 text-sm text-amber-300">
+                    <Minus className="h-4 w-4" />
+                    <span>Weapon item lost</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-amber-300">
+                    <Minus className="h-4 w-4" />
+                    <span>Armor item lost</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-amber-300">
+                    <Minus className="h-4 w-4" />
+                    <span>Grenade lost</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-amber-300">
+                    <Minus className="h-4 w-4" />
+                    <span>Molotov lost</span>
                   </div>
                 </>
               ) : (

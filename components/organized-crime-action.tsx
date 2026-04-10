@@ -210,9 +210,9 @@ function CreateLobbyDialog({
 
   // Check allowance
   const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
-    address: addresses.cash,
+    address: addresses.ingameCurrency,
     abi: INGAME_CURRENCY_ABI,
-    functionName: "allowance",
+    functionName: "allowances",
     args: address && addresses.ocJoin ? [address, addresses.ocJoin] : undefined,
     query: { enabled: !!address && !!addresses.ocJoin },
   });
@@ -262,7 +262,7 @@ function CreateLobbyDialog({
   const handleApprove = () => {
     if (!address || !addresses.ocJoin) return;
     writeApprove({
-      address: addresses.cash,
+      address: addresses.ingameCurrency,
       abi: INGAME_CURRENCY_ABI,
       functionName: "approve",
       args: [addresses.ocJoin, maxUint256],

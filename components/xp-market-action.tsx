@@ -1252,9 +1252,9 @@ function ViewListingsPanel() {
     if (!biddingListing) return "TOKEN";
     if (isNativeBidToken) return chainConfig.id === "bnb" ? "BNB" : "PLS";
     if (biddingListing.listingToken.toLowerCase() === addresses.mafia.toLowerCase()) return "MAFIA";
-    if (biddingListing.listingToken.toLowerCase() === addresses.cash.toLowerCase()) return "CASH";
+    if (biddingListing.listingToken.toLowerCase() === addresses.ingameCurrency.toLowerCase()) return "CASH";
     return selectedSwapToken?.name || "TOKEN";
-  }, [biddingListing, isNativeBidToken, chainConfig.id, addresses.mafia, addresses.cash, selectedSwapToken]);
+  }, [biddingListing, isNativeBidToken, chainConfig.id, addresses.mafia, addresses.ingameCurrency, selectedSwapToken]);
   const bidTokenDecimals = selectedSwapToken?.decimal ?? 18;
   const bidTimeLeft = biddingListing
     ? Math.max(0, Number(biddingListing.endTimestamp) - Math.floor(Date.now() / 1000))
@@ -1529,7 +1529,7 @@ function ViewListingsPanel() {
                 }
                 chainConfig={chainConfig}
                 mafiaAddress={addresses.mafia}
-                cashAddress={addresses.cash}
+                cashAddress={addresses.ingameCurrency}
               />
             ))}
           </div>

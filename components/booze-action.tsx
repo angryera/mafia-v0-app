@@ -224,7 +224,7 @@ export function BoozeAction() {
   const { data: allowanceData, refetch: refetchAllowance } = useReadContract({
     address: addresses.ingameCurrency as `0x${string}`,
     abi: INGAME_CURRENCY_ABI,
-    functionName: "allowance",
+    functionName: "allowances",
     args: address ? [address, addresses.smuggleMarket] : undefined,
     query: { enabled: !!address && !!addresses.smuggleMarket },
   });

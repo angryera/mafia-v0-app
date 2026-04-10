@@ -599,9 +599,9 @@ function CreateRaceDialog({
 
   // Check allowance for cash
   const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
-    address: addresses.cash,
-    abi: ERC20_ABI,
-    functionName: "allowance",
+    address: addresses.ingameCurrency,
+    abi: INGAME_CURRENCY_ABI,
+    functionName: "allowances",
     args: address && addresses.raceLobby ? [address, addresses.raceLobby] : undefined,
     query: { enabled: !!address && !!addresses.raceLobby && addresses.raceLobby !== ZERO_ADDRESS },
   });
@@ -707,7 +707,7 @@ function CreateRaceDialog({
       address: addresses.ingameCurrency,
       abi: INGAME_CURRENCY_ABI,
       functionName: "approveInGameCurrency",
-      args: [addresses.raceLobby, maxUint256],
+      args: [addresses.raceLobby, cashAmountWei],
     });
   }
 
