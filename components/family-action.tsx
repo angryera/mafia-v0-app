@@ -79,18 +79,6 @@ interface Family {
   players: Player[];
 }
 
-// Declare global MafiaFamily
-declare global {
-  interface Window {
-    MafiaFamily?: {
-      getFamiliesWithPlayers: (options: {
-        chain: string;
-        onProgress?: (info: { step: string; fetched: number; batchIndex?: number }) => void;
-      }) => Promise<Family[]>;
-    };
-  }
-}
-
 // Role hierarchy for sorting
 const ROLE_ORDER: Record<string, number> = {
   Don: 0,

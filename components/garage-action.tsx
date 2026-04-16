@@ -77,20 +77,6 @@ interface CarItem {
   damagePercent: number;
 }
 
-declare global {
-  interface Window {
-    MafiaInventory?: {
-      getItemsByCategory: (opts: {
-        chain: string;
-        contractAddress: string;
-        categoryId: number;
-        maxItems: number;
-        onProgress?: (info: { fetched: number; batchIndex: number }) => void;
-      }) => Promise<CarItem[]>;
-    };
-  }
-}
-
 // ── Script loader ───────────────────────────────────────────────
 function useInventoryScript() {
   const [ready, setReady] = useState(false);

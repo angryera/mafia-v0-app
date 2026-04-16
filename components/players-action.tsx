@@ -47,18 +47,6 @@ interface Player {
   jailedUntil?: number;
 }
 
-// Declare global MafiaProfile
-declare global {
-  interface Window {
-    MafiaProfile?: {
-      getUsersInfo: (options: {
-        chain: string;
-        onProgress?: (info: { fetched: number; batchIndex: number }) => void;
-      }) => Promise<Player[]>;
-    };
-  }
-}
-
 const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
 
 export function PlayersAction() {

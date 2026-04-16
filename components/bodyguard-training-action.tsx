@@ -51,20 +51,6 @@ interface BodyguardItem {
   cityId: number;
 }
 
-declare global {
-  interface Window {
-    MafiaInventory?: {
-      getItemsByCategory: (opts: {
-        chain: string;
-        contractAddress: string;
-        categoryId: number;
-        maxItems: number;
-        onProgress?: (info: { fetched: number; batchIndex: number }) => void;
-      }) => Promise<BodyguardItem[]>;
-    };
-  }
-}
-
 // ── Script loader ───────────────────────────────────────────────
 function useInventoryScript() {
   const [ready, setReady] = useState(false);
@@ -808,14 +794,15 @@ export function BodyguardTrainingAction() {
 
   const trainingSlots: TrainingSlotType[] = trainingSlotsRaw
     ? (trainingSlotsRaw as any[]).map((slot: any) => ({
-        endTime: Number(slot.endTime),
-        isTraining: slot.isTraining,
-        newCategoryId: Number(slot.newCategoryId),
-        newTypeId: Number(slot.newTypeId),
-        oldItemId: Number(slot.oldItemId),
-        startTime: Number(slot.startTime),
-        trainingCost: Number(formatEther(slot.trainingCost)),
-      }))
+      endTime: Number(slot.endTime),
+      isTraining: slot.isTraining,
+      newCategoryId: Number(slot.newCategoryId),
+      newTypeId: Number(slot.newTypeId),
+      oldItemId: Number(slot.oldItemId),
+      newItemId: Number(slot.newItemId),
+      startTime: Number(slot.startTime),
+      trainingCost: Number(formatEther(slot.trainingCost)),
+    }))
     : [];
 
   console.log("[v0] Parsed trainingSlots:", trainingSlots);

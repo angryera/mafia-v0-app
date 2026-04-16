@@ -78,18 +78,6 @@ export interface Family {
   players: Player[];
 }
 
-// Declare global MafiaFamily
-declare global {
-  interface Window {
-    MafiaFamily?: {
-      getFamiliesWithPlayers: (options: {
-        chain: string;
-        onProgress?: (info: { step: string; fetched: number; batchIndex?: number }) => void;
-      }) => Promise<Family[]>;
-    };
-  }
-}
-
 export function FamilyTable() {
   const router = useRouter();
   const { chainConfig } = useChain();

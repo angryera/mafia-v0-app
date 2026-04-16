@@ -99,26 +99,6 @@ interface EquipmentInfoData {
 // 3 hours in seconds
 const EQUIP_COOLDOWN_SECONDS = 3 * 60 * 60;
 
-declare global {
-  interface Window {
-    MafiaInventory?: {
-      getItemsByCategory: (opts: {
-        chain: string;
-        contractAddress: string;
-        categoryId: number;
-        maxItems?: number;
-        onProgress?: (info: { fetched: number; batchIndex: number }) => void;
-      }) => Promise<InventoryItem[]>;
-    };
-    MafiaMap?: {
-      getSlots: (opts: {
-        chain: string;
-        cityId: number;
-      }) => Promise<SlotInfo[]>;
-    };
-  }
-}
-
 // ── Script loader ───────────────────────────────────────────────
 function useInventoryScript() {
   const [ready, setReady] = useState(false);

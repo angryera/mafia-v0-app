@@ -1920,6 +1920,28 @@ export const SHOP_CONTRACT_ABI: Abi = [
   },
   {
     type: "function",
+    name: "getCityPrices",
+    inputs: [{ name: "cityId", type: "uint8", internalType: "uint8" }],
+    outputs: [
+      { name: "basePrices", type: "uint256[]", internalType: "uint256[]" },
+      { name: "onwerPrices", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getShopItems",
+    inputs: [{ name: "cityId", type: "uint8", internalType: "uint8" }],
+    outputs: [
+      { name: "categoryIds", type: "uint256[]", internalType: "uint256[]" },
+      { name: "typeIds", type: "uint256[]", internalType: "uint256[]" },
+      { name: "stockAmounts", type: "uint256[]", internalType: "uint256[]" },
+      { name: "prices", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "buyItems",
     inputs: [
       { name: "typeIds", type: "uint256[]", internalType: "uint256[]" },
@@ -1935,6 +1957,16 @@ export const SHOP_CONTRACT_ABI: Abi = [
     name: "restockItems",
     inputs: [
       { name: "cityId", type: "uint8", internalType: "uint8" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "updateCityCostPrice",
+    inputs: [
+      { name: "cityId", type: "uint8", internalType: "uint8" },
+      { name: "prices", type: "uint256[]", internalType: "uint256[]" },
     ],
     outputs: [],
     stateMutability: "nonpayable",

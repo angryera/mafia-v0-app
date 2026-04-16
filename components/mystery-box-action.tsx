@@ -47,22 +47,6 @@ interface InventoryItem {
   cityId: number;
 }
 
-interface MafiaInventory {
-  getItemsByCategory: (params: {
-    chain: string;
-    contractAddress: string;
-    categoryId: number;
-    maxItems: number;
-    onProgress?: (info: { fetched: number; batchIndex: number }) => void;
-  }) => Promise<InventoryItem[]>;
-}
-
-declare global {
-  interface Window {
-    MafiaInventory?: MafiaInventory;
-  }
-}
-
 type Phase = "idle" | "loading-inventory" | "opening" | "confirming" | "done";
 
 export function MysteryBoxAction() {

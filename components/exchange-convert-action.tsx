@@ -74,26 +74,6 @@ interface ParsedSlotInfo {
   owner: string;
 }
 
-declare global {
-  interface Window {
-    MafiaInventory?: {
-      getItemsByCategory: (opts: {
-        chain: string;
-        contractAddress: string;
-        categoryId: number;
-        maxItems: number;
-        onProgress?: (info: { fetched: number; batchIndex: number }) => void;
-      }) => Promise<ConvertItem[]>;
-    };
-    MafiaMap?: {
-      getSlots: (opts: {
-        chain: string;
-        cityId: number;
-      }) => Promise<ParsedSlotInfo[]>;
-    };
-  }
-}
-
 // Rarity number to name mapping
 const RARITY_NAMES: Record<number, string> = {
   0: "Strategic",
@@ -292,7 +272,7 @@ export function ExchangeConvertAction() {
     try {
       const inventoryAddress = addresses.inventory;
       const chain = activeChain === "bnb" ? "bnb" : "pls";
-      
+
       const categories = [0, 3, 6]; // CASH, SHOPITEM, CREDIT
       const allItems: ConvertItem[] = [];
 
@@ -303,7 +283,7 @@ export function ExchangeConvertAction() {
           categoryId,
           maxItems: 100000,
         });
-        
+
         // Filter by owner
         const ownedItems = categoryItems.filter(
           (item) => item.owner.toLowerCase() === address.toLowerCase()
@@ -319,12 +299,12 @@ export function ExchangeConvertAction() {
               chain: activeChain,
               cityId,
             });
-            
+
             // Filter owned slots and convert to ConvertItem format
             const ownedSlots = slots.filter(
               (slot) => slot.owner.toLowerCase() === address.toLowerCase()
             );
-            
+
             for (const slot of ownedSlots) {
               allItems.push({
                 itemId: slot.inventoryItemId,
@@ -499,7 +479,7 @@ export function ExchangeConvertAction() {
   const handleConvert = () => {
     if (selectedIds.size === 0) return;
     resetConvert();
-    
+
     const itemIds = Array.from(selectedIds).map((id) => BigInt(id));
     const exchangeAddress = EXCHANGE_ADDRESSES[activeChain as ChainId];
 
@@ -817,8 +797,8 @@ export function ExchangeConvertAction() {
                   {estimatedCash >= 100_000_000
                     ? " (+8%)"
                     : estimatedCash >= 50_000_000
-                    ? " (+5%)"
-                    : " (+3%)"}
+                      ? " (+5%)"
+                      : " (+3%)"}
                 </span>
                 <span className="text-sm font-semibold text-amber-400">
                   +${volumeBonus.toLocaleString(undefined, { maximumFractionDigits: 0 })}

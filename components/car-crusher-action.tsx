@@ -62,20 +62,6 @@ interface CarItem {
   };
 }
 
-declare global {
-  interface Window {
-    MafiaInventory?: {
-      getItemsByCategory: (opts: {
-        chain: string;
-        contractAddress: string;
-        categoryId: number;
-        maxItems: number;
-        onProgress?: (info: { fetched: number; batchIndex: number }) => void;
-      }) => Promise<CarItem[]>;
-    };
-  }
-}
-
 // ── Helpers ────────────────────────────────────────────────────
 function getCityName(cityId: number): string {
   const dest = TRAVEL_DESTINATIONS.find((d) => d.id === cityId);
@@ -203,12 +189,12 @@ export function CarCrusherAction() {
   // Parse city crusher info
   const cityCrusherInfo = cityCrusherInfoRaw
     ? {
-        bulletProfit: Number(formatEther((cityCrusherInfoRaw as any).bulletProfit ?? (cityCrusherInfoRaw as any)[0] ?? 0n)),
-        cashProfit: Number(formatEther((cityCrusherInfoRaw as any).cashProfit ?? (cityCrusherInfoRaw as any)[1] ?? 0n)),
-        inventoryItemId: Number((cityCrusherInfoRaw as any).inventoryItemId ?? (cityCrusherInfoRaw as any)[2] ?? 0n),
-        bulletFeePerCar: Number(formatEther((cityCrusherInfoRaw as any).bulletFeePerCar ?? (cityCrusherInfoRaw as any)[3] ?? 0n)),
-        oneTimeCashFee: Number(formatEther((cityCrusherInfoRaw as any).oneTimeCashFee ?? (cityCrusherInfoRaw as any)[4] ?? 0n)),
-      }
+      bulletProfit: Number(formatEther((cityCrusherInfoRaw as any).bulletProfit ?? (cityCrusherInfoRaw as any)[0] ?? 0n)),
+      cashProfit: Number(formatEther((cityCrusherInfoRaw as any).cashProfit ?? (cityCrusherInfoRaw as any)[1] ?? 0n)),
+      inventoryItemId: Number((cityCrusherInfoRaw as any).inventoryItemId ?? (cityCrusherInfoRaw as any)[2] ?? 0n),
+      bulletFeePerCar: Number(formatEther((cityCrusherInfoRaw as any).bulletFeePerCar ?? (cityCrusherInfoRaw as any)[3] ?? 0n)),
+      oneTimeCashFee: Number(formatEther((cityCrusherInfoRaw as any).oneTimeCashFee ?? (cityCrusherInfoRaw as any)[4] ?? 0n)),
+    }
     : null;
 
   const netBulletsPerCar = cityCrusherInfo

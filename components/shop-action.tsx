@@ -21,7 +21,7 @@ import {
   INGAME_CURRENCY_APPROVE_AMOUNT,
 } from "@/lib/contract";
 import type { ShopItemMeta } from "@/lib/contract";
-import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
+import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import {
   Loader2,
@@ -30,8 +30,6 @@ import {
   XCircle,
   AlertCircle,
   MapPin,
-  Package,
-  Coins,
   RefreshCw,
   Timer,
   Crosshair,
@@ -45,7 +43,15 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatEther } from "viem";
+import { formatEther, parseEther } from "viem";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ProfileData {
   profileId: bigint;
@@ -58,13 +64,25 @@ interface ShopItemData {
   categoryId: number;
   typeId: number;
   stockAmount: number;
+  basePrice: number;
+  ownerPrice: number;
   price: number;
+  basePriceRaw: bigint;
+  ownerPriceRaw: bigint;
   priceRaw: bigint;
 }
 
 interface CartEntry {
   typeId: number;
   amount: number;
+}
+
+interface BusinessInventoryItem {
+  itemId: number;
+  categoryId: number;
+  typeId: number;
+  owner: string;
+  cityId: number;
 }
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
@@ -85,8 +103,56 @@ const CATEGORY_BG: Record<string, string> = {
   bodyguard: "bg-emerald-400/10",
 };
 
+function toBigIntArray(value: unknown): bigint[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (typeof entry === "bigint") return entry;
+      if (typeof entry === "number") return BigInt(entry);
+      if (typeof entry === "string") {
+        try {
+          return BigInt(entry);
+        } catch {
+          return null;
+        }
+      }
+      return null;
+    })
+    .filter((entry): entry is bigint => entry !== null);
+}
+
+function parseCityPrices(raw: unknown): { basePrices: bigint[]; ownerPrices: bigint[] } {
+  const record = raw as Record<string, unknown> | undefined;
+  const basePrices = toBigIntArray(record?.basePrices ?? (Array.isArray(raw) ? raw[0] : []));
+  // Contract currently exposes `onwerPrices` (legacy typo), but support both keys.
+  const ownerPrices = toBigIntArray(
+    record?.ownerPrices ?? record?.onwerPrices ?? (Array.isArray(raw) ? raw[1] : [])
+  );
+  return { basePrices, ownerPrices };
+}
+
+function parseShopItems(raw: unknown): {
+  categoryIds: bigint[];
+  typeIds: bigint[];
+  stockAmounts: bigint[];
+  prices: bigint[];
+} {
+  const record = raw as Record<string, unknown> | undefined;
+  return {
+    categoryIds: toBigIntArray(record?.categoryIds ?? (Array.isArray(raw) ? raw[0] : [])),
+    typeIds: toBigIntArray(record?.typeIds ?? (Array.isArray(raw) ? raw[1] : [])),
+    stockAmounts: toBigIntArray(record?.stockAmounts ?? (Array.isArray(raw) ? raw[2] : [])),
+    prices: toBigIntArray(record?.prices ?? (Array.isArray(raw) ? raw[3] : [])),
+  };
+}
+
+function getOwnerPriceOrBase(item: ShopItemData): number {
+  return item.ownerPrice > 0 ? item.ownerPrice : item.basePrice;
+}
+
 export function ShopAction() {
   const { address, isConnected } = useAccount();
+  const { chainConfig } = useChain();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
   const { authData, isSigning: authSigning, signError, requestSignature } = useAuth();
@@ -97,6 +163,10 @@ export function ShopAction() {
   const [shopItems, setShopItems] = useState<Map<number, ShopItemData>>(new Map());
   const [shopLoading, setShopLoading] = useState(false);
   const [shopFetching, setShopFetching] = useState(false);
+  const [manageDialogOpen, setManageDialogOpen] = useState(false);
+  const [editableOwnerPrices, setEditableOwnerPrices] = useState<Record<number, string>>({});
+  const [inventoryReady, setInventoryReady] = useState(false);
+  const [cityShopBusinessItems, setCityShopBusinessItems] = useState<BusinessInventoryItem[]>([]);
 
   // ---------- Per-item quantity selector (before adding to cart) ----------
   const [selectedAmounts, setSelectedAmounts] = useState<Record<number, number>>({});
@@ -161,6 +231,34 @@ export function ShopAction() {
     return sum + (data && typeof data.price === "number" ? data.price * e.amount : 0);
   }, 0);
 
+  const canManageShop =
+    !!address &&
+    cityShopBusinessItems.some(
+      (item) => item.owner.toLowerCase() === address.toLowerCase()
+    );
+
+  console.log(cityShopBusinessItems);
+
+  // ---------- Load Mafia inventory script ----------
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as { MafiaInventory?: unknown }).MafiaInventory) {
+      setInventoryReady(true);
+      return;
+    }
+
+    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
+    if (existing) {
+      existing.addEventListener("load", () => setInventoryReady(true));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "/js/mafia-utils.js";
+    script.async = true;
+    script.onload = () => setInventoryReady(true);
+    document.head.appendChild(script);
+  }, []);
+
   // ---------- Approve cash spend ----------
   const {
     writeContract: writeApprove,
@@ -217,36 +315,50 @@ export function ShopAction() {
         ? `City #${profile.cityId}`
         : null;
 
-  // ---------- Read all 14 shop items ----------
+  // ---------- Read all 14 shop items (plus city base/owner prices) ----------
   const fetchShopItems = useCallback(async () => {
     if (cityId === undefined || !publicClient) return;
     setShopFetching(true);
     try {
-      const results = await Promise.all(
-        Array.from({ length: 14 }, (_, i) =>
-          publicClient.readContract({
-            address: addresses.shop,
-            abi: SHOP_CONTRACT_ABI,
-            functionName: "getShopItem",
-            args: [cityId, BigInt(i)],
-          })
-        )
-      );
+      const [cityPricesRaw, shopItemsRaw] = await Promise.all([
+        publicClient.readContract({
+          address: addresses.shop,
+          abi: SHOP_CONTRACT_ABI,
+          functionName: "getCityPrices",
+          args: [cityId],
+        }),
+        publicClient.readContract({
+          address: addresses.shop,
+          abi: SHOP_CONTRACT_ABI,
+          functionName: "getShopItems",
+          args: [cityId],
+        }),
+      ]);
+
+      const { basePrices, ownerPrices } = parseCityPrices(cityPricesRaw);
+      const { categoryIds, typeIds, stockAmounts, prices } = parseShopItems(shopItemsRaw);
 
       const items = new Map<number, ShopItemData>();
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i] as {
-          categoryId: bigint;
-          typeId: bigint;
-          stockAmount: bigint;
-          price: bigint;
-        };
-        items.set(i, {
-          categoryId: Number(r.categoryId),
-          typeId: Number(r.typeId),
-          stockAmount: Number(r.stockAmount),
-          price: Number(formatEther(r.price)),
-          priceRaw: r.price,
+      for (let itemId = 0; itemId < 14; itemId++) {
+        const categoryIdRaw = categoryIds[itemId] ?? BigInt(0);
+        const typeIdRaw = typeIds[itemId] ?? BigInt(itemId);
+        const stockAmountRaw = stockAmounts[itemId] ?? BigInt(0);
+        const basePriceRaw = basePrices[itemId] ?? BigInt(0);
+        const ownerPriceRaw = ownerPrices[itemId] ?? prices[itemId] ?? BigInt(0);
+        const finalPriceRaw =
+          prices[itemId] ?? (ownerPriceRaw > BigInt(0) ? ownerPriceRaw : basePriceRaw);
+
+        const typeId = Number(typeIdRaw);
+        items.set(itemId, {
+          categoryId: Number(categoryIdRaw),
+          typeId,
+          stockAmount: Number(stockAmountRaw),
+          basePrice: Number(formatEther(basePriceRaw)),
+          ownerPrice: Number(formatEther(ownerPriceRaw)),
+          price: Number(formatEther(finalPriceRaw)),
+          basePriceRaw,
+          ownerPriceRaw,
+          priceRaw: finalPriceRaw,
         });
       }
       setShopItems(items);
@@ -266,6 +378,36 @@ export function ShopAction() {
     return () => clearInterval(id);
   }, [cityId, publicClient, fetchShopItems]);
 
+  // ---------- Fetch business items to identify shop owner ----------
+  const fetchCityShopBusinessItems = useCallback(async () => {
+    if (!inventoryReady || cityId === undefined || !addresses.inventory) {
+      setCityShopBusinessItems([]);
+      return;
+    }
+
+    const mafiaInventory = window.MafiaInventory;
+    if (!mafiaInventory) return;
+
+    try {
+      const items = await mafiaInventory.getItemsByCategory({
+        chain: chainConfig.id,
+        contractAddress: addresses.inventory,
+        categoryId: 4,
+      });
+      const filtered = items.filter(
+        (item) => Number(item.typeId) === 1 && Number(item.cityId) === Number(cityId)
+      );
+      setCityShopBusinessItems(filtered);
+    } catch (error) {
+      console.error("Failed to fetch city business items:", error);
+      setCityShopBusinessItems([]);
+    }
+  }, [inventoryReady, cityId, addresses.inventory, chainConfig.id]);
+
+  useEffect(() => {
+    void fetchCityShopBusinessItems();
+  }, [fetchCityShopBusinessItems]);
+
   // ---------- Restock items ----------
   const {
     writeContract: writeRestock,
@@ -277,6 +419,78 @@ export function ShopAction() {
 
   const { isLoading: restockConfirming, isSuccess: restockSuccess } =
     useWaitForTransactionReceipt({ hash: restockHash });
+
+  // ---------- Manage owner prices ----------
+  const {
+    writeContractAsync: writeUpdateCityCostPrice,
+    data: updateCityPriceHash,
+    isPending: updateCityPricePending,
+  } = useChainWriteContract();
+  const { isLoading: updateCityPriceConfirming } = useWaitForTransactionReceipt({
+    hash: updateCityPriceHash,
+  });
+  const updateCityPriceLoading = updateCityPricePending || updateCityPriceConfirming;
+
+  useEffect(() => {
+    if (!manageDialogOpen) return;
+    const nextEditable = SHOP_ITEMS.reduce<Record<number, string>>((acc, itemMeta) => {
+      const data = shopItems.get(itemMeta.typeId);
+      if (!data) return acc;
+      acc[itemMeta.typeId] = String(getOwnerPriceOrBase(data));
+      return acc;
+    }, {});
+    setEditableOwnerPrices(nextEditable);
+  }, [manageDialogOpen, shopItems]);
+
+  const handleOwnerPriceInputChange = (typeId: number, value: string) => {
+    setEditableOwnerPrices((prev) => ({ ...prev, [typeId]: value }));
+  };
+
+  const handleSaveOwnerPrices = async () => {
+    if (!address || cityId === undefined || !publicClient) return;
+
+    const rawPrices: number[] = [];
+    for (let itemId = 0; itemId < 14; itemId++) {
+      const itemData = shopItems.get(itemId);
+      if (!itemData) {
+        rawPrices.push(0);
+        continue;
+      }
+
+      const priceInput = editableOwnerPrices[itemId];
+      const parsed = Number(priceInput);
+      const normalized = Number.isFinite(parsed)
+        ? Math.max(0, parsed)
+        : getOwnerPriceOrBase(itemData);
+
+      if (normalized < itemData.basePrice) {
+        toast.error(`Price for typeId ${itemId} cannot be lower than base price.`);
+        return;
+      }
+      rawPrices.push(normalized);
+    }
+
+    try {
+      const parsedPrices = rawPrices.map((price) => parseEther(price.toString()));
+      const txHash = await writeUpdateCityCostPrice({
+        address: addresses.shop,
+        abi: SHOP_CONTRACT_ABI,
+        functionName: "updateCityCostPrice",
+        args: [cityId, parsedPrices],
+      });
+      if (publicClient && txHash) {
+        await publicClient.waitForTransactionReceipt({ hash: txHash });
+      }
+      toast.success("Shop owner prices updated.");
+      setManageDialogOpen(false);
+      await fetchShopItems();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update prices";
+      if (!message.includes("User rejected")) {
+        toast.error(message);
+      }
+    }
+  };
 
   const handleRestock = () => {
     if (cityId === undefined) return;
@@ -459,23 +673,117 @@ export function ShopAction() {
       {/* Header */}
       <div className="mb-5 flex items-end justify-between">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Shop</h2>
+          <h2 className="flex items-center gap-2 text-lg font-bold text-foreground">
+            <span>Shop</span>
+            <span className="rounded-md border border-border bg-background/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              {cityName ?? "Loading city..."}
+            </span>
+          </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Add items to your cart and buy them all in a single transaction.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => fetchShopItems()}
-          disabled={shopFetching}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background/50 text-muted-foreground transition-colors hover:text-foreground hover:border-primary/30 disabled:opacity-50"
-          aria-label="Refresh shop data"
-        >
-          <RefreshCw
-            className={cn("h-3.5 w-3.5", shopFetching && "animate-spin")}
-          />
-        </button>
+        <div className="flex items-center gap-2">
+          {canManageShop && (
+            <button
+              type="button"
+              onClick={() => setManageDialogOpen(true)}
+              className="rounded-lg border border-border bg-background/60 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            >
+              Manage Shop
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => fetchShopItems()}
+            disabled={shopFetching}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-background/50 text-muted-foreground transition-colors hover:text-foreground hover:border-primary/30 disabled:opacity-50"
+            aria-label="Refresh shop data"
+          >
+            <RefreshCw
+              className={cn("h-3.5 w-3.5", shopFetching && "animate-spin")}
+            />
+          </button>
+        </div>
       </div>
+
+      <Dialog open={manageDialogOpen} onOpenChange={setManageDialogOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Manage Shop Prices</DialogTitle>
+            <DialogDescription>
+              Only shop owners can update owner prices. Owner price cannot be lower
+              than base price.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-auto rounded-lg border border-border">
+            <div className="grid grid-cols-3 gap-2 border-b border-border bg-background/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <span>Item</span>
+              <span className="text-right">Base Price</span>
+              <span className="text-right">Owner Price</span>
+            </div>
+            <div className="divide-y divide-border">
+              {SHOP_ITEMS.map((itemMeta) => {
+                const data = shopItems.get(itemMeta.typeId);
+                if (!data) return null;
+
+                const ownerInput =
+                  editableOwnerPrices[itemMeta.typeId] ??
+                  String(getOwnerPriceOrBase(data));
+
+                return (
+                  <div
+                    key={itemMeta.typeId}
+                    className="grid grid-cols-3 items-center gap-2 px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {itemMeta.name}
+                      </p>
+                      <p className="font-mono text-[10px] text-muted-foreground">
+                        typeId: {itemMeta.typeId}
+                      </p>
+                    </div>
+                    <p className="text-right font-mono text-xs tabular-nums text-foreground">
+                      {data.basePrice.toLocaleString()}
+                    </p>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={ownerInput}
+                      onChange={(e) =>
+                        handleOwnerPriceInputChange(itemMeta.typeId, e.target.value)
+                      }
+                      className="ml-auto h-8 w-28 rounded border border-border bg-background/60 px-2 text-right font-mono text-xs text-foreground outline-none focus:border-primary"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setManageDialogOpen(false)}
+              disabled={updateCityPriceLoading}
+              className="rounded-lg border border-border bg-background/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSaveOwnerPrices()}
+              disabled={updateCityPriceLoading}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+            >
+              {updateCityPriceLoading ? "Saving..." : "Save Prices"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* City & Cooldown */}
       <div className="mb-5 flex flex-col gap-3">
@@ -906,160 +1214,118 @@ export function ShopAction() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {items.map((meta) => {
-                    const data = shopItems.get(meta.typeId);
-                    const inCart = cart.get(meta.typeId) ?? 0;
-                    const outOfStock = data !== undefined && data.stockAmount === 0;
-                    const maxStock = data?.stockAmount ?? 0;
+                <div className="overflow-hidden rounded-xl border border-border bg-card">
+                  <div className="hidden grid-cols-7 gap-3 border-b border-border bg-background/60 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sm:grid">
+                    <span className="col-span-2">Item</span>
+                    <span className="text-right">Stock</span>
+                    <span className="text-right">Base</span>
+                    <span className="text-right">Final</span>
+                    <span className="text-right">Counter</span>
+                    <span className="text-right">Buy</span>
+                  </div>
 
-                    return (
-                      <div
-                        key={meta.typeId}
-                        className={cn(
-                          "rounded-xl border border-border bg-card p-4 transition-all duration-200",
-                          outOfStock && "opacity-50",
-                          inCart > 0 && "border-primary/40 ring-1 ring-primary/10"
-                        )}
-                      >
-                        {/* Item header */}
-                        <div className="mb-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={cn(
-                                "flex h-8 w-8 items-center justify-center rounded-lg",
-                                CATEGORY_BG[meta.category],
-                                CATEGORY_COLORS[meta.category]
-                              )}
-                            >
-                              {CATEGORY_ICONS[meta.category]}
-                            </div>
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                {meta.name}
-                              </p>
-                              <p className="font-mono text-[10px] text-muted-foreground">
-                                typeId: {meta.typeId}
-                              </p>
-                            </div>
-                          </div>
-                          {inCart > 0 && (
-                            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/20 px-1.5 text-[10px] font-bold text-primary">
-                              {inCart}
-                            </span>
+                  <div className="flex flex-col">
+                    {items.map((meta, index) => {
+                      const data = shopItems.get(meta.typeId);
+                      const inCart = cart.get(meta.typeId) ?? 0;
+                      const outOfStock = data !== undefined && data.stockAmount === 0;
+                      const maxStock = data?.stockAmount ?? 0;
+                      const canAdd = !outOfStock && !!data && inCart < maxStock;
+                      const maxCanAdd = Math.max(0, maxStock - inCart);
+                      const selAmount = getSelectedAmount(meta.typeId);
+
+                      return (
+                        <div
+                          key={meta.typeId}
+                          className={cn(
+                            "grid grid-cols-1 gap-3 px-4 py-3 sm:grid-cols-7 sm:items-center",
+                            index !== items.length - 1 && "border-b border-border",
+                            outOfStock && "opacity-55",
+                            inCart > 0 && "bg-primary/5"
                           )}
-                        </div>
-
-                        {/* Stock & Price */}
-                        {data ? (
-                          <div className="mb-3 grid grid-cols-2 gap-2">
-                            <div className="rounded-lg bg-background/50 border border-border px-2.5 py-2">
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <Package className="h-3 w-3 text-emerald-400" />
-                                <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Stock
-                                </span>
-                              </div>
-                              <p
+                        >
+                          <div className="sm:col-span-2">
+                            <div className="flex items-center gap-2">
+                              <div
                                 className={cn(
-                                  "text-base font-bold tabular-nums",
-                                  outOfStock ? "text-red-400" : "text-foreground"
+                                  "flex h-7 w-7 items-center justify-center rounded-md",
+                                  CATEGORY_BG[meta.category],
+                                  CATEGORY_COLORS[meta.category]
                                 )}
                               >
+                                {CATEGORY_ICONS[meta.category]}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-foreground">
+                                  {meta.name}
+                                </p>
+                                <p className="font-mono text-[10px] text-muted-foreground">
+                                  typeId: {meta.typeId}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {data ? (
+                            <>
+                              <p className="text-right font-mono text-xs tabular-nums text-foreground">
                                 {data.stockAmount.toLocaleString()}
                               </p>
-                            </div>
-                            <div className="rounded-lg bg-background/50 border border-border px-2.5 py-2">
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <Coins className="h-3 w-3 text-yellow-400" />
-                                <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Price
-                                </span>
-                              </div>
-                              <p className="text-base font-bold text-foreground tabular-nums">
+                              <p className="text-right font-mono text-xs tabular-nums text-foreground">
+                                {data.basePrice.toLocaleString()}
+                              </p>
+                              <p className="text-right font-mono text-xs font-semibold tabular-nums text-primary">
                                 {data.price.toLocaleString()}
                               </p>
+                            </>
+                          ) : (
+                            <div className="sm:col-span-4 flex items-center gap-2 text-xs text-muted-foreground">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Loading pricing...
                             </div>
-                          </div>
-                        ) : (
-                          <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Loading...
-                          </div>
-                        )}
+                          )}
 
-                        {/* Quantity selector + Add to cart */}
-                        {(() => {
-                          const canAdd = !outOfStock && !!data && inCart < maxStock;
-                          const maxCanAdd = Math.max(0, maxStock - inCart);
-                          const selAmount = getSelectedAmount(meta.typeId);
-                          return (
-                            <div className="flex flex-col gap-2">
-                              {canAdd && (
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedAmount(meta.typeId, selAmount - 1)}
-                                    disabled={selAmount <= 1}
-                                    className="flex h-7 w-7 items-center justify-center rounded border border-border bg-background/50 text-muted-foreground hover:text-foreground disabled:opacity-40"
-                                  >
-                                    <Minus className="h-3 w-3" />
-                                  </button>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    max={maxCanAdd}
-                                    value={selAmount}
-                                    onChange={(e) => setSelectedAmount(meta.typeId, Number(e.target.value) || 1)}
-                                    className="h-7 w-14 rounded border border-border bg-background/50 text-center font-mono text-xs text-foreground outline-none focus:border-primary"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedAmount(meta.typeId, selAmount + 1)}
-                                    disabled={selAmount >= maxCanAdd}
-                                    className="flex h-7 w-7 items-center justify-center rounded border border-border bg-background/50 text-muted-foreground hover:text-foreground disabled:opacity-40"
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                  </button>
-                                  {data && (
-                                    <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
-                                      = {(data.price * selAmount).toLocaleString()} cash
-                                    </span>
-                                  )}
-                                </div>
+                          <div className="flex items-center justify-end gap-2 sm:col-span-2">
+                            {canAdd ? (
+                              <>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={maxCanAdd}
+                                  value={selAmount}
+                                  onChange={(e) =>
+                                    setSelectedAmount(
+                                      meta.typeId,
+                                      Number(e.target.value) || 1
+                                    )
+                                  }
+                                  className="h-7 w-12 rounded border border-border bg-background/50 text-center font-mono text-xs text-foreground outline-none focus:border-primary"
+                                />
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                {outOfStock ? "Out of stock" : "Max in cart"}
+                              </span>
+                            )}
+
+                            <button
+                              onClick={() => addToCart(meta.typeId, canAdd ? selAmount : 1)}
+                              disabled={!canAdd}
+                              className={cn(
+                                "ml-1 flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-200",
+                                canAdd
+                                  ? "bg-primary/90 text-primary-foreground hover:bg-primary active:scale-[0.98]"
+                                  : "bg-secondary text-muted-foreground cursor-not-allowed"
                               )}
-                              <button
-                                onClick={() => addToCart(meta.typeId, canAdd ? selAmount : 1)}
-                                disabled={!canAdd}
-                                className={cn(
-                                  "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200",
-                                  canAdd
-                                    ? "bg-primary/90 text-primary-foreground hover:bg-primary active:scale-[0.98]"
-                                    : "bg-secondary text-muted-foreground cursor-not-allowed"
-                                )}
-                              >
-                                {outOfStock ? (
-                                  "Out of Stock"
-                                ) : inCart >= maxStock ? (
-                                  "Max in Cart"
-                                ) : inCart > 0 ? (
-                                  <>
-                                    <Plus className="h-3.5 w-3.5" />
-                                    Add More ({inCart} in cart)
-                                  </>
-                                ) : (
-                                  <>
-                                    <ShoppingCart className="h-3.5 w-3.5" />
-                                    Add to Cart
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    );
-                  })}
+                            >
+                              <ShoppingCart className="h-3.5 w-3.5" />
+                              Add
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             );

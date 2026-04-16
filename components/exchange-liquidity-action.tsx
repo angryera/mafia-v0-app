@@ -52,14 +52,6 @@ interface LiquidityPosition {
   active: boolean;
 }
 
-declare global {
-  interface Window {
-    MafiaDeposit?: {
-      getLiquidityPositions: (opts: { chain: string }) => Promise<LiquidityPosition[]>;
-    };
-  }
-}
-
 // ── Script loader ───────────────────────────────────────────────
 function useDepositScript() {
   const [ready, setReady] = useState(false);

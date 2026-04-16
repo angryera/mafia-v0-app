@@ -23,17 +23,6 @@ import { City } from "@/lib/contract";
 
 export type { ParsedSlotInfo };
 
-declare global {
-  interface Window {
-    MafiaMap?: {
-      getSlots: (opts: {
-        chain: string;
-        cityId: number;
-      }) => Promise<ParsedSlotInfo[]>;
-    };
-  }
-}
-
 type CellType =
   | "empty"
   | "user"

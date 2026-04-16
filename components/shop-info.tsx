@@ -14,21 +14,34 @@ export function ShopInfo() {
       <div className="flex flex-col gap-2.5">
         <CopyableAddress address={addresses.shop} label="Contract" />
 
-        {/* getShopItem */}
+        {/* getShopItems */}
         <div className="rounded-lg bg-background/50 px-3 py-2.5">
           <p className="text-xs text-muted-foreground mb-0.5">Read Function</p>
           <p className="font-mono text-sm text-primary break-all">
-            getShopItem(uint8,uint256)
+            getShopItems(uint8)
           </p>
           <div className="mt-1.5 flex flex-col gap-1">
             <p className="font-mono text-xs text-foreground">
               cityId <span className="text-muted-foreground">(uint8)</span>
             </p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              Returns categoryIds, typeIds, stockAmounts, prices
+            </p>
+          </div>
+        </div>
+
+        {/* getCityPrices */}
+        <div className="rounded-lg bg-background/50 px-3 py-2.5">
+          <p className="text-xs text-muted-foreground mb-0.5">Read Function</p>
+          <p className="font-mono text-sm text-primary break-all">
+            getCityPrices(uint8)
+          </p>
+          <div className="mt-1.5 flex flex-col gap-1">
             <p className="font-mono text-xs text-foreground">
-              typeId <span className="text-muted-foreground">(uint256)</span>
+              cityId <span className="text-muted-foreground">(uint8)</span>
             </p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              Returns categoryId, typeId, stockAmount, price
+              Returns basePrices and ownerPrices arrays
             </p>
           </div>
         </div>

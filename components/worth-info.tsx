@@ -17,19 +17,6 @@ import {
   ChevronUp,
 } from "lucide-react";
 
-declare global {
-  interface Window {
-    MafiaWorth?: {
-      computeWorth: (params: {
-        chain: string;
-        player: string;
-        signMsg: string;
-        signature: string;
-      }) => Promise<WorthResult>;
-    };
-  }
-}
-
 interface BreakdownItem {
   group: string;
   label: string;

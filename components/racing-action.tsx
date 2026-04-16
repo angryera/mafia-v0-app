@@ -127,26 +127,6 @@ type RawRace = Partial<Record<keyof Race, unknown>> & {
   opponentCarDamagePercent?: unknown;
 };
 
-declare global {
-  interface Window {
-    MafiaInventory?: {
-      getItemsByCategory: (opts: {
-        chain: string;
-        contractAddress: string;
-        categoryId: number;
-        maxItems: number;
-        onProgress?: (info: { fetched: number; batchIndex: number }) => void;
-      }) => Promise<CarItem[]>;
-    };
-    MafiaRaceLobby?: {
-      getRaces: (opts: {
-        chain: string;
-        pageSize: number;
-      }) => Promise<RawRace[]>;
-    };
-  }
-}
-
 // ── Script loader ───────────────────────────────────────────────
 function useInventoryScript() {
   const [ready, setReady] = useState(false);
