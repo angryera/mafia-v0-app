@@ -1789,12 +1789,36 @@ export const BULLET_FACTORY_ABI: Abi = [
 export const BANK_TRANSFER_ABI: Abi = [
   {
     type: "function",
+    name: "lastTransferTime",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "cityOwnerFee",
+    inputs: [{ name: "", type: "uint8", internalType: "uint8" }],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "userTransfer",
     inputs: [
       { name: "to", type: "address", internalType: "address" },
       { name: "amount", type: "uint256", internalType: "uint256" },
       { name: "message", type: "string", internalType: "string" },
       { name: "signature", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setCityOwnerFee",
+    inputs: [
+      { name: "cityId", type: "uint8", internalType: "uint8" },
+      { name: "_cityOwnerFee", type: "uint256", internalType: "uint256" },
     ],
     outputs: [],
     stateMutability: "nonpayable",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import {
   useWaitForTransactionReceipt,
@@ -15,7 +15,7 @@ import {
   USER_PROFILE_CONTRACT_ABI,
   TRAVEL_DESTINATIONS,
 } from "@/lib/contract";
-import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
+import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import {
   Loader2,
@@ -40,12 +40,27 @@ interface ProfileData {
   isActive: boolean;
 }
 
+interface BusinessInventoryItem {
+  itemId: number;
+  categoryId: number;
+  typeId: number;
+  owner: string;
+  cityId: number;
+}
+
+const OWNER_DISCOUNT_PERCENT = 20;
+const OWNER_PRICE_FACTOR_NUM = BigInt(100 - OWNER_DISCOUNT_PERCENT); // 80
+const OWNER_PRICE_FACTOR_DEN = BigInt(100);
+
 export function BulletFactoryAction() {
   const { address, isConnected } = useAccount();
+  const { chainConfig } = useChain();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
   const { authData, isSigning: authSigning, signError, requestSignature } = useAuth();
   const { signMessageAsync } = useSignMessage();
+  const [inventoryReady, setInventoryReady] = useState(false);
+  const [bulletBusinessItems, setBulletBusinessItems] = useState<BusinessInventoryItem[]>([]);
 
   // ---------- Read user profile to get cityId ----------
   const { data: profileRaw, isLoading: profileLoading } = useReadContract({
@@ -104,6 +119,21 @@ export function BulletFactoryAction() {
 
   const pricePerBullet = marketInfo?.[0];
   const amountLeft = marketInfo?.[1];
+  const isBulletFactoryOwner =
+    !!address &&
+    cityId !== undefined &&
+    bulletBusinessItems.some(
+      (item) =>
+        Number(item.typeId) === 9 &&
+        Number(item.cityId) === Number(cityId) &&
+        item.owner.toLowerCase() === address.toLowerCase()
+    );
+  const effectivePricePerBullet =
+    pricePerBullet !== undefined
+      ? isBulletFactoryOwner
+        ? (pricePerBullet * OWNER_PRICE_FACTOR_NUM) / OWNER_PRICE_FACTOR_DEN
+        : pricePerBullet
+      : undefined;
 
   // ---------- reproduceBullets ----------
   const {
@@ -209,6 +239,46 @@ export function BulletFactoryAction() {
   const cooldownSecs = cooldownSeconds % 60;
   const cooldownReady = cooldownSeconds <= 0;
   const onCooldown = isConnected && !cooldownReady;
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.MafiaInventory) {
+      setInventoryReady(true);
+      return;
+    }
+    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
+    if (existing) {
+      existing.addEventListener("load", () => setInventoryReady(true));
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "/js/mafia-utils.js";
+    script.async = true;
+    script.onload = () => setInventoryReady(true);
+    document.head.appendChild(script);
+  }, []);
+
+  const fetchBulletBusinessItems = useCallback(async () => {
+    if (!inventoryReady || cityId === undefined || !addresses.inventory) {
+      setBulletBusinessItems([]);
+      return;
+    }
+    if (!window.MafiaInventory) return;
+    try {
+      const items = await window.MafiaInventory.getItemsByCategory({
+        chain: chainConfig.id,
+        contractAddress: addresses.inventory,
+        categoryId: 3,
+      });
+      setBulletBusinessItems(items as BusinessInventoryItem[]);
+    } catch (e) {
+      console.error("Failed to fetch bullet factory business items:", e);
+      setBulletBusinessItems([]);
+    }
+  }, [inventoryReady, cityId, addresses.inventory, chainConfig.id]);
+
+  useEffect(() => {
+    void fetchBulletBusinessItems();
+  }, [fetchBulletBusinessItems]);
 
   // ---------- Toast notifications ----------
   const bulletToastFired = useRef(false);
@@ -379,10 +449,15 @@ export function BulletFactoryAction() {
                 </span>
               </div>
               <p className="text-xl font-bold text-foreground tabular-nums">
-                {pricePerBullet !== undefined
-                  ? Number(formatEther(pricePerBullet)).toLocaleString()
+                {effectivePricePerBullet !== undefined
+                  ? Number(formatEther(effectivePricePerBullet)).toLocaleString()
                   : "\u2014"}
               </p>
+              {isBulletFactoryOwner && (
+                <p className="text-[10px] text-green-400 mt-0.5">
+                  Owner discount applied (-{OWNER_DISCOUNT_PERCENT}%)
+                </p>
+              )}
               <p className="text-[10px] text-muted-foreground mt-0.5">cash per 1 bullet</p>
             </div>
           </div>
@@ -580,11 +655,11 @@ export function BulletFactoryAction() {
                 </span>
               </div>
             )}
-            {isValidAmount && pricePerBullet !== undefined && (
+            {isValidAmount && effectivePricePerBullet !== undefined && (
               <div className="mt-1.5 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Total Cost</span>
                 <span className="font-mono text-xs font-semibold text-foreground">
-                  {(Number(formatEther(pricePerBullet)) * Number(bulletAmount)).toLocaleString()} cash
+                  {(Number(formatEther(effectivePricePerBullet)) * Number(bulletAmount)).toLocaleString()} cash
                 </span>
               </div>
             )}
