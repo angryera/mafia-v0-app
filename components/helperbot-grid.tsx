@@ -3,11 +3,19 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { formatEther } from "viem";
-import { Bot, Coins, Loader2, RefreshCw } from "lucide-react";
+import { Coins, Loader2, RefreshCw } from "lucide-react";
 import { HELPER_BOTS, CREDITS_ABI } from "@/lib/contract";
 import { useChainAddresses } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
-import { HelperBotCard } from "@/components/helperbot-card";
+import { HelperBotDetail } from "@/components/helperbot-detail";
+import { HelperBotListRow } from "@/components/helperbot-list-row";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 export function HelperBotGrid() {
@@ -18,6 +26,7 @@ export function HelperBotGrid() {
 
   const [creditBalance, setCreditBalance] = useState<bigint | null>(null);
   const [creditLoading, setCreditLoading] = useState(false);
+  const [selectedBotId, setSelectedBotId] = useState<number | null>(null);
 
   const fetchCredits = useCallback(async () => {
     if (!address || !publicClient || !authData) return;
@@ -44,6 +53,7 @@ export function HelperBotGrid() {
   }, [fetchCredits]);
 
   const creditBalanceNum = creditBalance !== null ? Math.floor(Number(formatEther(creditBalance))) : null;
+  const selectedBot = HELPER_BOTS.find((bot) => bot.id === selectedBotId) ?? null;
 
   return (
     <div>
@@ -98,11 +108,35 @@ export function HelperBotGrid() {
           {HELPER_BOTS.length} bots
         </span>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
         {HELPER_BOTS.map((bot) => (
-          <HelperBotCard key={bot.id} bot={bot} creditBalance={creditBalanceNum} onCreditChange={fetchCredits} />
+          <HelperBotListRow
+            key={bot.id}
+            bot={bot}
+            onOpenHire={() => setSelectedBotId(bot.id)}
+          />
         ))}
       </div>
+
+      <Dialog open={selectedBot !== null} onOpenChange={(open) => !open && setSelectedBotId(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px]">
+          {selectedBot && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{selectedBot.label} Details</DialogTitle>
+                <DialogDescription>
+                  Review helper bot details and continue with hiring from this popup.
+                </DialogDescription>
+              </DialogHeader>
+              <HelperBotDetail
+                bot={selectedBot}
+                creditBalance={creditBalanceNum}
+                onCreditChange={fetchCredits}
+              />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

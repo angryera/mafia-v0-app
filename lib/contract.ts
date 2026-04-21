@@ -1035,6 +1035,13 @@ export const HELPERBOT_CONTRACT_ABI: Abi = [
     outputs: [],
     stateMutability: "nonpayable",
   },
+  {
+    type: "function",
+    name: "HELPER_BOT_BULLET_PRICE",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
   // User info functions - read bot state for a user
   {
     type: "function",
@@ -1158,6 +1165,23 @@ export const HELPERBOT_CONTRACT_ABI: Abi = [
   },
   {
     type: "function",
+    name: "userBulletBotPlusInfo",
+    inputs: [{ name: "user", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct BulletBotPlusInfo",
+        components: [
+          { name: "amountModifiedPercent", type: "uint256", internalType: "uint256" },
+          { name: "priceModifiedPercent", type: "uint256", internalType: "uint256" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "userRacingBotInfo",
     inputs: [{ name: "user", type: "address", internalType: "address" }],
     outputs: [
@@ -1207,6 +1231,13 @@ export type HelperBotInfo = {
   isRunning: boolean;
 };
 
+export type BulletBotPlusInfo = {
+  amountModifiedPercent: bigint;
+  priceModifiedPercent: bigint;
+};
+
+export const HELPER_BOT_BULLET_PRICE = 200;
+
 export const parseHelperBotInfo = (data: any): HelperBotInfo => {
   return {
     successRate: Number(data.successRate),
@@ -1214,6 +1245,13 @@ export const parseHelperBotInfo = (data: any): HelperBotInfo => {
     endTimestamp: Number(data.endTimestamp),
     attemptCount: Number(data.attemptCount),
     isRunning: Boolean(data.isRunning),
+  };
+};
+
+export const parseBulletBotPlusInfo = (data: any): BulletBotPlusInfo => {
+  return {
+    amountModifiedPercent: BigInt(data.amountModifiedPercent),
+    priceModifiedPercent: BigInt(data.priceModifiedPercent),
   };
 };
 
