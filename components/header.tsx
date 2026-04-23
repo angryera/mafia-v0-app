@@ -82,6 +82,7 @@ import {
   BookOpen,
   Flag,
   Wallet,
+  ArrowRightLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -129,6 +130,7 @@ export type Tab =
   | "info"
   | "exchange-convert"
   | "exchange-liquidity"
+  | "exchange-otc"
   | "referral"
   | "weekly-missions"
   | "story-mode"
@@ -160,7 +162,7 @@ export function getTabFromPath(pathname: string): Tab {
     "biz-detective-agency", "biz-car-crusher", "biz-bank", "biz-roulette",
     "biz-slotmachine", "biz-jackpot", "biz-safehouse", "biz-booze", "biz-narcs",
     "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
-    "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-liquidity", "referral",
+    "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-liquidity", "exchange-otc", "referral",
     "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao"
   ];
   return validTabs.includes(firstSegment as Tab) ? (firstSegment as Tab) : "crime";
@@ -206,6 +208,7 @@ const GAME_SECTION: NavItem[] = [
   { id: "equipment", label: "Equipment", icon: <Swords className="h-4 w-4" /> },
   { id: "exchange-convert", label: "Exchange Convert", icon: <Coins className="h-4 w-4" /> },
   { id: "exchange-liquidity", label: "Exchange Liquidity", icon: <Wallet className="h-4 w-4" /> },
+  { id: "exchange-otc", label: "OTC Desk", icon: <ArrowRightLeft className="h-4 w-4" /> },
   { id: "xp-market", label: "XP Market", icon: <TrendingUp className="h-4 w-4" /> },
   { id: "marketplace", label: "Marketplace", icon: <Store className="h-4 w-4" /> },
   { id: "referral", label: "Referral", icon: <UserPlus className="h-4 w-4" /> },

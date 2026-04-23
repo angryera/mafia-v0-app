@@ -30,6 +30,7 @@ import {
 import { useChain } from "@/components/chain-provider";
 import { cn } from "@/lib/utils";
 import type { Family } from "@/components/family-table";
+import "@/types/mafia-globals";
 
 // Role hierarchy for sorting
 const ROLE_ORDER: Record<string, number> = {

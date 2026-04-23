@@ -325,6 +325,14 @@ const TAB_CONFIG: Record<
     contractAddress: "0xB081EC0763360a9Ad4D09AF2C9ec7DC1ED5190Ae",
     contractShort: "0xB081...90Ae",
   },
+  "exchange-otc": {
+  title: "OTC Desk",
+  description:
+  "Browse open peer-to-peer OTC offers. Accept an offer by delivering the requested items, or cancel your own open offers.",
+  codeSample: "getOTCOffers() / acceptOTCOffer() / cancelOTCOffer()",
+  contractAddress: "0x605694A29c5258D6c7Aed642D01111c4b7036966",
+  contractShort: "0x6056...6966",
+  },
   referral: {
     title: "Referral Program",
     description:

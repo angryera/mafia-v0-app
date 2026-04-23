@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
 import { cn } from "@/lib/utils";
+import "@/types/mafia-globals";
 
 // Data structures from the prompt
 interface Leader {
@@ -122,8 +123,8 @@ function StatusIndicators({ isJailed, isDead }: { isJailed: boolean; isDead: boo
   if (!isJailed && !isDead) return null;
   return (
     <span className="inline-flex gap-1 ml-1">
-      {isJailed && <Lock className="h-3 w-3 text-amber-500" title="Jailed" />}
-      {isDead && <Skull className="h-3 w-3 text-red-500" title="Dead" />}
+      {isJailed && <Lock className="h-3 w-3 text-amber-500" />}
+      {isDead && <Skull className="h-3 w-3 text-red-500" />}
     </span>
   );
 }

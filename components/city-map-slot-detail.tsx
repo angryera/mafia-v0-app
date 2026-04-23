@@ -344,7 +344,7 @@ export function CityMapSlotDetail({
     useReadContract({
       address: addresses.ingameCurrency,
       abi: INGAME_CURRENCY_ABI,
-      functionName: "allowances",
+      functionName: "allowance",
       args:
         address && mapAddress ? [address, mapAddress] : undefined,
       query: { enabled: gameCashAllowanceEnabled },

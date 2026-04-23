@@ -40,6 +40,7 @@ import {
 import { useChain } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import { cn } from "@/lib/utils";
+import "@/types/mafia-globals";
 
 // Player data structure from contract (with referrer field)
 interface Player {

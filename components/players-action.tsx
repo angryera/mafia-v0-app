@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
 import { cn } from "@/lib/utils";
+import "@/types/mafia-globals";
 
 // Player data structure from contract
 interface Player {
