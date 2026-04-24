@@ -694,6 +694,20 @@ export const City: Record<number, string> = {
   10: "Napoli",
 };
 
+export const CitySimple = [
+  "CHI",
+  "DET",
+  "NYC",
+  "MIA",
+  "LVG",
+  "MED",
+  "BOG",
+  "CAR",
+  "PAL",
+  "MES",
+  "NAP",
+] as const;
+
 export type TravelRegion = {
   region: string;
   cities: { name: string; cityId: number }[];
@@ -3664,6 +3678,7 @@ export function getShopItemSlotType(typeId: number): number {
 
 // Building stats by slot subtype
 export const BUILDING_STATS: Record<number, { offense: number; defense: number; name: string }> = {
+  0: { offense: 0, defense: 0, name: "Empty Tile" },
   1: { offense: 3, defense: 5, name: "Shed" },
   2: { offense: 15, defense: 15, name: "House" },
   3: { offense: 30, defense: 30, name: "Villa" },
@@ -4524,6 +4539,45 @@ export const EXCHANGE_CONTRACT_ABI: Abi = [
     stateMutability: "nonpayable",
   },
   {
+    type: "function",
+    name: "createOTCOffer",
+    inputs: [
+      { name: "offerItemIds", type: "uint256[]", internalType: "uint256[]" },
+      {
+        name: "requestItems",
+        type: "tuple[]",
+        internalType: "struct MafiaExchange.OTCRequestItem[]",
+        components: [
+          { name: "itemType", type: "uint256", internalType: "uint256" },
+          { name: "categoryId", type: "uint256", internalType: "uint256" },
+          { name: "typeId", type: "uint256", internalType: "uint256" },
+          { name: "cityId", type: "uint256", internalType: "uint256" },
+          { name: "x", type: "uint256", internalType: "uint256" },
+          { name: "y", type: "uint256", internalType: "uint256" },
+        ],
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "acceptOTCOffer",
+    inputs: [
+      { name: "offerId", type: "uint256", internalType: "uint256" },
+      { name: "myItemIds", type: "uint256[]", internalType: "uint256[]" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "cancelOTCOffer",
+    inputs: [{ name: "offerId", type: "uint256", internalType: "uint256" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
     type: "event",
     name: "ItemConverted",
     inputs: [
@@ -4533,6 +4587,19 @@ export const EXCHANGE_CONTRACT_ABI: Abi = [
       { name: "timestamp", type: "uint256", indexed: false, internalType: "uint256" },
     ],
     anonymous: false,
+  },
+  {
+    "inputs": [],
+    "name": "otcOfferIds",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
 ] as const;
 
@@ -5015,6 +5082,72 @@ export const MARKETPLACE_ITEM_NAMES: Record<number, Record<number, string>> = {
   14: { // Business (v2)
     0: "Jackpot hall", 1: "Lottery hall", 2: "Bank", 3: "Hospital", 4: "Detective Agency",
     5: "Booze warehouse", 6: "Narcotics warehouse", 7: "Slotmachine", 8: "Roulette", 9: "Bullet factory",
+  },
+  15: {
+    0: "Rolls-Royce 20/25 HP Standard Sedan - $125,000",
+    1: "Rolls-Royce 20/25 HP Sports Saloon - $175,000",
+    2: "Rolls-Royce Phantom II - $250,000",
+    3: "Rolls-Royce Phantom II Continental Limousine - $500,000",
+    4: "Bentley 4.5 Litre Standard Tourer  - $100,000",
+    5: "Bentley 4.5 Litre Sports Saloon  - $150,000",
+    6: "Bentley Speed Six Saloon  - $200,000",
+    7: "Bentley 8 Litre Limousine by H.J. Mulliner  - $450,000",
+    8: "Packard Standard Eight Model 726  - $75,000",
+    9: "Packard Standard Eight Model 733  - $125,000",
+    10: "Packard Deluxe Eight Model 740  - $175,000",
+    11: "Packard Custom Eight Model 745 Convertible Sedan  - $350,000",
+    12: "Cadillac Series 353 Standard Sedan  - $70,000",
+    13: "Cadillac Series 353 Town Sedan  - $120,000",
+    14: "Cadillac V-16 Imperial Sedan  - $180,000",
+    15: "Cadillac V-16 Roadster  - $275,000",
+    16: "Lincoln Model L  - $60,000",
+    17: "Lincoln Model K sedan  - $100,000",
+    18: "Lincoln Model L Town Car  - $155,000",
+    19: "Lincoln Model L Limousine  - $250,000",
+    20: "Chrysler Model 66 sedan  - $40,000",
+    21: "Chrysler Series 70 sedan  - $75,000",
+    22: "Chrysler Imperial Model 80 Roadster  - $90,000",
+    23: "Chrysler Imperial Custom Series 8 Limousine  - $150,000",
+    24: "Buick Series 40  - $15,000",
+    25: "Buick Series 50 sedan  - $35,000",
+    26: "Buick Series 60 sedan  - $50,000",
+    27: "Buick Series 90 Limited  - $100,000",
+    28: "DeSoto Model K  - $16,000",
+    29: "DeSoto CF Eight sedan  - $25,000",
+    30: "DeSoto Deluxe Eight sedan  - $40,000",
+    31: "DeSoto Custom Imperial Limousine  - $75,000",
+    32: "Dodge DC Series sedan  - $16,000",
+    33: "Dodge Eight Series DH sedan  - $25,000",
+    34: "Dodge Senior Six sedan  - $35,000",
+    35: "Dodge Deluxe Eight Limousine  - $75,000",
+    36: "Hudson Greater Eight  - $8,000",
+    37: "Hudson Essex Super Six  - $16,000",
+    38: "Hudson Custom Eight  - $27,000",
+    39: "Hudson Greater Eight Custom Limousine  - $50,000",
+    40: "Nash 400 Series sedan  - $8,000",
+    41: "Nash Standard Six sedan  - $16,000",
+    42: "Nash Advanced Eight sedan  - $27,000",
+    43: "Nash Ambassador Eight Limousine  - $50,000",
+    44: "Studebaker Six Standard Sedan  - $8,000",
+    45: "Studebaker Commander Sedan  - $16,000",
+    46: "Studebaker President Eight Sedan  - $27,000",
+    47: "Studebaker President Convertible Coupe  - $50,000",
+    48: "Ford Model A  - $5,000",
+    49: "Ford Model A Deluxe Roadster  - $12,000",
+    50: "Ford Model A Town Car  - $21,000",
+    51: "Ford Model A Tudor Limousine  - $42,000",
+    52: "Chevrolet Universal Series AD Coach  - $5,000",
+    53: "Chevrolet Independence Series AE sedan  - $12,000",
+    54: "Chevrolet Series AD Universal Phaeton  - $21,000",
+    55: "Chevrolet Series AD Universal Landau  - $42,000",
+    56: "Austin 7  - $5,000",
+    57: "Austin 12/4  - $12,000",
+    58: "Austin 16  - $15,000",
+    59: "Austin 20/6 Mayfair Limousine  - $37,000",
+    60: "Plymouth Model U  - $5,000",
+    61: "Plymouth 30U sedan  - $12,000",
+    62: "Plymouth PA Deluxe sedan  - $15,000",
+    63: "Plymouth PA Deluxe Limousine  - $37,000"
   },
   // Category 15 = Car (Dynamic from CarsList - handled separately)
   16: { // FBI Assets

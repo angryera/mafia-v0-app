@@ -1,7 +1,7 @@
 // OTC helpers: types, text-only label formatting, and request matching logic.
 // No backend calls. No images/icons. Pure data transformations.
 
-import { ItemCategory, City, getCrateCategory } from "@/lib/contract";
+import { ItemCategory, City, CitySimple, MARKETPLACE_ITEM_NAMES, getCrateCategory } from "@/lib/contract";
 
 // ── Types (as specified in prompt) ──────────────────────────────
 export interface OTCRequestItem {
@@ -50,17 +50,9 @@ export const CRATE_ITEM_CATEGORY_IDS: number[] = [
   ItemCategory.BUSINESS,
   ItemCategory.BODYGUARD,
   ItemCategory.CREDIT,
-  ItemCategory.CAR,
-  ItemCategory.KEY,
-  ItemCategory.KEYITEMS,
   ItemCategory.MAFIA,
   ItemCategory.OGNFT,
   ItemCategory.NOTICREDIT,
-  ItemCategory.LANDSLOT,
-  ItemCategory.BUSINESS_EXTRA,
-  ItemCategory.CAR_ITEM,
-  ItemCategory.FBI_ASSETS,
-  ItemCategory.PERK_BOX,
 ];
 
 export const BUSINESS_CATEGORY_ID = ItemCategory.BUSINESS;
@@ -107,6 +99,11 @@ export function getCityName(cityId: number): string {
   return City[cityId] ?? `City #${cityId}`;
 }
 
+export function getCitySimpleName(cityId: number): string {
+  if (cityId < 0) return "";
+  return CitySimple[cityId] ?? getCityName(cityId);
+}
+
 // ── Text-only item label ────────────────────────────────────────
 /**
  * Returns a purely textual label for an item, mirroring the semantics
@@ -125,9 +122,11 @@ export function getCityName(cityId: number): string {
  */
 export function getItemLabel(categoryId: number, typeId: number, cityId?: number): string {
   const cat = getCrateCategory(categoryId);
+  const marketplaceName = MARKETPLACE_ITEM_NAMES?.[categoryId]?.[typeId];
 
   // A) Perk categories (18..47)
   if (categoryId >= PERK_SUCCESS_MIN && categoryId <= PERK_BOOST_MAX) {
+    if (marketplaceName) return marketplaceName;
     if (!cat) return `Category #${categoryId} / Type #${typeId}`;
     return `${cat.name} (Tier ${typeId + 1})`;
   }
@@ -144,14 +143,19 @@ export function getItemLabel(categoryId: number, typeId: number, cityId?: number
 
   // C) Business category
   if (categoryId === BUSINESS_CATEGORY_ID || categoryId === BUSINESS_EXTRA_CATEGORY_ID) {
-    const bizName = typeof val === "string" ? val : `Business #${typeId}`;
+    const bizName =
+      marketplaceName ??
+      (typeof val === "string" ? val : `Business #${typeId}`);
     if (cityId !== undefined && cityId >= 0) {
       return `${bizName} - ${getCityName(cityId)}`;
     }
     return bizName;
   }
 
-  // D) Default: string value or placeholder
+  // D) Marketplace name map has highest priority for known category/type pairs.
+  if (marketplaceName) return marketplaceName;
+
+  // E) Default: string value or placeholder
   if (typeof val === "string") return val;
   return `Category #${categoryId} / Type #${typeId}`;
 }
@@ -159,7 +163,7 @@ export function getItemLabel(categoryId: number, typeId: number, cityId?: number
 // Add the "Crate Item: " prefix for categories in the crate-reward group.
 export function withCratePrefix(label: string, categoryId: number): string {
   if (CRATE_ITEM_CATEGORY_IDS.includes(categoryId)) {
-    return `Crate Item: ${label}`;
+    return `Shop Item: ${label}`;
   }
   return label;
 }
@@ -174,7 +178,8 @@ export function getOfferedItemText(item: OfferedItemDetail): string {
 export function getRequestItemText(req: OTCRequestItem): string {
   // itemType == 2 means LAND slot
   if (Number(req.itemType) === 2) {
-    const base = `Land Slot #${req.cityId}-${req.x}-${req.y}`;
+    const cityLabel = getCitySimpleName(req.cityId);
+    const base = `Land Slot #${cityLabel}-${req.x}-${req.y}`;
     return withCratePrefix(base, req.categoryId);
   }
   const base = getItemLabel(req.categoryId, req.typeId, req.cityId);
@@ -284,9 +289,7 @@ export function matchRequestAgainstInventory(
 ): MatchResult {
   // Build a mutable copy we can consume from.
   const pool = inventory.slice();
-  // Slot lookup: slot's inventoryItemId → slot data.
-  const slotByItem = new Map<number, OwnedSlotEntry>();
-  for (const s of slots) slotByItem.set(Number(s.inventoryItemId), s);
+  const slotPool = slots.slice();
 
   const myItemIds: number[] = [];
   const missing: OTCRequestItem[] = [];
@@ -298,13 +301,10 @@ export function matchRequestAgainstInventory(
 
     if (isLand) {
       const reqKey = `${req.cityId}-${req.x}-${req.y}`;
-      for (let i = 0; i < pool.length; i++) {
-        const inv = pool[i];
-        if (inv.categoryId !== LANDSLOT_CATEGORY_ID) continue;
-        const slot = slotByItem.get(Number(inv.itemId));
-        if (!slot) continue;
-        const invKey = `${slot.cityId}-${slot.slotX}-${slot.slotY}`;
-        if (invKey === reqKey) {
+      for (let i = 0; i < slotPool.length; i++) {
+        const slot = slotPool[i];
+        const slotKey = `${slot.cityId}-${slot.slotX}-${slot.slotY}`;
+        if (slotKey === reqKey) {
           matchIdx = i;
           break;
         }
@@ -336,6 +336,9 @@ export function matchRequestAgainstInventory(
 
     if (matchIdx < 0) {
       missing.push(req);
+    } else if (isLand) {
+      const matchedSlot = slotPool.splice(matchIdx, 1)[0];
+      myItemIds.push(Number(matchedSlot.inventoryItemId));
     } else {
       const matched = pool.splice(matchIdx, 1)[0];
       myItemIds.push(Number(matched.itemId));
@@ -349,8 +352,8 @@ export function matchRequestAgainstInventory(
 }
 
 // ── Status helpers ──────────────────────────────────────────────
-export function otcStatusLabel(status: number): "Open" | "Accepted" | "Canceled" {
+export function otcStatusLabel(status: number): "Open" | "Completed" | "Cancelled" {
   if (status === OTC_STATUS_OPEN) return "Open";
-  if (status === OTC_STATUS_ACCEPTED) return "Accepted";
-  return "Canceled";
+  if (status === OTC_STATUS_ACCEPTED) return "Completed";
+  return "Cancelled";
 }

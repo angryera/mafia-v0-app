@@ -89,40 +89,35 @@ function useInventoryScript() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load MafiaInventory script (required)
-    if (typeof window !== "undefined" && window.MafiaInventory) {
+    if (typeof window === "undefined") return;
+    const mapApi = window.MafiaMapApi ?? window.MafiaMap;
+
+    if (window.MafiaInventory) {
       setReady(true);
-    } else {
-      const existingInv = document.querySelector('script[src="/js/mafia-inventory.js"]');
-      if (existingInv) {
-        existingInv.addEventListener("load", () => setReady(true));
-      } else {
-        const script = document.createElement("script");
-        script.src = "/js/mafia-inventory.js";
-        script.async = true;
-        script.onload = () => setReady(true);
-        script.onerror = () => setError("Failed to load inventory script");
-        document.head.appendChild(script);
-      }
+      setMapReady(Boolean(mapApi?.getSlots || mapApi?.getLandSlotsByOwner));
+      return;
     }
 
-    // Load MafiaMap script (optional - for land slots)
-    if (typeof window !== "undefined" && window.MafiaMap) {
-      setMapReady(true);
-    } else {
-      const existingMap = document.querySelector('script[src="/js/mafia-map.js"]');
-      if (existingMap) {
-        existingMap.addEventListener("load", () => setMapReady(true));
-      } else {
-        const script = document.createElement("script");
-        script.src = "/js/mafia-map.js";
-        script.async = true;
-        script.onload = () => setMapReady(true);
-        // Don't set error for map - it's optional
-        script.onerror = () => console.log("MafiaMap script not available - land slots disabled");
-        document.head.appendChild(script);
-      }
+    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
+    if (existing) {
+      existing.addEventListener("load", () => {
+        setReady(Boolean(window.MafiaInventory));
+        const loadedMapApi = window.MafiaMapApi ?? window.MafiaMap;
+        setMapReady(Boolean(loadedMapApi?.getSlots || loadedMapApi?.getLandSlotsByOwner));
+      });
+      return;
     }
+
+    const script = document.createElement("script");
+    script.src = "/js/mafia-utils.js";
+    script.async = true;
+    script.onload = () => {
+      setReady(Boolean(window.MafiaInventory));
+      const loadedMapApi = window.MafiaMapApi ?? window.MafiaMap;
+      setMapReady(Boolean(loadedMapApi?.getSlots || loadedMapApi?.getLandSlotsByOwner));
+    };
+    script.onerror = () => setError("Failed to load mafia-utils script");
+    document.head.appendChild(script);
   }, []);
 
   return { ready, mapReady, error };
@@ -275,6 +270,7 @@ export function ExchangeConvertAction() {
 
       const categories = [0, 3, 6]; // CASH, SHOPITEM, CREDIT
       const allItems: ConvertItem[] = [];
+      const mapApi = window.MafiaMapApi ?? window.MafiaMap;
 
       for (const categoryId of categories) {
         const categoryItems = await window.MafiaInventory.getItemsByCategory({
@@ -292,10 +288,10 @@ export function ExchangeConvertAction() {
       }
 
       // Fetch land slots from all cities (0-10)
-      if (window.MafiaMap) {
+      if (mapApi?.getSlots) {
         for (let cityId = 0; cityId <= 10; cityId++) {
           try {
-            const slots = await window.MafiaMap.getSlots({
+            const slots = await mapApi.getSlots({
               chain: activeChain,
               cityId,
             });
@@ -321,21 +317,22 @@ export function ExchangeConvertAction() {
         }
       }
 
-      // Check for conversion perk (categoryId = 46)
-      try {
-        const perkItems = await window.MafiaInventory.getItemsByCategory({
-          chain,
-          contractAddress: inventoryAddress,
-          categoryId: 46, // CONVERSION_RATE_BOOST
-          maxItems: 100,
-        });
-        const hasActivePerk = perkItems.some(
-          (item) => item.owner.toLowerCase() === address.toLowerCase()
-        );
-        setHasConvertPerk(hasActivePerk);
-      } catch {
-        setHasConvertPerk(false);
-      }
+      setHasConvertPerk(false);
+      // // Check for conversion perk (categoryId = 46)
+      // try {
+      //   const perkItems = await window.MafiaInventory.getItemsByCategory({
+      //     chain,
+      //     contractAddress: inventoryAddress,
+      //     categoryId: 46, // CONVERSION_RATE_BOOST
+      //     maxItems: 100,
+      //   });
+      //   const hasActivePerk = perkItems.some(
+      //     (item) => item.owner.toLowerCase() === address.toLowerCase()
+      //   );
+      //   setHasConvertPerk(hasActivePerk);
+      // } catch {
+      //   setHasConvertPerk(false);
+      // }
 
       setItems(allItems);
     } catch (e) {

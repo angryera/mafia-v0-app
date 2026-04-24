@@ -191,20 +191,20 @@ function useMafiaMapScript() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaMap) {
+    if (typeof window !== "undefined" && (window.MafiaMapApi || window.MafiaMap)) {
       setReady(true);
       return;
     }
-    const existing = document.querySelector('script[src="/js/mafia-map.js"]');
+    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
     if (existing) {
       existing.addEventListener("load", () => setReady(true));
       return;
     }
     const script = document.createElement("script");
-    script.src = "/js/mafia-map.js";
+    script.src = "/js/mafia-utils.js";
     script.async = true;
     script.onload = () => setReady(true);
-    script.onerror = () => console.warn("MafiaMap script failed to load");
+    script.onerror = () => console.warn("Mafia utils script failed to load");
     document.head.appendChild(script);
   }, []);
 
@@ -249,7 +249,8 @@ export function CityMap() {
   const [slotsError, setSlotsError] = useState<string | null>(null);
 
   const reloadSlots = useCallback(async () => {
-    if (!mapScriptReady || !window.MafiaMap?.getSlots) {
+    const mapApi = window.MafiaMapApi ?? window.MafiaMap;
+    if (!mapScriptReady || !mapApi?.getSlots) {
       setSlotsLoading(false);
       setCells(emptyTemplate);
       return;
@@ -257,7 +258,7 @@ export function CityMap() {
     setSlotsLoading(true);
     setSlotsError(null);
     try {
-      const slots = await window.MafiaMap!.getSlots({
+      const slots = await mapApi.getSlots({
         chain: chainConfig.id,
         cityId,
       });
@@ -272,7 +273,8 @@ export function CityMap() {
   }, [mapScriptReady, chainConfig.id, cityId, emptyTemplate]);
 
   useEffect(() => {
-    if (!mapScriptReady || !window.MafiaMap?.getSlots) {
+    const mapApi = window.MafiaMapApi ?? window.MafiaMap;
+    if (!mapScriptReady || !mapApi?.getSlots) {
       setSlotsLoading(false);
       setCells(emptyTemplate);
       return;

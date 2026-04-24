@@ -1,4 +1,4 @@
-export {};
+export { };
 
 declare global {
   interface MafiaInventoryApi {
@@ -9,12 +9,26 @@ declare global {
       maxItems?: number;
       onProgress?: (info: { fetched: number; batchIndex: number }) => void;
     }) => Promise<any[]>;
+
+    getAllItemsByOwner: (opts: {
+      chain: string;
+      owner: string;
+      onProgress?: (info: { fetched: number; batchIndex: number }) => void;
+    }) => Promise<any[]>;
   }
 
   interface MafiaMapApi {
     getSlots: (opts: {
       chain: string;
       cityId: number;
+    }) => Promise<any[]>;
+
+    getLandSlotsByOwner: (opts: {
+      chain: string;
+      owner: string;
+      cityIds: number[];
+      requireInventoryItem: boolean;
+      onProgress?: (info: { fetched: number; batchIndex: number }) => void;
     }) => Promise<any[]>;
   }
 
@@ -52,13 +66,24 @@ declare global {
     }) => Promise<any[]>;
   }
 
+  interface MafiaExchangeApi {
+    getOTCOffers: (opts: {
+      chain: string;
+      startIndex: number;
+      length: number;
+      contractAddress: string;
+    }) => Promise<any[]>;
+  }
+
   interface Window {
     MafiaInventory?: MafiaInventoryApi;
+    MafiaMapApi?: MafiaMapApi;
     MafiaMap?: MafiaMapApi;
     MafiaFamily?: MafiaFamilyApi;
     MafiaProfile?: MafiaProfileApi;
     MafiaDeposit?: MafiaDepositApi;
     MafiaWorth?: MafiaWorthApi;
     MafiaRaceLobby?: MafiaRaceLobbyApi;
+    MafiaExchange?: MafiaExchangeApi;
   }
 }

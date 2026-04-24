@@ -445,13 +445,8 @@ export function JackpotAction() {
         src="/js/mafia-utils.js"
         strategy="afterInteractive"
         onReady={() => {
-          // Utils script loaded
+          setScriptReady(Boolean(window.MafiaInventory));
         }}
-      />
-      <Script
-        src="/js/mafia-inventory.js"
-        strategy="afterInteractive"
-        onReady={() => setScriptReady(true)}
       />
 
       {/* Header */}
