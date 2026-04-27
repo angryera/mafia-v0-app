@@ -899,6 +899,65 @@ export const BULLET_ABI: Abi = [
         outputs: [],
         stateMutability: "nonpayable",
     },
+    {
+        type: "function",
+        name: "withdrawBullet",
+        inputs: [{ name: "amount", type: "uint256", internalType: "uint256" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "decimals",
+        inputs: [],
+        outputs: [{ name: "", type: "uint8", internalType: "uint8" }],
+        stateMutability: "view",
+    },
+] as const;
+
+// Wallet bullet ERC20: standard transfers + `depositBullet` into in-game balance
+export const BULLET_WALLET_TOKEN_ABI: Abi = [
+    {
+        type: "function",
+        name: "approve",
+        inputs: [
+            { name: "spender", type: "address", internalType: "address" },
+            { name: "amount", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [{ name: "", type: "bool", internalType: "bool" }],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "allowance",
+        inputs: [
+            { name: "owner", type: "address", internalType: "address" },
+            { name: "spender", type: "address", internalType: "address" },
+        ],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "balanceOf",
+        inputs: [{ name: "account", type: "address", internalType: "address" }],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "decimals",
+        inputs: [],
+        outputs: [{ name: "", type: "uint8", internalType: "uint8" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "depositBullet",
+        inputs: [{ name: "amount", type: "uint256", internalType: "uint256" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
 ] as const;
 
 // ========== Health Contract ==========

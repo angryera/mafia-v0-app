@@ -129,6 +129,7 @@ export type Tab =
   | "families"
   | "info"
   | "exchange-convert"
+  | "exchange-bullet"
   | "exchange-liquidity"
   | "exchange-otc"
   | "referral"
@@ -162,7 +163,7 @@ export function getTabFromPath(pathname: string): Tab {
     "biz-detective-agency", "biz-car-crusher", "biz-bank", "biz-roulette",
     "biz-slotmachine", "biz-jackpot", "biz-safehouse", "biz-booze", "biz-narcs",
     "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
-    "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-liquidity", "exchange-otc", "referral",
+    "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-bullet", "exchange-liquidity", "exchange-otc", "referral",
     "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao"
   ];
   return validTabs.includes(firstSegment as Tab) ? (firstSegment as Tab) : "crime";
@@ -207,6 +208,7 @@ const GAME_SECTION: NavItem[] = [
   { id: "bodyguard-training", label: "Bodyguard Training", icon: <Shield className="h-4 w-4" /> },
   { id: "equipment", label: "Equipment", icon: <Swords className="h-4 w-4" /> },
   { id: "exchange-convert", label: "Exchange Convert", icon: <Coins className="h-4 w-4" /> },
+  { id: "exchange-bullet", label: "Bullet exchange", icon: <Zap className="h-4 w-4" /> },
   { id: "exchange-liquidity", label: "Exchange Liquidity", icon: <Wallet className="h-4 w-4" /> },
   { id: "exchange-otc", label: "OTC Desk", icon: <ArrowRightLeft className="h-4 w-4" /> },
   { id: "xp-market", label: "XP Market", icon: <TrendingUp className="h-4 w-4" /> },

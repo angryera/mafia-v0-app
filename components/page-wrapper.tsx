@@ -334,6 +334,14 @@ const TAB_CONFIG: Record<
     contractAddress: "0x605694A29c5258D6c7Aed642D01111c4b7036966",
     contractShort: "0x6056...6966",
   },
+  "exchange-bullet": {
+    title: "Bullet exchange",
+    description:
+      "Move wallet bullet tokens in-game (deposit) or take in-game bullets back to your wallet (withdraw). Open the DEX to trade MAFIA for wallet bullet tokens.",
+    codeSample: "depositBullet() / withdrawBullet()",
+    contractAddress: "",
+    contractShort: "",
+  },
   "exchange-liquidity": {
     title: "Exchange Liquidity",
     description:
