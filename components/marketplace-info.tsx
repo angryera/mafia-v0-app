@@ -40,7 +40,7 @@ export function MarketplaceInfo() {
           Contract Address
         </p>
         <div className="flex items-center gap-2">
-          <CopyableAddress address={addresses.inventoryMarketplace} />
+          <CopyableAddress address={addresses.inventoryMarketplace} label="Contract" />
           <a
             href={`${explorer}/address/${addresses.inventoryMarketplace}`}
             target="_blank"

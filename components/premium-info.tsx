@@ -82,7 +82,7 @@ export function PremiumInfo() {
 
         <div className="rounded bg-secondary/50 p-2">
           <p className="mb-1 font-medium text-foreground">Contract</p>
-          <CopyableAddress address={addresses.playerSubscription} />
+          <CopyableAddress address={addresses.playerSubscription} label="Contract" />
         </div>
         <a
           href={`${explorer}/address/${addresses.playerSubscription}`}

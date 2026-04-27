@@ -219,7 +219,7 @@ export function BuyKeysAction() {
         functionName: "buyCrates",
         args: [BigInt(selectedToken.tokenId), BigInt(amount)],
         value: nativeValue,
-      });
+      } as any);
     } else {
       writeBuy({
         address: addresses.buyKeys,

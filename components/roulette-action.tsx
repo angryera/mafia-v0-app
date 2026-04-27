@@ -317,16 +317,16 @@ export function RouletteAction() {
               strict: false,
             });
             if (decoded.eventName === "FinishedBet") {
-              const args = decoded.args as Record<string, unknown>;
-              setResult({
-                rouletteId: Number(args.rouletteId),
-                betId: args.betId as bigint,
-                nonce: args.nonce as bigint,
-                betAmount: args.betAmount as bigint,
-                totalReward: args.totalReward as bigint,
-                rewardReceived: args.rewardReceived as bigint,
-                feeAmount: args.feeAmount as bigint,
-              });
+              const args = decoded.args as unknown as {
+                rouletteId: number;
+                betId: bigint;
+                nonce: bigint;
+                betAmount: bigint;
+                totalReward: bigint;
+                rewardReceived: bigint;
+                feeAmount: bigint;
+              };
+              setResult(args);
               setPhase("result");
               return;
             }
@@ -940,7 +940,7 @@ export function RouletteAction() {
             {result ? (
               <>
                 {/* Win or Loss */}
-                {result.totalReward > 0n ? (
+                {result.totalReward > BigInt(0) ? (
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/10">
                     <Trophy className="h-8 w-8 text-emerald-400" />
                   </div>
@@ -954,12 +954,12 @@ export function RouletteAction() {
                   <h3
                     className={cn(
                       "text-lg font-bold",
-                      result.totalReward > 0n
+                      result.totalReward > BigInt(0)
                         ? "text-emerald-400"
                         : "text-red-400",
                     )}
                   >
-                    {result.totalReward > 0n ? "You Won!" : "No Luck This Time"}
+                    {result.totalReward > BigInt(0) ? "You Won!" : "No Luck This Time"}
                   </h3>
 
                   {/* Nonce / winning number */}
@@ -968,7 +968,7 @@ export function RouletteAction() {
                       Winning Number:
                     </span>
                     {(() => {
-                      const winNum = Number(result.nonce % 38n);
+                      const winNum = Number(result.nonce % BigInt(38));
                       const col = getRouletteNumberColor(winNum);
                       return (
                         <span
@@ -1008,7 +1008,7 @@ export function RouletteAction() {
                     <span
                       className={cn(
                         "font-mono text-xs font-semibold",
-                        result.totalReward > 0n
+                        result.totalReward > BigInt(0)
                           ? "text-emerald-400"
                           : "text-muted-foreground",
                       )}

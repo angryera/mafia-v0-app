@@ -219,7 +219,7 @@ export function BuyPerkboxAction() {
         functionName: "buyPerkBoxes",
         args: [BigInt(selectedToken.tokenId), BigInt(amount)],
         value: nativeValue,
-      });
+      } as any);
     } else {
       writeBuy({
         address: addresses.buyPerkbox,

@@ -287,7 +287,7 @@ export function CityMapSlotDetail({
     s.slotType === 1 &&
     canDepositActivateResidential(s.slotSubType);
 
-  const allowanceBn = (allowanceRaw as bigint | undefined) ?? 0n;
+  const allowanceBn = (allowanceRaw as bigint | undefined) ?? BigInt(0);
   const needsApproveForActivate =
     isMySlot &&
     s &&
@@ -295,7 +295,7 @@ export function CityMapSlotDetail({
     residentialCanDepositActivate &&
     !s.isOperating &&
     activateWei != null &&
-    activateWei > 0n &&
+    activateWei > BigInt(0) &&
     allowanceBn < activateWei;
 
   const canActivate =
@@ -306,7 +306,7 @@ export function CityMapSlotDetail({
     residentialCanDepositActivate &&
     !s.isOperating &&
     activateWei != null &&
-    activateWei > 0n &&
+    activateWei > BigInt(0) &&
     allowanceBn >= activateWei;
 
   const upgradeCooldownReady =
@@ -687,7 +687,7 @@ export function CityMapSlotDetail({
       toast.error("Invalid withdraw amount");
       return;
     }
-    if (amount <= 0n) return;
+    if (amount <= BigInt(0)) return;
     writeMap({
       address: mapAddress,
       abi: MAFIA_MAP_ABI,

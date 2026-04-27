@@ -61,7 +61,7 @@ export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disab
           strict: false,
         });
         if (decoded.eventName === "NewCrime") {
-          const args = decoded.args as {
+          const args = decoded.args as unknown as {
             criminal: `0x${string}`;
             crimeType: number;
             isSuccess: boolean;
@@ -150,8 +150,8 @@ export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disab
             <span className={cn(
               "font-mono text-xs font-semibold",
               successRate >= 70 ? "text-green-400" :
-              successRate >= 40 ? "text-yellow-400" :
-              "text-red-400"
+                successRate >= 40 ? "text-yellow-400" :
+                  "text-red-400"
             )}>
               {successRate}%
             </span>
@@ -161,8 +161,8 @@ export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disab
               className={cn(
                 "h-1.5 rounded-full transition-all duration-500",
                 successRate >= 70 ? "bg-green-400" :
-                successRate >= 40 ? "bg-yellow-400" :
-                "bg-red-400"
+                  successRate >= 40 ? "bg-yellow-400" :
+                    "bg-red-400"
               )}
               style={{ width: `${successRate}%` }}
             />

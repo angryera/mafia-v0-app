@@ -225,7 +225,7 @@ export function NarcsAction() {
     query: { enabled: !!address && !!addresses.smuggleMarket },
   });
 
-  const currentAllowance = allowanceData ? BigInt(allowanceData as bigint) : 0n;
+  const currentAllowance = allowanceData ? BigInt(allowanceData as bigint) : BigInt(0);
 
   // ---------- Transaction state ----------
   const {
@@ -274,7 +274,7 @@ export function NarcsAction() {
           strict: false,
         });
         if (decoded.eventName === "NarcsBuy") {
-          const args = decoded.args as {
+          const args = decoded.args as unknown as {
             buyer: `0x${string}`;
             isSuccess: boolean;
             isJailed: boolean;
@@ -314,7 +314,7 @@ export function NarcsAction() {
           strict: false,
         });
         if (decoded.eventName === "NarcsSell") {
-          const args = decoded.args as {
+          const args = decoded.args as unknown as {
             seller: `0x${string}`;
             isSuccess: boolean;
             isJailed: boolean;
@@ -359,7 +359,7 @@ export function NarcsAction() {
         icon: <XCircle className="h-4 w-4 text-red-400" />,
       });
     }
-    
+
     // Refresh data
     fetchHoldings();
     fetchPrices();
@@ -382,7 +382,7 @@ export function NarcsAction() {
         icon: <XCircle className="h-4 w-4 text-red-400" />,
       });
     }
-    
+
     // Refresh data
     fetchHoldings();
     fetchPrices();
@@ -761,8 +761,8 @@ export function NarcsAction() {
                 <button
                   onClick={mode === "buy" ? handleBuy : handleSell}
                   disabled={
-                    (mode === "buy" 
-                      ? buyPending || buyConfirming || totalBuyAmount === 0 
+                    (mode === "buy"
+                      ? buyPending || buyConfirming || totalBuyAmount === 0
                       : sellPending || sellConfirming || totalSellAmount === 0) ||
                     !canTransact
                   }
@@ -777,7 +777,7 @@ export function NarcsAction() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   )}
                   <ShoppingCart className="h-4 w-4" />
-                  {mode === "buy" 
+                  {mode === "buy"
                     ? (buyPending ? "Confirm in wallet..." : buyConfirming ? "Confirming..." : "Buy")
                     : (sellPending ? "Confirm in wallet..." : sellConfirming ? "Confirming..." : "Sell")}
                 </button>

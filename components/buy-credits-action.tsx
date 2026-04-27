@@ -224,7 +224,7 @@ export function BuyCreditsAction() {
         functionName: "buyCredit",
         args: [BigInt(selectedToken.tokenId), paymentAmountWei],
         value: nativeValue,
-      });
+      } as any);
     } else {
       writeBuy({
         address: addresses.buyCredit,

@@ -81,7 +81,7 @@ export function KillSkillCard({ trainType }: { trainType: TrainType }) {
         });
         if (decoded.eventName === "TrainedSkill") {
           return {
-            isSuccess: (decoded.args as { isSuccess: boolean }).isSuccess,
+            isSuccess: (decoded.args as unknown as { isSuccess: boolean }).isSuccess,
           };
         }
       } catch {

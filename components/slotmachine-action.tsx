@@ -340,7 +340,16 @@ export function SlotMachineAction() {
               strict: false,
             });
             if (decoded.eventName === "FinishedBet") {
-              const args = decoded.args as Record<string, unknown>;
+              const args = decoded.args as unknown as {
+                slotMachineId: number;
+                betId: bigint;
+                nonce: bigint;
+                spinCount: number;
+                amountPerSpin: bigint;
+                totalReward: bigint;
+                rewardReceived: bigint;
+                feeAmount: bigint;
+              };
               setResult({
                 slotMachineId: Number(args.slotMachineId),
                 betId: args.betId as bigint,
@@ -707,8 +716,8 @@ export function SlotMachineAction() {
                 )
                   ? "Transaction rejected by user"
                   : ((betError || finishError) as Error).message?.split(
-                      "\n",
-                    )[0]}
+                    "\n",
+                  )[0]}
               </p>
             </div>
           )}
@@ -913,7 +922,7 @@ export function SlotMachineAction() {
       {phase === "result" && (
         <div className={cn(
           "rounded-xl border bg-card p-6 overflow-hidden",
-          result && result.totalReward > 0n
+          result && result.totalReward > BigInt(0)
             ? "border-emerald-400/30"
             : "border-red-400/20",
         )}>
@@ -932,7 +941,7 @@ export function SlotMachineAction() {
             <div
               className={cn(
                 "flex h-16 w-16 items-center justify-center rounded-2xl",
-                result && result.totalReward > 0n
+                result && result.totalReward > BigInt(0)
                   ? "bg-emerald-400/10"
                   : "bg-red-400/10",
               )}
@@ -940,7 +949,7 @@ export function SlotMachineAction() {
               <Trophy
                 className={cn(
                   "h-8 w-8",
-                  result && result.totalReward > 0n
+                  result && result.totalReward > BigInt(0)
                     ? "text-emerald-400"
                     : "text-red-400",
                 )}
@@ -949,12 +958,12 @@ export function SlotMachineAction() {
             <h3
               className={cn(
                 "mt-2 text-lg font-bold",
-                result && result.totalReward > 0n
+                result && result.totalReward > BigInt(0)
                   ? "text-emerald-400"
                   : "text-red-400",
               )}
             >
-              {result && result.totalReward > 0n
+              {result && result.totalReward > BigInt(0)
                 ? "Winner!"
                 : "Better luck next time!"}
             </h3>
@@ -988,7 +997,7 @@ export function SlotMachineAction() {
                 <span
                   className={cn(
                     "font-mono text-sm font-semibold",
-                    result.totalReward > 0n
+                    result.totalReward > BigInt(0)
                       ? "text-emerald-400"
                       : "text-red-400",
                   )}
@@ -1010,7 +1019,7 @@ export function SlotMachineAction() {
                   cash
                 </span>
               </div>
-              {result.feeAmount > 0n && (
+              {result.feeAmount > BigInt(0) && (
                 <div className="flex items-center justify-between rounded-lg bg-background/50 px-3 py-2.5">
                   <span className="text-xs text-muted-foreground">Fee</span>
                   <span className="font-mono text-sm text-muted-foreground">
@@ -1029,7 +1038,7 @@ export function SlotMachineAction() {
                   const wagered =
                     result.amountPerSpin * BigInt(result.spinCount);
                   const net = result.rewardReceived - wagered;
-                  const isProfit = net >= 0n;
+                  const isProfit = net >= BigInt(0);
                   return (
                     <span
                       className={cn(

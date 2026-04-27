@@ -1,42 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import {
-  useAccount,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
-import { useChain, useChainAddresses } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import { useAuth } from "@/components/auth-provider";
-import {
-  RACE_LOBBY_ABI,
-  USER_PROFILE_CONTRACT_ABI,
-  INGAME_CURRENCY_ABI,
-  ERC20_ABI,
-  TRAVEL_DESTINATIONS,
-} from "@/lib/contract";
-import { decodeEventLog, formatEther, parseEther, maxUint256 } from "viem";
-import {
-  Flag,
-  AlertCircle,
-  Loader2,
-  RefreshCw,
-  Car,
-  Trophy,
-  DollarSign,
-  Clock,
-  User,
-  X,
-  Plus,
-  Eye,
-  Ban,
-  Play,
-  CheckCircle2,
-  ShieldCheck,
-  Heart,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useChain, useChainAddresses } from "@/components/chain-provider";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -54,9 +20,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useToast } from "@/hooks/use-toast";
+import {
+  INGAME_CURRENCY_ABI,
+  RACE_LOBBY_ABI,
+  TRAVEL_DESTINATIONS,
+  USER_PROFILE_CONTRACT_ABI
+} from "@/lib/contract";
+import { cn } from "@/lib/utils";
+import {
+  AlertCircle,
+  Ban,
+  Car,
+  Clock,
+  DollarSign,
+  Eye,
+  Flag,
+  Heart,
+  Loader2,
+  Play,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Trophy
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { decodeEventLog, formatEther, maxUint256, parseEther } from "viem";
+import {
+  useAccount,
+  useReadContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
 
 // ── Types ───────────────────────────────────────────────────────
 enum RaceStatus {
@@ -311,13 +307,13 @@ function formatAddress(address: string): string {
 }
 
 function formatTime(timestamp: bigint): string {
-  if (!timestamp || timestamp === 0n) return "-";
+  if (!timestamp || timestamp === BigInt(0)) return "-";
   const date = new Date(Number(timestamp) * 1000);
   return date.toLocaleString();
 }
 
 function getNextRaceTimeLabel(timestamp: bigint): string {
-  if (!timestamp || timestamp <= 0n) return "-";
+  if (!timestamp || timestamp <= BigInt(0)) return "-";
   const nextTimeMs = Number(timestamp) * 1000;
   if (!Number.isFinite(nextTimeMs)) return "-";
   if (Date.now() >= nextTimeMs) return "Ready now";
@@ -325,7 +321,7 @@ function getNextRaceTimeLabel(timestamp: bigint): string {
 }
 
 function isRaceTimeLocked(timestamp: bigint): boolean {
-  if (!timestamp || timestamp <= 0n) return false;
+  if (!timestamp || timestamp <= BigInt(0)) return false;
   const nextTimeMs = Number(timestamp) * 1000;
   if (!Number.isFinite(nextTimeMs)) return false;
   return Date.now() < nextTimeMs;
@@ -617,15 +613,15 @@ function CreateRaceDialog({
 
   // Calculate if approval is needed
   const cashAmountWei = useMemo(() => {
-    if (prizeType !== "1" || !cashAmount) return 0n;
+    if (prizeType !== "1" || !cashAmount) return BigInt(0);
     try {
       return parseEther(cashAmount);
     } catch {
-      return 0n;
+      return BigInt(0);
     }
   }, [prizeType, cashAmount]);
 
-  const needsApproval = prizeType === "1" && cashAmountWei > 0n;
+  const needsApproval = prizeType === "1" && cashAmountWei > BigInt(0);
   const hasEnoughAllowance = allowance !== undefined && allowance >= cashAmountWei;
   const isCashApprovalReady = hasEnoughAllowance || approveSuccess;
   const hasEnoughCash = cashBalance >= cashAmountWei;
@@ -773,7 +769,7 @@ function CreateRaceDialog({
 
     // All validations passed, submit transaction
     setIsSubmitting(true);
-    const finalCashAmount = prizeType === "1" ? cashAmountWei : 0n;
+    const finalCashAmount = prizeType === "1" ? cashAmountWei : BigInt(0);
 
     // createRace(uint256 carId, uint256 cashAmount, PrizeType prizeType, string memory message, bytes memory signature)
     writeContract({
@@ -1184,7 +1180,7 @@ function JoinRaceDialog({
 
   const isDifferentCity = race.cityId !== currentCityId;
   const raceLocked = isRaceTimeLocked(nextRaceTime);
-  const needsApproval = race.prizeType === PrizeType.GameCash && race.cashAmount > 0n;
+  const needsApproval = race.prizeType === PrizeType.GameCash && race.cashAmount > BigInt(0);
   const approveLoading = approvePending || approveConfirming;
   const isWorking = isPending || isConfirming;
 
@@ -1758,7 +1754,7 @@ export function RacingAction() {
       : undefined,
     query: { enabled: !!authData && !!address },
   });
-  const cashBalance = (cashBalanceRaw as bigint) ?? 0n;
+  const cashBalance = (cashBalanceRaw as bigint) ?? BigInt(0);
 
   // Next race time per account
   const { data: nextRaceTimeRaw, refetch: refetchNextRaceTime } = useReadContract({
@@ -1771,7 +1767,7 @@ export function RacingAction() {
       refetchInterval: 30000,
     },
   });
-  const nextRaceTime = (nextRaceTimeRaw as bigint | undefined) ?? 0n;
+  const nextRaceTime = (nextRaceTimeRaw as bigint | undefined) ?? BigInt(0);
   const raceLocked = isRaceTimeLocked(nextRaceTime);
 
   // Filter races based on view mode

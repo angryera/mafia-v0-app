@@ -40,7 +40,7 @@ export function useChainWriteContract() {
   const writeContractAsync = useCallback(
     async (args: Parameters<typeof originalWriteContractAsync>[0]) => {
       const functionName = args.functionName as string;
-      
+
       // For high-gas functions, estimate gas and multiply by 5
       if (HIGH_GAS_FUNCTIONS.includes(functionName) && publicClient && address) {
         try {
@@ -59,7 +59,7 @@ export function useChainWriteContract() {
           });
 
           // Apply 5x multiplier
-          const gasLimit = gasEstimate * 5n;
+          const gasLimit = gasEstimate * BigInt(5);
 
           return originalWriteContractAsync({
             ...args,

@@ -227,22 +227,22 @@ export function JackpotAction() {
     if (!roundRaw) return null;
     const r = roundRaw as any;
     return {
-      roundId: Number(r.roundId ?? r[0] ?? 0n),
+      roundId: Number(r.roundId ?? r[0] ?? BigInt(0)),
       state: Number(r.state ?? r[1] ?? 0),
-      totalUSD: Number(formatEther(r.totalUSD ?? r[2] ?? 0n)),
-      liveTime: Number(r.liveTime ?? r[3] ?? 0n),
-      duration: Number(r.duration ?? r[4] ?? 0n),
-      entriesCount: Number(r.entriesCount ?? r[5] ?? 0n),
-      minBetUSD: Number(formatEther(r.minBetUSD ?? r[6] ?? 0n)),
-      maxBetUSD: Number(formatEther(r.maxBetUSD ?? r[7] ?? 0n)),
+      totalUSD: Number(formatEther(r.totalUSD ?? r[2] ?? BigInt(0))),
+      liveTime: Number(r.liveTime ?? r[3] ?? BigInt(0)),
+      duration: Number(r.duration ?? r[4] ?? BigInt(0)),
+      entriesCount: Number(r.entriesCount ?? r[5] ?? BigInt(0)),
+      minBetUSD: Number(formatEther(r.minBetUSD ?? r[6] ?? BigInt(0))),
+      maxBetUSD: Number(formatEther(r.maxBetUSD ?? r[7] ?? BigInt(0))),
     };
   }, [roundRaw]);
 
   const totalPotUSD = totalPotRaw ? Number(formatEther(totalPotRaw as bigint)) : round?.totalUSD ?? 0;
   const betLimits = betLimitsRaw
     ? {
-        min: Number(formatEther((betLimitsRaw as any).minBetUSD ?? (betLimitsRaw as any)[0] ?? 0n)),
-        max: Number(formatEther((betLimitsRaw as any).maxBetUSD ?? (betLimitsRaw as any)[1] ?? 0n)),
+        min: Number(formatEther((betLimitsRaw as any).minBetUSD ?? (betLimitsRaw as any)[0] ?? BigInt(0))),
+        max: Number(formatEther((betLimitsRaw as any).maxBetUSD ?? (betLimitsRaw as any)[1] ?? BigInt(0))),
       }
     : null;
   const feePercent = feePercentageRaw ? Number(feePercentageRaw) : null;
@@ -385,9 +385,9 @@ export function JackpotAction() {
           const args = decoded.args as any;
           return {
             assetType: args.assetType as string,
-            usdValue: Number(formatEther(args.usdValue ?? 0n)),
-            amount: Number(formatEther(args.amount ?? 0n)),
-            entryId: Number(args.entryId ?? 0n),
+            usdValue: Number(formatEther(args.usdValue ?? BigInt(0))),
+            amount: Number(formatEther(args.amount ?? BigInt(0))),
+            entryId: Number(args.entryId ?? BigInt(0)),
           };
         }
       } catch {

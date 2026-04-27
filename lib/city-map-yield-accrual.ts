@@ -5,7 +5,7 @@ import {
   YIELD_TIER_MAX_ACCRUAL_DAYS,
 } from "@/lib/city-slot-config";
 
-const WAD = BigInt(10) ** BigInt(18);
+const WAD = BigInt(10 ** 18);
 
 /**
  * Floored whole token amount from 18-decimal `wei` — no fractional digits (integer display).

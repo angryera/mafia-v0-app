@@ -24,11 +24,11 @@ export function BuyGiCreditsInfo() {
         </p>
         <div className="rounded bg-secondary/50 p-2">
           <p className="mb-1 font-medium text-foreground">GI Credits Token</p>
-          <CopyableAddress address={addresses.giCredits} />
+          <CopyableAddress address={addresses.giCredits} label="GI Credits Token" />
         </div>
         <div className="rounded bg-secondary/50 p-2">
           <p className="mb-1 font-medium text-foreground">Swap Router</p>
-          <CopyableAddress address={addresses.swapRouter} />
+          <CopyableAddress address={addresses.swapRouter} label="Swap Router" />
         </div>
         <a
           href={`${explorer}/address/${addresses.swapRouter}`}

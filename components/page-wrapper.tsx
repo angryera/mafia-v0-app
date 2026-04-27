@@ -119,6 +119,23 @@ const TAB_CONFIG: Record<
     contractAddress: "0x26563e46A96a07e66BC01Ad6b1b41B42a33364F8",
     contractShort: "0x2656...f1F8",
   },
+  "mystery-box": {
+    title: "Mystery Box",
+    description:
+      "Open mystery box items from your inventory. Each open burns one box and rolls a reward on-chain via the story mode contract.",
+    codeSample: "claimMysteryBox(uint256 itemId)",
+    contractAddress: "0x4D9d610092B233a24193CB686De1A8746C5224f8",
+    contractShort: "0x4D9d...24f8",
+  },
+  marketplace: {
+    title: "Marketplace",
+    description:
+      "List inventory items for fixed price or auction, place bids, and buy listings. Approve game cash or ERC-20 tokens for purchases as required.",
+    codeSample:
+      "createListing(...) / purchaseFixedItem(...) / bidOnAuctionItem(...)",
+    contractAddress: "0x1fb8C9F810afd99A6FAE3E81aBe0806f8796ba73",
+    contractShort: "0x1fb8...ba73",
+  },
   "buy-gi-credits": {
     title: "Buy GI Credits",
     description:
@@ -326,12 +343,12 @@ const TAB_CONFIG: Record<
     contractShort: "0xB081...90Ae",
   },
   "exchange-otc": {
-  title: "OTC Desk",
-  description:
-  "Browse open peer-to-peer OTC offers. Accept an offer by delivering the requested items, or cancel your own open offers.",
-  codeSample: "getOTCOffers() / acceptOTCOffer() / cancelOTCOffer()",
-  contractAddress: "0x605694A29c5258D6c7Aed642D01111c4b7036966",
-  contractShort: "0x6056...6966",
+    title: "OTC Desk",
+    description:
+      "Browse open peer-to-peer OTC offers. Accept an offer by delivering the requested items, or cancel your own open offers.",
+    codeSample: "getOTCOffers() / acceptOTCOffer() / cancelOTCOffer()",
+    contractAddress: "0x605694A29c5258D6c7Aed642D01111c4b7036966",
+    contractShort: "0x6056...6966",
   },
   referral: {
     title: "Referral Program",
@@ -403,7 +420,7 @@ export function PageWrapper({ children, sidebar, fullWidth = false }: PageWrappe
   const pathname = usePathname();
   const activeTab = getTabFromPath(pathname);
   const { chainConfig } = useChain();
-  
+
   // Ensure config always has a valid value with explicit fallback
   const rawConfig = TAB_CONFIG[activeTab];
   const config = rawConfig ?? TAB_CONFIG.crime;

@@ -160,9 +160,9 @@ export function WeeklyMissionGrid() {
 
   // Read player's current city for smuggle mission links
   const { data: playerProfileRaw } = useReadContract({
-  address: addresses.userProfile,
-  abi: USER_PROFILE_CONTRACT_ABI,
-  functionName: "getProfile",
+    address: addresses.userProfile,
+    abi: USER_PROFILE_CONTRACT_ABI,
+    functionName: "getProfile",
     args: address ? [address] : undefined,
     query: {
       enabled: isConnected && !!address,
@@ -232,7 +232,7 @@ export function WeeklyMissionGrid() {
   const currentTime = Math.floor(Date.now() / 1000);
   const isExpired = missionStatus
     ? missionStatus.startedAt > 0 &&
-      currentTime > missionStatus.startedAt + WEEKLY_DURATION_SECONDS
+    currentTime > missionStatus.startedAt + WEEKLY_DURATION_SECONDS
     : false;
   const generateNeeded =
     !missionStatus ||
@@ -262,9 +262,9 @@ export function WeeklyMissionGrid() {
     : "0";
   const currentReward = missionStatus
     ? calculateCurrentReward(
-        Number(formatEther(missionStatus.maxReward)),
-        missionStatus.startedAt
-      )
+      Number(formatEther(missionStatus.maxReward)),
+      missionStatus.startedAt
+    )
     : 0;
 
   // Countdown timer
@@ -305,7 +305,7 @@ export function WeeklyMissionGrid() {
           strict: false,
         });
         if (decoded.eventName === "WeeklyMissionClaimed") {
-          const args = decoded.args as { reward: bigint };
+          const args = decoded.args as unknown as { reward: bigint };
           return Number(formatEther(args.reward));
         }
       } catch {

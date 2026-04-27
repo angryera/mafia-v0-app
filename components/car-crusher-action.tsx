@@ -189,11 +189,11 @@ export function CarCrusherAction() {
   // Parse city crusher info
   const cityCrusherInfo = cityCrusherInfoRaw
     ? {
-      bulletProfit: Number(formatEther((cityCrusherInfoRaw as any).bulletProfit ?? (cityCrusherInfoRaw as any)[0] ?? 0n)),
-      cashProfit: Number(formatEther((cityCrusherInfoRaw as any).cashProfit ?? (cityCrusherInfoRaw as any)[1] ?? 0n)),
-      inventoryItemId: Number((cityCrusherInfoRaw as any).inventoryItemId ?? (cityCrusherInfoRaw as any)[2] ?? 0n),
-      bulletFeePerCar: Number(formatEther((cityCrusherInfoRaw as any).bulletFeePerCar ?? (cityCrusherInfoRaw as any)[3] ?? 0n)),
-      oneTimeCashFee: Number(formatEther((cityCrusherInfoRaw as any).oneTimeCashFee ?? (cityCrusherInfoRaw as any)[4] ?? 0n)),
+      bulletProfit: Number(formatEther((cityCrusherInfoRaw as any).bulletProfit ?? (cityCrusherInfoRaw as any)[0] ?? BigInt(0))),
+      cashProfit: Number(formatEther((cityCrusherInfoRaw as any).cashProfit ?? (cityCrusherInfoRaw as any)[1] ?? BigInt(0))),
+      inventoryItemId: Number((cityCrusherInfoRaw as any).inventoryItemId ?? (cityCrusherInfoRaw as any)[2] ?? BigInt(0)),
+      bulletFeePerCar: Number(formatEther((cityCrusherInfoRaw as any).bulletFeePerCar ?? (cityCrusherInfoRaw as any)[3] ?? BigInt(0))),
+      oneTimeCashFee: Number(formatEther((cityCrusherInfoRaw as any).oneTimeCashFee ?? (cityCrusherInfoRaw as any)[4] ?? BigInt(0))),
     }
     : null;
 

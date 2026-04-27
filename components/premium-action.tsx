@@ -101,7 +101,7 @@ export function PremiumAction() {
     address: addresses.playerSubscription,
     abi: PLAYER_SUBSCRIPTION_ABI,
     functionName: "planPrice",
-    args: [1n],
+    args: [1],
     chainId: chainConfig.wagmiChainId,
   });
 
@@ -109,7 +109,7 @@ export function PremiumAction() {
     address: addresses.playerSubscription,
     abi: PLAYER_SUBSCRIPTION_ABI,
     functionName: "planPrice",
-    args: [2n],
+    args: [2],
     chainId: chainConfig.wagmiChainId,
   });
 
@@ -329,7 +329,7 @@ export function PremiumAction() {
         functionName: "subscribe",
         args: [BigInt(selectedTokenId), BigInt(selectedPlan)],
         value: sendAmount,
-      });
+      } as any);
     } else {
       writeSubscribe({
         address: addresses.playerSubscription,
@@ -628,7 +628,7 @@ export function PremiumAction() {
                           className={cn(
                             "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-primary/5",
                             selectedTokenId === t.tokenId &&
-                              "bg-primary/10",
+                            "bg-primary/10",
                           )}
                         >
                           <div className="flex h-6 w-6 items-center justify-center rounded bg-primary/10">
@@ -660,9 +660,9 @@ export function PremiumAction() {
                     {totalTokenCost < 0.01
                       ? totalTokenCost.toFixed(6)
                       : totalTokenCost.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 4,
-                        })}{" "}
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 4,
+                      })}{" "}
                     {selectedToken.name}
                   </span>
                 </div>
@@ -747,11 +747,11 @@ export function PremiumAction() {
                 totalTokenCost &&
                 (step === "buy" || isNativeToken)
                 ? cn(
-                    "text-primary-foreground active:scale-[0.98] disabled:opacity-50",
-                    selectedPlan === 2
-                      ? "bg-amber-500 hover:bg-amber-400"
-                      : "bg-emerald-500 hover:bg-emerald-400",
-                  )
+                  "text-primary-foreground active:scale-[0.98] disabled:opacity-50",
+                  selectedPlan === 2
+                    ? "bg-amber-500 hover:bg-amber-400"
+                    : "bg-emerald-500 hover:bg-emerald-400",
+                )
                 : "bg-secondary text-muted-foreground cursor-not-allowed",
             )}
           >

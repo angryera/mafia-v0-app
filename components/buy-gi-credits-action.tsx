@@ -217,7 +217,7 @@ export function BuyGiCreditsAction() {
         functionName: "buyCredit",
         args: [BigInt(selectedTokenId), creditAmountWei],
         value: sendAmount,
-      });
+      } as any);
     } else {
       writeBuy({
         address: addresses.giCredits,
@@ -341,7 +341,7 @@ export function BuyGiCreditsAction() {
                         className={cn(
                           "flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary/50",
                           token.tokenId === selectedTokenId &&
-                            "bg-primary/10"
+                          "bg-primary/10"
                         )}
                       >
                         <span className="text-sm font-medium text-foreground">

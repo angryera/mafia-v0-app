@@ -1,15 +1,14 @@
 "use client";
 
-import { useAccount } from "wagmi";
-import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useChainAddresses } from "@/components/chain-provider";
 import { CopyableAddress } from "@/components/copyable-address";
-import { Calendar, Target, Gift, Clock } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Calendar, Clock, Gift, Target } from "lucide-react";
+import { useAccount } from "wagmi";
 
 export function WeeklyMissionInfo() {
   const { isConnected } = useAccount();
   const addresses = useChainAddresses();
-  const explorer = useChainExplorer();
 
   return (
     <Card className="border-border bg-card">
@@ -23,7 +22,7 @@ export function WeeklyMissionInfo() {
           <p className="text-muted-foreground mb-1.5">Contract Address</p>
           <CopyableAddress
             address={addresses.weeklyMission}
-            explorerUrl={explorer}
+            label="Contract"
           />
         </div>
 

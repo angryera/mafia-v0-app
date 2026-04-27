@@ -79,8 +79,8 @@ function StatusIndicators({ isJailed, isDead }: { isJailed: boolean; isDead: boo
   if (!isJailed && !isDead) return null;
   return (
     <span className="inline-flex gap-1 ml-1">
-      {isJailed && <Lock className="h-3 w-3 text-amber-500" title="Jailed" />}
-      {isDead && <Skull className="h-3 w-3 text-red-500" title="Dead" />}
+      {isJailed && <Lock className="h-3 w-3 text-amber-500" aria-label="Jailed" />}
+      {isDead && <Skull className="h-3 w-3 text-red-500" aria-label="Dead" />}
     </span>
   );
 }

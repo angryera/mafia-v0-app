@@ -408,7 +408,7 @@ function XpBars() {
   const rankXp = rankXpRaw !== undefined ? Number(rankXpRaw) : null;
   const rankPercent = (() => {
     if (rankLevel === null || rankXp === null) return null;
-    const currentLevelXp = RANK_XP[rankLevel-1] ?? 0;
+    const currentLevelXp = RANK_XP[rankLevel - 1] ?? 0;
     const nextLevelXp = RANK_XP[rankLevel];
     if (nextLevelXp === undefined) return 100;
     const range = nextLevelXp - currentLevelXp;
@@ -1277,15 +1277,4 @@ function MobileHeader({
       )}
     </div>
   );
-}
-
-// Keep backward compat export (not used directly anymore, but Tab type is)
-export function Header({
-  activeTab,
-  onTabChange,
-}: {
-  activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
-}) {
-  return <TopBar activeTab={activeTab} onTabChange={onTabChange} />;
 }

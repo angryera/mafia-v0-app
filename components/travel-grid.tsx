@@ -139,10 +139,10 @@ export function TravelGrid() {
 
   const travelInfo: TravelInfo | null = travelInfoRaw
     ? {
-        travelType: Number((travelInfoRaw as { travelType: bigint }).travelType),
-        travelUntil: Number((travelInfoRaw as { travelUntil: bigint }).travelUntil),
-        itemId: Number((travelInfoRaw as { itemId: bigint }).itemId),
-      }
+      travelType: Number((travelInfoRaw as { travelType: bigint }).travelType),
+      travelUntil: Number((travelInfoRaw as { travelUntil: bigint }).travelUntil),
+      itemId: Number((travelInfoRaw as { itemId: bigint }).itemId),
+    }
     : null;
 
   const isTraveling = travelInfo && travelInfo.travelUntil > Math.floor(Date.now() / 1000);
@@ -184,9 +184,7 @@ export function TravelGrid() {
 
     setLoadingVehicles(true);
     try {
-      // @ts-expect-error MafiaInventory is loaded from external script
       if (window.MafiaInventory) {
-        // @ts-expect-error MafiaInventory is loaded from external script
         const items = await window.MafiaInventory.getItemsByCategory({
           chain: chainConfig.id,
           contractAddress: addresses.inventory,

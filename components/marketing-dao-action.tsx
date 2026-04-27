@@ -370,8 +370,8 @@ function CreateProposalModal({
       const formattedOptions = options.map((o) => ({
         title: o.title,
         delieveryLink: o.delieveryLink || "",
-        cost: o.cost ? parseUnits(o.cost, 18) : 0n,
-        adminFee: o.adminFee ? parseUnits(o.adminFee, 18) : 0n,
+        cost: o.cost ? parseUnits(o.cost, 18) : BigInt(0),
+        adminFee: o.adminFee ? parseUnits(o.adminFee, 18) : BigInt(0),
       }));
 
       await writeContractAsync({
@@ -527,7 +527,7 @@ function VoteModal({
     args: address ? [address, contractAddress] : undefined,
   }) as { data: bigint | undefined; refetch: () => void };
 
-  const amountWei = amount ? parseUnits(amount, 18) : 0n;
+  const amountWei = amount ? parseUnits(amount, 18) : BigInt(0);
   const needsApproval = allowance !== undefined && amountWei > allowance;
 
   const handleApprove = async () => {
@@ -1077,10 +1077,10 @@ export function MarketingDaoAction() {
                     </TableHeader>
                     <TableBody>
                       {options.map((option, optionIndex) => {
-                        const weight = weights[optionIndex] ?? 0n;
+                        const weight = weights[optionIndex] ?? BigInt(0);
                         const percentage =
-                          proposal.totalMafia > 0n
-                            ? Number((weight * 100n) / proposal.totalMafia)
+                          proposal.totalMafia > BigInt(0)
+                            ? Number((weight * BigInt(100)) / proposal.totalMafia)
                             : 0;
                         const isWinner =
                           proposal.status === 2 && proposal.chosenOption === optionIndex;

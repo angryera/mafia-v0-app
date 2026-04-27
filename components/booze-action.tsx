@@ -1,42 +1,38 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { toast } from "sonner";
-import {
-  useAccount,
-  useReadContract,
-  useReadContracts,
-  usePublicClient,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAuth } from "@/components/auth-provider";
+import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import {
-  USER_PROFILE_CONTRACT_ABI,
-  TRAVEL_DESTINATIONS,
+  BOOZE_TYPES,
   INGAME_CURRENCY_ABI,
   INGAME_CURRENCY_APPROVE_AMOUNT,
   SMUGGLE_MARKET_ABI,
-  BOOZE_TYPES,
+  TRAVEL_DESTINATIONS,
+  USER_PROFILE_CONTRACT_ABI,
 } from "@/lib/contract";
-import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
-import { useAuth } from "@/components/auth-provider";
+import { cn } from "@/lib/utils";
 import {
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  MapPin,
-  Coins,
-  RefreshCw,
-  Timer,
   Beer,
-  ShoppingCart,
+  Loader2,
+  Lock,
+  MapPin,
   Minus,
   Plus,
-  Lock,
+  RefreshCw,
+  ShoppingCart,
+  Timer,
+  XCircle
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { formatEther, parseEther, decodeEventLog } from "viem";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { decodeEventLog, formatEther, parseEther } from "viem";
+import {
+  useAccount,
+  usePublicClient,
+  useReadContract,
+  useWaitForTransactionReceipt
+} from "wagmi";
 
 interface ProfileData {
   profileId: bigint;
@@ -229,7 +225,7 @@ export function BoozeAction() {
     query: { enabled: !!address && !!addresses.smuggleMarket },
   });
 
-  const currentAllowance = allowanceData ? BigInt(allowanceData as bigint) : 0n;
+  const currentAllowance = allowanceData ? BigInt(allowanceData as bigint) : BigInt(0);
 
   // ---------- Transaction state ----------
   const {
@@ -278,7 +274,7 @@ export function BoozeAction() {
           strict: false,
         });
         if (decoded.eventName === "BoozeBuy") {
-          const args = decoded.args as {
+          const args = decoded.args as unknown as {
             buyer: `0x${string}`;
             isSuccess: boolean;
             isJailed: boolean;
@@ -321,7 +317,7 @@ export function BoozeAction() {
           strict: false,
         });
         if (decoded.eventName === "BoozeSell") {
-          const args = decoded.args as {
+          const args = decoded.args as unknown as {
             seller: `0x${string}`;
             isSuccess: boolean;
             isJailed: boolean;
@@ -366,7 +362,7 @@ export function BoozeAction() {
         icon: <XCircle className="h-4 w-4 text-red-400" />,
       });
     }
-    
+
     // Refresh data
     fetchHoldings();
     fetchPrices();
@@ -389,7 +385,7 @@ export function BoozeAction() {
         icon: <XCircle className="h-4 w-4 text-red-400" />,
       });
     }
-    
+
     // Refresh data
     fetchHoldings();
     fetchPrices();
@@ -768,8 +764,8 @@ export function BoozeAction() {
                 <button
                   onClick={mode === "buy" ? handleBuy : handleSell}
                   disabled={
-                    (mode === "buy" 
-                      ? buyPending || buyConfirming || totalBuyAmount === 0 
+                    (mode === "buy"
+                      ? buyPending || buyConfirming || totalBuyAmount === 0
                       : sellPending || sellConfirming || totalSellAmount === 0) ||
                     !canTransact
                   }
@@ -784,7 +780,7 @@ export function BoozeAction() {
                     <Loader2 className="h-4 w-4 animate-spin" />
                   )}
                   <ShoppingCart className="h-4 w-4" />
-                  {mode === "buy" 
+                  {mode === "buy"
                     ? (buyPending ? "Confirm in wallet..." : buyConfirming ? "Confirming..." : "Buy")
                     : (sellPending ? "Confirm in wallet..." : sellConfirming ? "Confirming..." : "Sell")}
                 </button>

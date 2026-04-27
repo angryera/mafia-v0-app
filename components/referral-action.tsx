@@ -41,6 +41,7 @@ import { useChain } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import { cn } from "@/lib/utils";
 import "@/types/mafia-globals";
+import { useAccount } from "wagmi";
 
 // Player data structure from contract (with referrer field)
 interface Player {
@@ -66,7 +67,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export function ReferralAction() {
   const { chainConfig } = useChain();
-  const { address } = useAuth();
+  const { address } = useAccount();
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState<string>("");
@@ -585,10 +586,10 @@ export function ReferralAction() {
                                     entry.rank === 1
                                       ? "bg-yellow-500/20"
                                       : entry.rank === 2
-                                      ? "bg-gray-400/20"
-                                      : entry.rank === 3
-                                      ? "bg-amber-600/20"
-                                      : "bg-primary/10"
+                                        ? "bg-gray-400/20"
+                                        : entry.rank === 3
+                                          ? "bg-amber-600/20"
+                                          : "bg-primary/10"
                                   )}
                                 >
                                   <User
@@ -597,10 +598,10 @@ export function ReferralAction() {
                                       entry.rank === 1
                                         ? "text-yellow-500"
                                         : entry.rank === 2
-                                        ? "text-gray-400"
-                                        : entry.rank === 3
-                                        ? "text-amber-600"
-                                        : "text-primary"
+                                          ? "text-gray-400"
+                                          : entry.rank === 3
+                                            ? "text-amber-600"
+                                            : "text-primary"
                                     )}
                                   />
                                 </div>

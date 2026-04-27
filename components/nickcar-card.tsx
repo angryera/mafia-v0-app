@@ -88,7 +88,7 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
           strict: false,
         });
         if (decoded.eventName === "NewCarNick") {
-          const args = decoded.args as {
+          const args = decoded.args as unknown as {
             criminal: `0x${string}`;
             crimeType: number;
             isSuccess: boolean;
@@ -192,8 +192,8 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
             <span className={cn(
               "font-mono text-xs font-semibold",
               successRate >= 70 ? "text-green-400" :
-              successRate >= 40 ? "text-yellow-400" :
-              "text-red-400"
+                successRate >= 40 ? "text-yellow-400" :
+                  "text-red-400"
             )}>
               {successRate}%
             </span>
@@ -203,8 +203,8 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
               className={cn(
                 "h-1.5 rounded-full transition-all duration-500",
                 successRate >= 70 ? "bg-green-400" :
-                successRate >= 40 ? "bg-yellow-400" :
-                "bg-red-400"
+                  successRate >= 40 ? "bg-yellow-400" :
+                    "bg-red-400"
               )}
               style={{ width: `${successRate}%` }}
             />
@@ -278,7 +278,7 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
                 <span className={cn(
                   "font-mono font-semibold",
                   nickResult.damagePercent === 0 ? "text-green-400" :
-                  nickResult.damagePercent <= 50 ? "text-yellow-400" : "text-red-400"
+                    nickResult.damagePercent <= 50 ? "text-yellow-400" : "text-red-400"
                 )}>
                   {nickResult.damagePercent}%
                 </span>
