@@ -17,7 +17,6 @@ import {
   USER_PROFILE_CONTRACT_ABI,
   TRAVEL_DESTINATIONS,
   INGAME_CURRENCY_ABI,
-  INGAME_CURRENCY_ADDRESS,
   INGAME_CURRENCY_APPROVE_AMOUNT,
 } from "@/lib/contract";
 import type { ShopItemMeta } from "@/lib/contract";
@@ -274,7 +273,7 @@ export function ShopAction() {
   const handleApprove = () => {
     resetApprove();
     writeApprove({
-      address: INGAME_CURRENCY_ADDRESS,
+      address: addresses.ingameCurrency,
       abi: INGAME_CURRENCY_ABI,
       functionName: "approveInGameCurrency",
       args: [addresses.shop, INGAME_CURRENCY_APPROVE_AMOUNT],

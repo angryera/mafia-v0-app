@@ -12,7 +12,6 @@ import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import {
   SLOT_MACHINE_CONTRACT_ABI,
   INGAME_CURRENCY_ABI,
-  INGAME_CURRENCY_ADDRESS,
   INGAME_CURRENCY_APPROVE_AMOUNT,
   USER_PROFILE_CONTRACT_ABI,
   TRAVEL_DESTINATIONS,
@@ -388,7 +387,7 @@ export function SlotMachineAction() {
   const handleApprove = () => {
     resetApprove();
     writeApprove({
-      address: INGAME_CURRENCY_ADDRESS,
+      address: addresses.ingameCurrency,
       abi: INGAME_CURRENCY_ABI,
       functionName: "approveInGameCurrency",
       args: [addresses.slotMachine, INGAME_CURRENCY_APPROVE_AMOUNT],

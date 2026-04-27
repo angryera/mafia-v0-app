@@ -13,7 +13,6 @@ import {
   ROULETTE_CONTRACT_ABI,
   ROULETTE_BET_TYPES,
   INGAME_CURRENCY_ABI,
-  INGAME_CURRENCY_ADDRESS,
   INGAME_CURRENCY_APPROVE_AMOUNT,
   USER_PROFILE_CONTRACT_ABI,
   TRAVEL_DESTINATIONS,
@@ -372,7 +371,7 @@ export function RouletteAction() {
   const handleApprove = () => {
     resetApprove();
     writeApprove({
-      address: INGAME_CURRENCY_ADDRESS,
+      address: addresses.ingameCurrency,
       abi: INGAME_CURRENCY_ABI,
       functionName: "approveInGameCurrency",
       args: [addresses.roulette, INGAME_CURRENCY_APPROVE_AMOUNT],
