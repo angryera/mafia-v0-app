@@ -22,9 +22,9 @@ type ChainContextType = {
 };
 
 const ChainContext = createContext<ChainContextType>({
-  activeChain: "bnb",
-  chainConfig: CHAIN_CONFIGS.bnb,
-  setActiveChain: () => {},
+  activeChain: "pulse",
+  chainConfig: CHAIN_CONFIGS.pulse,
+  setActiveChain: () => { },
   isSwitching: false,
 });
 
@@ -43,7 +43,7 @@ export function useChainExplorer() {
 }
 
 export function ChainProvider({ children }: { children: ReactNode }) {
-  const [activeChain, setActiveChainState] = useState<ChainId>("bnb");
+  const [activeChain, setActiveChainState] = useState<ChainId>("pulse");
   const [isSwitching, setIsSwitching] = useState(false);
   const { switchChainAsync } = useSwitchChain();
   const { isConnected } = useAccount();

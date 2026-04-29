@@ -110,7 +110,7 @@ import { getBodyguardTrainingCost, getCityRegion, getCrateCategory, getCrateItem
 import { BulletBotPlusInfo, HelperBotInfo, TrainingSlotType } from "./constants/type";
 
 // ========== Chain Configuration ==========
-export type ChainId = "bnb" | "pulsechain";
+export type ChainId = "bnb" | "pulse";
 
 export {
   BODYGUARD_CATEGORIES, BODYGUARD_INFO, BOOZE_TYPES, BUILDING_STATS, CASH_VALUES, City,

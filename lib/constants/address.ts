@@ -122,8 +122,8 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             raceLobby: getAddress("0xE3a3892fEC9bA9457fEE08Fe3d2E7b32bCeb33Ad"),
         },
     },
-    pulsechain: {
-        id: "pulsechain",
+    pulse: {
+        id: "pulse",
         label: "PulseChain",
         wagmiChainId: 369,
         rpc: "https://rpc.pulsechain.com",
@@ -184,21 +184,21 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
 // Centralized contract addresses by chain (single source of truth).
 export const CONTRACT_ADDRESSES: Record<ChainId, ChainConfig["addresses"]> = {
     bnb: CHAIN_CONFIGS.bnb.addresses,
-    pulsechain: CHAIN_CONFIGS.pulsechain.addresses,
+    pulse: CHAIN_CONFIGS.pulse.addresses,
 };
 
 // ========== Exchange Contract (Convert Items) ==========
 export const EXCHANGE_ADDRESSES: Record<ChainId, `0x${string}`> = {
     bnb: getAddress("0x605694A29c5258D6c7Aed642D01111c4b7036966"),
-    pulsechain: getAddress("0x11ee2732eD4C6BFe673e7b4BE15ece35D6a8cCD7"),
+    pulse: getAddress("0x11ee2732eD4C6BFe673e7b4BE15ece35D6a8cCD7"),
 };
 
 export const DEPOSIT_ADDRESSES: Record<ChainId, `0x${string}`> = {
     bnb: getAddress("0xB081EC0763360a9Ad4D09AF2C9ec7DC1ED5190Ae"),
-    pulsechain: getAddress("0xC9565b4f23C301Cf9f158D72A842BA6a53B84590"),
+    pulse: getAddress("0xC9565b4f23C301Cf9f158D72A842BA6a53B84590"),
 };
 
 export const MAFIA_PAIR_ADDRESSES: Record<ChainId, `0x${string}`> = {
     bnb: getAddress("0xdE6e6378623C4F2c1102F2CcD35507d5bAf7924d"),
-    pulsechain: getAddress("0x113bbdfea64b06aebe14a50e00c70149a32973ab"),
+    pulse: getAddress("0x113bbdfea64b06aebe14a50e00c70149a32973ab"),
 };

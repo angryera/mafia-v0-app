@@ -244,7 +244,7 @@ export function CarCrusherAction() {
     setError(null);
     setProgress("");
     try {
-      const chainName = chainConfig.id === "bnb" ? "bnb" : "pulsechain";
+      const chainName = chainConfig.id === "bnb" ? "bnb" : "pulse";
       const items = await window.MafiaInventory.getItemsByCategory({
         chain: chainName,
         contractAddress: chainConfig.addresses.inventory,

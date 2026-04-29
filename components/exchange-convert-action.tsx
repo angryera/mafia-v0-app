@@ -223,7 +223,7 @@ export function ExchangeConvertAction() {
     setPriceLoading(true);
     try {
       const pairAddress = MAFIA_PAIR_ADDRESSES[activeChain as ChainId];
-      const network = activeChain === "bnb" ? "bsc" : "pulsechain";
+      const network = activeChain === "bnb" ? "bsc" : "pulse";
       const res = await fetch(
         `https://api.dexscreener.com/latest/dex/pairs/${network}/${pairAddress}`
       );
