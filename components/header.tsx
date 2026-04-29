@@ -427,8 +427,9 @@ function XpBars() {
   };
 
   const killPercent = toPercent(killXpRaw);
+  console.log(raceXpRaw);
   const racePercent = raceXpRaw !== undefined
-    ? Math.min(100, Math.max(0, (Number(raceXpRaw) / 5000) * 100))
+    ? Math.min(100, Math.max(0, (Number(raceXpRaw) / 500000) * 100))
     : null;
   const bustPercent = toPercent(bustXpRaw);
 

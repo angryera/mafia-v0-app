@@ -43,7 +43,7 @@ export function useChainExplorer() {
 }
 
 export function ChainProvider({ children }: { children: ReactNode }) {
-  const [activeChain, setActiveChainState] = useState<ChainId>("pulse");
+  const [activeChain, setActiveChainState] = useState<ChainId>("bnb");
   const [isSwitching, setIsSwitching] = useState(false);
   const { switchChainAsync } = useSwitchChain();
   const { isConnected } = useAccount();
