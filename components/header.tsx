@@ -17,6 +17,7 @@ import {
   JAIL_CONTRACT_ABI,
   SAFEHOUSE_ABI,
   KILLSKILL_CONTRACT_ABI,
+  BUSTOUT_SKILL_ABI,
   CAR_CRUSHER_ABI,
   BULLET_ABI,
   HEALTH_ABI,
@@ -396,9 +397,9 @@ function XpBars() {
 
   // Bust Out XP (0-10000)
   const { data: bustXpRaw } = useReadContract({
-    address: addresses.rankXp,
-    abi: RANK_ABI,
-    functionName: "getBustOutXp",
+    address: addresses.bustOutSkill,
+    abi: BUSTOUT_SKILL_ABI,
+    functionName: "getSkillXp",
     args: authData && address ? [address, authData.message, authData.signature] : undefined,
     query: { enabled },
   });

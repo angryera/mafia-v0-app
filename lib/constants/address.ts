@@ -14,6 +14,8 @@ export type ChainConfig = {
         travel: `0x${string}`;
         nickcar: `0x${string}`;
         killskill: `0x${string}`;
+        /** BustOutSkill XP contract (`getSkillXp`). */
+        bustOutSkill: `0x${string}`;
         jail: `0x${string}`;
         helperbot: `0x${string}`;
         buyCredit: `0x${string}`;
@@ -78,6 +80,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             travel: getAddress("0xa08D627E071cB4b53C6D0611d77dbCB659902AA4"),
             nickcar: getAddress("0x60B8e0dd9566b42F9CAa5538350aA0D29988373c"),
             killskill: getAddress("0xa5dc2Cb4dC13f12d8464eaA862fAC00F19ADc84d"),
+            bustOutSkill: getAddress("0xd401B2af85Df998faaDD0963F0e15e2EB92D5697"),
             jail: getAddress("0x7371580cd13dE739C734AE85062F75194d13Fac2"),
             helperbot: getAddress("0xE2E4506c23C26eea2526d0e4dBb8dbF9cDa9d105"),
             buyCredit: getAddress("0x192F029CC7e0BB80dB201191E0040e8F801df34d"),
@@ -135,6 +138,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             travel: getAddress("0x7FB6A056877c1da14a63bFECdE95ebbFa854f07F"),
             nickcar: getAddress("0x2bf1EEaa4e1D7502AeF7f5beCCf64356eDb4a8c8"),
             killskill: getAddress("0xdC45E5469A8B6D020473F69fEC91C0f0e83a3308"),
+            bustOutSkill: getAddress("0xf404b3336f5D78406326e848c8bc14Cbf2566d0A"),
             jail: getAddress("0xDCD5E9c0b2b4E9Cb93677A258521D854b3A9f5A1"),
             helperbot: getAddress("0x6Ea05BaDD5B6e4226a49Af087eFd2A22c410e6cc"),
             buyCredit: getAddress("0x9D2417e5cB35abaae331b32fb262c75A258a0717"),

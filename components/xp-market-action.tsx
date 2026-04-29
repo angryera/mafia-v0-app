@@ -12,6 +12,7 @@ import {
   XP_MARKET_ABI,
   RANK_ABI,
   KILLSKILL_CONTRACT_ABI,
+  BUSTOUT_SKILL_ABI,
   RACE_XP_ABI,
   RANK_XP,
   RANK_NAMES,
@@ -255,9 +256,9 @@ export function XpMarketAction() {
   });
 
   const { data: bustXpRaw } = useReadContract({
-    address: addresses.rankXp,
-    abi: RANK_ABI,
-    functionName: "getBustOutXp",
+    address: addresses.bustOutSkill,
+    abi: BUSTOUT_SKILL_ABI,
+    functionName: "getSkillXp",
     args: authData && address ? [address, authData.message, authData.signature] : undefined,
     query: { enabled: !!authData && !!address },
   });

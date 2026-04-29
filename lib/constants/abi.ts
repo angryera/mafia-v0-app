@@ -291,6 +291,21 @@ export const KILLSKILL_CONTRACT_ABI: Abi = [
     },
 ] as const;
 
+// ========== BustOutSkill Contract (XP) ==========
+export const BUSTOUT_SKILL_ABI: Abi = [
+    {
+        type: "function",
+        name: "getSkillXp",
+        inputs: [
+            { name: "user", type: "address", internalType: "address" },
+            { name: "message", type: "string", internalType: "string" },
+            { name: "signature", type: "bytes", internalType: "bytes" },
+        ],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+] as const;
+
 
 // ========== Jail Contract ==========
 export const JAIL_CONTRACT_ABI: Abi = [
