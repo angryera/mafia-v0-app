@@ -56,7 +56,7 @@ export function MyProfile() {
   const profile = profileRaw as ProfileData | undefined;
 
   const { data: powerRaw, isLoading: isPowerLoading } = useReadContract({
-    address: addresses.power,
+    address: addresses.equipment,
     abi: POWER_ABI,
     functionName: "getTotalPower",
     args:
@@ -91,7 +91,7 @@ export function MyProfile() {
   // Calculate rank progress percentage
   const rankProgress = (() => {
     if (rankLevel === null || rankXp === null) return null;
-    const currentLevelXp = RANK_XP[rankLevel-1] ?? 0;
+    const currentLevelXp = RANK_XP[rankLevel - 1] ?? 0;
     const nextLevelXp = RANK_XP[rankLevel];
 
     // Max rank — show 100%

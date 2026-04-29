@@ -25,7 +25,6 @@ export type ChainConfig = {
         bullets: `0x${string}`;
         health: `0x${string}`;
         giCredits: `0x${string}`;
-        power: `0x${string}`;
         hospital: `0x${string}`;
         bulletFactory: `0x${string}`;
         shop: `0x${string}`;
@@ -53,7 +52,7 @@ export type ChainConfig = {
         /**
          * Wallet ERC20 bullet (bridge/deposit). Used for on-chain DEX + deposit into in-game `bullets`.
          */
-        walletBullet: `0x${string}`;
+        bulletToken: `0x${string}`;
         ocLobby: `0x${string}`;
         ocJoin: `0x${string}`;
         ocExecution: `0x${string}`;
@@ -90,7 +89,6 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             bullets: getAddress("0xa42AE5D3E84bff9cD2C734A072232D9629f2ED16"),
             health: getAddress("0xC63668378B83f3E58A9AAAe6E12Da3282F150225"),
             giCredits: getAddress("0x21b6833B76A4AD783fe681c04Fc9F3a3a0A5b0B7"),
-            power: getAddress("0xa2AA522B4CCBc95Dec0aFCa2B0c645f9C126cD24"),
             hospital: getAddress("0xB4c9ef457e17992f9271B447de3507016fd0E0d7"),
             bulletFactory: getAddress("0xAbfdA460fFEa2697A4d0b17e955bc17e87b6d45E"),
             shop: getAddress("0xd922255cCeb4f97e2830038E4e7EF54Cb62B6733"),
@@ -113,7 +111,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             ogCrate: getAddress("0x16B11C057cA6d354E81D58B375CB118f7930807c"),
             map: getAddress("0x1c88060e4509c59b4064A7a9818f64AeC41ef19E"),
             mafiaFamily: getAddress("0x1bC581fe134BdC7432eF8ba75BCeEd242F90BcD2"),
-            walletBullet: getAddress("0xe92F5d948d8764904F9703ae878a3A9e6b3952eb"),
+            bulletToken: getAddress("0xe92F5d948d8764904F9703ae878a3A9e6b3952eb"),
             ocLobby: getAddress("0x281C0Db67c96ee7Ad32AF25817cB3964Fc7E79cD"),
             ocJoin: getAddress("0x00D0933595F87eD8b50638796FCf5b22de3795a2"),
             ocExecution: getAddress("0xC813f8EA6668eAb88e157d00F00aeBCb2b5F56C0"),
@@ -148,7 +146,6 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             bullets: getAddress("0x98f0d50b77BCcd657ecfa2E5C1E4915c6f4565B8"),
             health: getAddress("0xA3b9a5E273a9199bbD64fFf81f369FEa0A3a0E1F"),
             giCredits: getAddress("0xEDe999DDF33851F99e450468dE7251CcE96e2A72"),
-            power: getAddress("0x37edFc50908e194f05912EA0BC812Cd2f1Eb5bE4"),
             hospital: getAddress("0x222e69D7e1CA26D4Bbbd80637Dd49a8C07c3c8A1"),
             bulletFactory: getAddress("0x7770699325422632E76513823D84661D36AE8e6A"),
             shop: getAddress("0xd442356eF1c11f1B577c89542882c032E8DB82FE"),
@@ -171,7 +168,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             ogCrate: getAddress("0x3325E42aA71188939216b669E8d431718e5bd790"),
             map: getAddress("0xE571Aa670EDeEBd88887eb5687576199652A714F"),
             mafiaFamily: getAddress("0x3363cf983ae23AF2D95a81bA4A39C36084f8BEc4"),
-            walletBullet: getAddress("0xe193484ef0f7880eb42c3bc34c1929f2e7680D64"),
+            bulletToken: getAddress("0xe193484ef0f7880eb42c3bc34c1929f2e7680D64"),
             ocLobby: getAddress("0xE9680c72817477f9e51596bD39821C670790a66E"),
             ocJoin: getAddress("0xE79495F0982FCC3e884E5bCC2960D6d48439fCB6"),
             ocExecution: getAddress("0x7783e026416cF3B43046f3C2D45eFFa582bA2e91"),

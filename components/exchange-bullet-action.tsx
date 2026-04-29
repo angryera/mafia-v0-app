@@ -70,7 +70,7 @@ export function ExchangeBulletAction() {
   const [pending, setPending] = useState<"deposit" | "withdraw" | "approve" | null>(null);
 
   const { data: walletDecimalsRaw, isLoading: wDecL } = useReadContract({
-    address: addresses.walletBullet,
+    address: addresses.bulletToken,
     abi: BULLET_WALLET_TOKEN_ABI,
     functionName: "decimals",
   });
@@ -87,7 +87,7 @@ export function ExchangeBulletAction() {
   const authOk = isConnected && !!address && !!authData;
 
   const { data: walletBalanceRaw, refetch: refetchWallet, isLoading: wBalL } = useReadContract({
-    address: addresses.walletBullet,
+    address: addresses.bulletToken,
     abi: BULLET_WALLET_TOKEN_ABI,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
@@ -103,7 +103,7 @@ export function ExchangeBulletAction() {
   });
 
   const { data: allowanceRaw, refetch: refetchAllow } = useReadContract({
-    address: addresses.walletBullet,
+    address: addresses.bulletToken,
     abi: BULLET_WALLET_TOKEN_ABI,
     functionName: "allowance",
     args: address && addresses.bullets ? [address, addresses.bullets] : undefined,
@@ -134,10 +134,10 @@ export function ExchangeBulletAction() {
     const u = getBulletTradeUrl({
       chain: activeChain,
       inputToken: addresses.mafia,
-      outputToken: addresses.walletBullet,
+      outputToken: addresses.bulletToken,
     });
     window.open(u, "_blank", "noopener,noreferrer");
-  }, [activeChain, addresses.mafia, addresses.walletBullet]);
+  }, [activeChain, addresses.mafia, addresses.bulletToken]);
 
   const onDeposit = async () => {
     if (!address) {
@@ -163,7 +163,7 @@ export function ExchangeBulletAction() {
       if (allowanceWei < w) {
         setPending("approve");
         const approveHash = await writeContractAsync({
-          address: addresses.walletBullet,
+          address: addresses.bulletToken,
           abi: BULLET_WALLET_TOKEN_ABI,
           functionName: "approve",
           args: [addresses.bullets, maxUint256],
@@ -178,7 +178,7 @@ export function ExchangeBulletAction() {
         setPending("deposit");
       }
       const depHash = await writeContractAsync({
-        address: addresses.walletBullet,
+        address: addresses.bulletToken,
         abi: BULLET_WALLET_TOKEN_ABI,
         functionName: "depositBullet",
         args: [w],

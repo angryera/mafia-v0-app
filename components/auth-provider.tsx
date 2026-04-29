@@ -59,13 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Auto-sign on connect
+  // Auto-sign on connect (and after chain switches)
   useEffect(() => {
     if (isConnected && address && !authData && !isSigning && !signError) {
       requestSignature();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isConnected, address]);
+  }, [isConnected, address, chainConfig.id, authData, isSigning, signError, signMessageAsync]);
 
   // Reset on wallet or chain change
   useEffect(() => {
