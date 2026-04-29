@@ -10,67 +10,66 @@ const CONTRACT_REGISTRY: {
   section: string;
   contracts: { key: string; label: string }[];
 }[] = [
-  {
-    section: "Core Gameplay",
-    contracts: [
-      { key: "crime", label: "Crime" },
-      { key: "travel", label: "Travel" },
-      { key: "nickcar", label: "Nick a Car" },
-      { key: "killskill", label: "Kill Skill" },
-      { key: "jail", label: "Jail" },
-      { key: "helperbot", label: "Helper Bots" },
-      { key: "safehouse", label: "Safehouse" },
-      { key: "rankStake", label: "Rank Activation" },
-    ],
-  },
-  {
-    section: "Businesses",
-    contracts: [
-      { key: "shop", label: "Shop" },
-      { key: "hospital", label: "Hospital" },
-      { key: "bulletFactory", label: "Bullet Factory" },
-      { key: "roulette", label: "Roulette" },
-      { key: "slotMachine", label: "Slot Machine" },
-      { key: "carCrusher", label: "Car Crusher" },
-      { key: "jackpot", label: "Jackpot" },
-      { key: "detectiveAgency", label: "Detective Agency" },
-    ],
-  },
-  {
-    section: "Purchases",
-    contracts: [
-      { key: "buyCredit", label: "Buy Credits" },
-      { key: "buyPerkbox", label: "Buy Perk Boxes" },
-      { key: "buyKeys", label: "Buy Keys" },
-      { key: "inventory", label: "Inventory (Open Crate)" },
-      { key: "perkOpener", label: "Perk Opener (Open Perk Box)" },
-      { key: "playerSubscription", label: "Player Subscription" },
-    ],
-  },
-  {
-    section: "Tokens / Resources",
-    contracts: [
-      { key: "ingameCurrency", label: "In-Game Currency" },
-      { key: "cash", label: "Cash" },
-      { key: "bullets", label: "Bullets" },
-      { key: "health", label: "Health" },
-      { key: "giCredits", label: "GI Credits" },
-      { key: "power", label: "Power" },
-      { key: "rankXp", label: "Rank XP" },
-      { key: "raceXp", label: "Race XP" },
-      { key: "ogCrate", label: "OG Crate (ERC1155 keys)" },
-    ],
-  },
-  {
-    section: "Infrastructure",
-    contracts: [
-      { key: "userProfile", label: "User Profile" },
-      { key: "swapRouter", label: "Swap Router" },
-      { key: "wbnb", label: "Wrapped Native Token" },
-      { key: "chainlinkPriceFeed", label: "Price Feed" },
-    ],
-  },
-];
+    {
+      section: "Core Gameplay",
+      contracts: [
+        { key: "crime", label: "Crime" },
+        { key: "travel", label: "Travel" },
+        { key: "nickcar", label: "Nick a Car" },
+        { key: "killskill", label: "Kill Skill" },
+        { key: "jail", label: "Jail" },
+        { key: "helperbot", label: "Helper Bots" },
+        { key: "safehouse", label: "Safehouse" },
+        { key: "rankStake", label: "Rank Activation" },
+      ],
+    },
+    {
+      section: "Businesses",
+      contracts: [
+        { key: "shop", label: "Shop" },
+        { key: "hospital", label: "Hospital" },
+        { key: "bulletFactory", label: "Bullet Factory" },
+        { key: "roulette", label: "Roulette" },
+        { key: "slotMachine", label: "Slot Machine" },
+        { key: "carCrusher", label: "Car Crusher" },
+        { key: "jackpot", label: "Jackpot" },
+        { key: "detectiveAgency", label: "Detective Agency" },
+      ],
+    },
+    {
+      section: "Purchases",
+      contracts: [
+        { key: "buyCredit", label: "Buy Credits" },
+        { key: "buyPerkbox", label: "Buy Perk Boxes" },
+        { key: "buyKeys", label: "Buy Keys" },
+        { key: "inventory", label: "Inventory (Open Crate)" },
+        { key: "perkOpener", label: "Perk Opener (Open Perk Box)" },
+        { key: "playerSubscription", label: "Player Subscription" },
+      ],
+    },
+    {
+      section: "Tokens / Resources",
+      contracts: [
+        { key: "ingameCurrency", label: "In-Game Currency" },
+        { key: "cash", label: "Cash" },
+        { key: "bullets", label: "Bullets" },
+        { key: "health", label: "Health" },
+        { key: "giCredits", label: "GI Credits" },
+        { key: "power", label: "Power" },
+        { key: "rankXp", label: "Rank XP" },
+        { key: "raceXp", label: "Race XP" },
+        { key: "ogCrate", label: "OG Crate (ERC1155 keys)" },
+      ],
+    },
+    {
+      section: "Infrastructure",
+      contracts: [
+        { key: "userProfile", label: "User Profile" },
+        { key: "swapRouter", label: "Swap Router" },
+        { key: "chainlinkPriceFeed", label: "Price Feed" },
+      ],
+    },
+  ];
 
 function ContractRow({
   label,

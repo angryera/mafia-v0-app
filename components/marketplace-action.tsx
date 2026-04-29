@@ -485,8 +485,7 @@ export function MarketplaceAction() {
         return { name: "Game Cash", decimal: 18, isNative: false };
       }
       const isNative =
-        tokenAddress === "0x0000000000000000000000000000000000000000" ||
-        tokenAddress.toLowerCase() === addresses.wbnb?.toLowerCase();
+        tokenAddress === "0x0000000000000000000000000000000000000000"
       if (isNative) {
         return { name: chainConfig.id === "bnb" ? "BNB" : "PLS", decimal: 18, isNative: true };
       }
@@ -497,7 +496,7 @@ export function MarketplaceAction() {
         ? { name: token.name, decimal: token.decimal, isNative: false }
         : { name: "Token", decimal: 18, isNative: false };
     },
-    [swapTokens, addresses.wbnb, chainConfig.id]
+    [swapTokens, chainConfig.id]
   );
 
   // ── Loading State ─────────────────────────────────────────────

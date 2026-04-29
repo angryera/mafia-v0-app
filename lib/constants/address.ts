@@ -16,8 +16,6 @@ export type ChainConfig = {
         killskill: `0x${string}`;
         jail: `0x${string}`;
         helperbot: `0x${string}`;
-        wbnb: `0x${string}`;
-        chainlinkPriceFeed: `0x${string}`;
         buyCredit: `0x${string}`;
         buyPerkbox: `0x${string}`;
         buyKeys: `0x${string}`;
@@ -82,8 +80,6 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             killskill: getAddress("0xa5dc2Cb4dC13f12d8464eaA862fAC00F19ADc84d"),
             jail: getAddress("0x7371580cd13dE739C734AE85062F75194d13Fac2"),
             helperbot: getAddress("0xE2E4506c23C26eea2526d0e4dBb8dbF9cDa9d105"),
-            wbnb: getAddress("0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"),
-            chainlinkPriceFeed: getAddress("0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE"),
             buyCredit: getAddress("0x192F029CC7e0BB80dB201191E0040e8F801df34d"),
             buyPerkbox: getAddress("0x55849c0F5A567A49d219B00642A4648389ada6f6"),
             buyKeys: getAddress("0x1F4Eb51E87C4e2368316dba8e478Cd561FEb8B77"),
@@ -141,8 +137,6 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             killskill: getAddress("0xdC45E5469A8B6D020473F69fEC91C0f0e83a3308"),
             jail: getAddress("0xDCD5E9c0b2b4E9Cb93677A258521D854b3A9f5A1"),
             helperbot: getAddress("0x6Ea05BaDD5B6e4226a49Af087eFd2A22c410e6cc"),
-            wbnb: getAddress("0x0000000000000000000000000000000000000000"),
-            chainlinkPriceFeed: getAddress("0x0000000000000000000000000000000000000000"),
             buyCredit: getAddress("0x9D2417e5cB35abaae331b32fb262c75A258a0717"),
             buyPerkbox: getAddress("0xF3B4F7d0ec795B555e12BC70150dDb1081FdA403"),
             buyKeys: getAddress("0x7FE7220E6A8AAB508c60be9d48fEfacDbe6BC179"),
