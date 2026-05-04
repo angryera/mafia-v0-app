@@ -22,8 +22,8 @@ type ChainContextType = {
 };
 
 const ChainContext = createContext<ChainContextType>({
-  activeChain: "pulse",
-  chainConfig: CHAIN_CONFIGS.pulse,
+  activeChain: "bnb",
+  chainConfig: CHAIN_CONFIGS.bnb,
   setActiveChain: () => { },
   isSwitching: false,
 });

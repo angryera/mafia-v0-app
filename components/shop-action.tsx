@@ -13,13 +13,11 @@ import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import {
   SHOP_CONTRACT_ABI,
   SHOP_ITEMS,
-  SHOP_CATEGORIES,
   USER_PROFILE_CONTRACT_ABI,
   TRAVEL_DESTINATIONS,
   INGAME_CURRENCY_ABI,
   INGAME_CURRENCY_APPROVE_AMOUNT,
 } from "@/lib/contract";
-import type { ShopItemMeta } from "@/lib/contract";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -51,6 +49,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { SHOP_CATEGORIES } from "@/lib/constants/const";
 
 interface ProfileData {
   profileId: bigint;
