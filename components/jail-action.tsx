@@ -304,7 +304,7 @@ export function JailAction() {
 
   // ---------- Buy Out ----------
   const {
-    writeContract: writeBuyOut,
+    writeContractAsync: writeBuyOut,
     data: buyOutHash,
     isPending: buyOutPending,
     error: buyOutError,
@@ -314,14 +314,18 @@ export function JailAction() {
   const { isLoading: buyOutConfirming, isSuccess: buyOutSuccess } =
     useWaitForTransactionReceipt({ hash: buyOutHash });
 
-  const handleBuyOut = (playerAddress: string) => {
+  const handleBuyOut = async (playerAddress: string) => {
     resetBuyOut();
-    writeBuyOut({
-      address: addresses.jail,
-      abi: JAIL_CONTRACT_ABI,
-      functionName: "buyOut",
-      args: [playerAddress as `0x${string}`],
-    });
+    try {
+      await writeBuyOut({
+        address: addresses.jail,
+        abi: JAIL_CONTRACT_ABI,
+        functionName: "buyOut",
+        args: [playerAddress as `0x${string}`],
+      });
+    } catch (e) {
+      console.error("buyOut error:", e);
+    }
   };
 
   const buyOutLoading = buyOutPending || buyOutConfirming;
@@ -338,7 +342,7 @@ export function JailAction() {
 
   // ---------- Bust Out ----------
   const {
-    writeContract: writeBustOut,
+    writeContractAsync: writeBustOut,
     data: bustOutHash,
     isPending: bustOutPending,
     error: bustOutError,
@@ -348,14 +352,18 @@ export function JailAction() {
   const { isLoading: bustOutConfirming, isSuccess: bustOutSuccess } =
     useWaitForTransactionReceipt({ hash: bustOutHash });
 
-  const handleBustOut = (playerAddress: string) => {
+  const handleBustOut = async (playerAddress: string) => {
     resetBustOut();
-    writeBustOut({
-      address: addresses.jail,
-      abi: JAIL_CONTRACT_ABI,
-      functionName: "bustOut",
-      args: [playerAddress as `0x${string}`],
-    });
+    try {
+      await writeBustOut({
+        address: addresses.jail,
+        abi: JAIL_CONTRACT_ABI,
+        functionName: "bustOut",
+        args: [playerAddress as `0x${string}`],
+      });
+    } catch (e) {
+      console.error("bustOut error:", e);
+    }
   };
 
   const bustOutLoading = bustOutPending || bustOutConfirming;

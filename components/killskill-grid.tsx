@@ -24,7 +24,7 @@ export function KillSkillGrid() {
           </p>
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="flex flex-col gap-4">
         {TRAIN_TYPES.map((t) => (
           <KillSkillCard key={t.id} trainType={t} />
         ))}

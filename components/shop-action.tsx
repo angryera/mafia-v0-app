@@ -408,7 +408,7 @@ export function ShopAction() {
 
   // ---------- Restock items ----------
   const {
-    writeContract: writeRestock,
+    writeContractAsync: writeRestock,
     data: restockHash,
     isPending: restockPending,
     error: restockError,
@@ -490,16 +490,19 @@ export function ShopAction() {
     }
   };
 
-  const handleRestock = () => {
+  const handleRestock = async () => {
     if (cityId === undefined) return;
     resetRestock();
-    writeRestock({
+    try {
+      await writeRestock({
       address: addresses.shop,
       abi: SHOP_CONTRACT_ABI,
       functionName: "restockItems",
       args: [cityId],
-      gas: BigInt(500_000),
-    });
+      });
+    } catch (e) {
+      console.error("Restock error:", e);
+    }
   };
 
   const restockLoading = restockPending || restockConfirming;
@@ -508,7 +511,7 @@ export function ShopAction() {
   const [checkoutSigning, setCheckoutSigning] = useState(false);
 
   const {
-    writeContract: writeBuy,
+    writeContractAsync: writeBuy,
     data: buyHash,
     isPending: buyPending,
     error: buyError,
@@ -532,12 +535,11 @@ export function ShopAction() {
       const typeIds = cartEntries.map((e) => BigInt(e.typeId));
       const amounts = cartEntries.map((e) => BigInt(e.amount));
 
-      writeBuy({
+      await writeBuy({
         address: addresses.shop,
         abi: SHOP_CONTRACT_ABI,
         functionName: "buyItems",
         args: [typeIds, amounts, authMessage, signature],
-        gas: BigInt(1_000_000),
       });
     } catch {
       setCheckoutSigning(false);

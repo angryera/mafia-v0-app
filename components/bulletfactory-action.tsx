@@ -165,7 +165,7 @@ export function BulletFactoryAction() {
   const [bulletSigning, setBulletSigning] = useState(false);
 
   const {
-    writeContract: writeBullets,
+    writeContractAsync: writeBullets,
     data: bulletHash,
     isPending: bulletPending,
     error: bulletError,
@@ -193,7 +193,7 @@ export function BulletFactoryAction() {
 
       const parsedAmount = parseUnits(bulletAmount, 0);
 
-      writeBullets({
+      await writeBullets({
         address: addresses.bulletFactory,
         abi: BULLET_FACTORY_ABI,
         functionName: "buyBullets",

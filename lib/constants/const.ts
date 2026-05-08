@@ -144,11 +144,36 @@ export const NICKCAR_TYPES: { id: number; label: string; description: string }[]
 
 
 // Kill skill training types for the trainType parameter
-export const TRAIN_TYPES: { id: number; label: string; description: string }[] = [
-    { id: 0, label: "Strength", description: "Build raw power for close-range encounters" },
-    { id: 1, label: "Stealth", description: "Master the art of moving unseen" },
-    { id: 2, label: "Accuracy", description: "Perfect your precision for ranged takedowns" },
-];
+// Note: we intentionally do not include images in the app UI.
+export const TRAIN_TYPES: {
+    id: number;
+    label: string;
+    description: string;
+    percentage: number;
+    cost: number;
+}[] = [
+        {
+            id: 0,
+            label: "Practise on bottles in your backyard",
+            description: "Low intensity training (4% success).",
+            percentage: 4,
+            cost: 0,
+        },
+        {
+            id: 1,
+            label: "Take a day at the shooting range",
+            description: "Medium intensity training (8% success).",
+            percentage: 8,
+            cost: 5000,
+        },
+        {
+            id: 2,
+            label: "Hire a personal trainer",
+            description: "High intensity training (18% success).",
+            percentage: 18,
+            cost: 30000,
+        },
+    ];
 
 export type HelperBotEndType = "none" | "signed" | "bulletSigned";
 

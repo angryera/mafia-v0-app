@@ -165,7 +165,7 @@ export function HospitalAction() {
   const [healthSigning, setHealthSigning] = useState(false);
 
   const {
-    writeContract: writeHealth,
+    writeContractAsync: writeHealth,
     data: healthHash,
     isPending: healthPending,
     error: healthError,
@@ -193,7 +193,7 @@ export function HospitalAction() {
 
       const parsedAmount = parseUnits(healthAmount, 0);
 
-      writeHealth({
+      await writeHealth({
         address: addresses.hospital,
         abi: HOSPITAL_CONTRACT_ABI,
         functionName: "buyHealth",

@@ -44,7 +44,7 @@ export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disab
 
   const successRate = successRateData !== undefined ? Math.min(Number(successRateData) / 100, 100) : null;
 
-  const { writeContract, data: hash, isPending, error, reset } = useChainWriteContract();
+  const { writeContractAsync: writeContract, data: hash, isPending, error, reset } = useChainWriteContract();
 
   const { data: receipt, isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
@@ -99,14 +99,18 @@ export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disab
     }
   }, [crimeResult, hash]);
 
-  const handleExecute = () => {
+  const handleExecute = async () => {
     reset();
-    writeContract({
-      address: addresses.crime,
-      abi: CONTRACT_ABI,
-      functionName: "makeCrime",
-      args: [crime.id],
-    });
+    try {
+      await writeContract({
+        address: addresses.crime,
+        abi: CONTRACT_ABI,
+        functionName: "makeCrime",
+        args: [crime.id],
+      });
+    } catch (e) {
+      console.error("makeCrime error:", e);
+    }
   };
 
   const isLoading = isPending || isConfirming;

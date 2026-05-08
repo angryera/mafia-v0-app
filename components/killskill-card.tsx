@@ -24,12 +24,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const TYPE_ICONS: Record<number, string> = {
-  0: "\u{1F4AA}",
-  1: "\u{1F977}",
-  2: "\u{1F3AF}",
-};
-
 const APPROVE_AMOUNT = parseEther("100000000");
 
 type TrainType = (typeof TRAIN_TYPES)[number];
@@ -59,7 +53,7 @@ export function KillSkillCard({ trainType }: { trainType: TrainType }) {
 
   // Train transaction
   const {
-    writeContract,
+    writeContractAsync: writeContract,
     data: hash,
     isPending,
     error,
@@ -108,7 +102,6 @@ export function KillSkillCard({ trainType }: { trainType: TrainType }) {
       abi: KILLSKILL_CONTRACT_ABI,
       functionName: "trainSkill",
       args: [trainType.id],
-      gas: BigInt(500_000),
     });
   };
 
@@ -136,9 +129,6 @@ export function KillSkillCard({ trainType }: { trainType: TrainType }) {
             {trainType.description}
           </p>
         </div>
-        <span className="text-2xl" role="img" aria-label={trainType.label}>
-          {TYPE_ICONS[trainType.id]}
-        </span>
       </div>
 
       {/* Info */}

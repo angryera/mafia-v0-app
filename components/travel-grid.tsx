@@ -252,7 +252,7 @@ export function TravelGrid() {
 
   // Travel transaction
   const {
-    writeContract: writeTravel,
+    writeContractAsync: writeTravel,
     data: travelHash,
     isPending: isTravelPending,
     error: travelError,
@@ -281,7 +281,7 @@ export function TravelGrid() {
     });
   };
 
-  const handleTravel = () => {
+  const handleTravel = async () => {
     if (selectedDestination === null) return;
 
     const travelType = TRAVEL_TYPES[selectedTravelType];
@@ -307,12 +307,16 @@ export function TravelGrid() {
     }
 
     resetTravel();
-    writeTravel({
+    try {
+      await writeTravel({
       address: addresses.travel,
       abi: TRAVEL_CONTRACT_ABI,
       functionName: "travel",
       args: [BigInt(selectedDestination), BigInt(selectedTravelType), BigInt(itemId)],
-    });
+      });
+    } catch (e) {
+      console.error("Travel error:", e);
+    }
   };
 
   const isApproveLoading = isApprovePending || isApproveConfirming;

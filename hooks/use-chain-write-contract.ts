@@ -7,7 +7,26 @@ import type { Abi, EncodeFunctionDataParameters } from "viem";
 import { encodeFunctionData } from "viem";
 
 // Function names that require 5x gas multiplier
-const HIGH_GAS_FUNCTIONS = ["buyBooze", "sellBooze", "buyNarcs", "sellNarcs"];
+const HIGH_GAS_FUNCTIONS = [
+  "buyBooze",
+  "sellBooze",
+  "buyNarcs",
+  "sellNarcs",
+  // Shop
+  "updateCityCostPrice",
+  "restockItems",
+  "buyItem",
+  "buyItems",
+  // Travel / Skills
+  "travel",
+  "trainSkill",
+  "buyOut",
+  "bustOut",
+  "buyHealth",
+  "nickCar",
+  "buyBullets",
+  "makeCrime",
+];
 
 /**
  * Wrapper around wagmi's useWriteContract that automatically injects

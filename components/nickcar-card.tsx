@@ -67,7 +67,7 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
 
   const successRate = successRateData !== undefined ? Math.min(Number(successRateData) / 100, 100) : null;
   const {
-    writeContract,
+    writeContractAsync: writeContract,
     data: hash,
     isPending,
     error,
@@ -145,7 +145,7 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
       const authMessage = `"Sign this message with ${address} - expire at ${utcTimestamp}"`;
       const signature = await signMessageAsync({ message: authMessage });
       setSigning(false);
-      writeContract({
+      await writeContract({
         address: addresses.nickcar,
         abi: NICKCAR_CONTRACT_ABI,
         functionName: "nickCar",
