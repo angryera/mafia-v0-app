@@ -51,6 +51,7 @@ import {
   Package,
   Crown,
   Trophy,
+  Ticket,
   Coins,
   User,
   DollarSign,
@@ -115,6 +116,7 @@ export type Tab =
   | "biz-roulette"
   | "biz-slotmachine"
   | "biz-jackpot"
+  | "biz-lottery-hall"
   | "biz-safehouse"
   | "biz-booze"
   | "biz-narcs"
@@ -162,7 +164,7 @@ export function getTabFromPath(pathname: string): Tab {
     "buy-helper-credits", "buy-keys", "buy-perk-boxes", "buy-premium", "buy-gi-credits",
     "my-profile", "worth", "cash", "biz-shop", "biz-hospital", "biz-bulletfactory",
     "biz-detective-agency", "biz-car-crusher", "biz-bank", "biz-roulette",
-    "biz-slotmachine", "biz-jackpot", "biz-safehouse", "biz-booze", "biz-narcs",
+    "biz-slotmachine", "biz-jackpot", "biz-lottery-hall", "biz-safehouse", "biz-booze", "biz-narcs",
     "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
     "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-bullet", "exchange-liquidity", "exchange-otc", "referral",
     "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao"
@@ -193,6 +195,7 @@ const CITY_SECTION: NavItem[] = [
   { id: "biz-roulette", label: "Roulette", icon: <Dices className="h-4 w-4" /> },
   { id: "biz-slotmachine", label: "Slot Machine", icon: <Cherry className="h-4 w-4" /> },
   { id: "biz-jackpot", label: "Jackpot", icon: <Trophy className="h-4 w-4" /> },
+  { id: "biz-lottery-hall", label: "Lottery Hall", icon: <Ticket className="h-4 w-4" /> },
   { id: "biz-detective-agency", label: "Detective Agency", icon: <Search className="h-4 w-4" /> },
   { id: "biz-bank", label: "Bank", icon: <Landmark className="h-4 w-4" /> },
   { id: "biz-bulletfactory", label: "Bullet Factory", icon: <Factory className="h-4 w-4" /> },
@@ -427,7 +430,7 @@ function XpBars() {
   };
 
   const killPercent = toPercent(killXpRaw);
-  console.log(raceXpRaw);
+
   const racePercent = raceXpRaw !== undefined
     ? Math.min(100, Math.max(0, (Number(raceXpRaw) / 500000) * 100))
     : null;

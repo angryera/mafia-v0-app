@@ -38,6 +38,8 @@ export type ChainConfig = {
         raceXp: `0x${string}`;
         carCrusher: `0x${string}`;
         jackpot: `0x${string}`;
+        /** MafiaLotteryHall — replace zero address after deployment per chain. */
+        lotteryHall: `0x${string}`;
         safehouse: `0x${string}`;
         detectiveAgency: `0x${string}`;
         rankStake: `0x${string}`;
@@ -102,6 +104,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             raceXp: getAddress("0x05BE7743913dECe53D93E22120279f0630014743"),
             carCrusher: getAddress("0xC17B536db3431040f1F2A8980B2Eb80B814dD022"),
             jackpot: getAddress("0x2FAcF1371d3e67B98A27490321655ac059f675B2"),
+            lotteryHall: getAddress("0x9BD51e3Ff9FED76db11F718e9E3DcfcB7597e374"),
             safehouse: getAddress("0x6c7e8317698986c0B92FdDB7CA3086234B5e5F60"),
             detectiveAgency: getAddress("0x0cCA060E6c22A67eF17E657342548A467D96B3CD"),
             rankStake: getAddress("0xDFfCf5D284D2bA80376BAba90F37494D60fe8820"),
@@ -159,6 +162,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             raceXp: getAddress("0x6B454a53581E3b1e93553485210A2172e4897FD0"),
             carCrusher: getAddress("0x5D9D43f6890868C88315411fd7B012b4194C96Ab"),
             jackpot: getAddress("0xeD548643332E019C97e3150736807839bf174dF9"),
+            lotteryHall: getAddress("0x9BD51e3Ff9FED76db11F718e9E3DcfcB7597e374"),
             safehouse: getAddress("0x67336ec867c5631c08F1A536FAdF9DC489EeFf71"),
             detectiveAgency: getAddress("0xB31B9f5a9f99871B30956B96CcDEC275C48D84F1"),
             rankStake: getAddress("0xcecf804016bd0cfDEE8F506EA273c6E5D74f6699"),

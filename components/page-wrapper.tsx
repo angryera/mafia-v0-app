@@ -239,6 +239,14 @@ const TAB_CONFIG: Record<
     contractAddress: "0x2FAcF1371d3e67B98A27490321655ac059f675B2",
     contractShort: "0x2FAc...75B2",
   },
+  "biz-lottery-hall": {
+    title: "Lottery Hall",
+    description:
+      "Timed lottery rounds on-chain: enter with in-game cash, timer starts after three unique players, then anyone can call draw when time is up. The lottery item owner may owner-withdraw the entry pot per contract rules.",
+    codeSample: "enter(uint256) / drawWinner() / ownerWithdraw()",
+    contractAddress: "",
+    contractShort: "",
+  },
   "biz-safehouse": {
     title: "Safehouse",
     description:
