@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   useWaitForTransactionReceipt,
   useAccount,
@@ -28,11 +28,18 @@ const APPROVE_AMOUNT = parseEther("100000000");
 
 type TrainType = (typeof TRAIN_TYPES)[number];
 
-export function KillSkillCard({ trainType }: { trainType: TrainType }) {
+export function KillSkillCard({
+  trainType,
+  cooldown,
+}: {
+  trainType: TrainType;
+  cooldown?: { seconds: number; label: string } | null;
+}) {
   const { isConnected } = useAccount();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
   const [approved, setApproved] = useState(false);
+  const onCooldown = (cooldown?.seconds ?? 0) > 0;
 
   // Approve transaction
   const {
@@ -271,10 +278,10 @@ export function KillSkillCard({ trainType }: { trainType: TrainType }) {
         </button>
         <button
           onClick={handleExecute}
-          disabled={!isConnected || isLoading || !approved}
+          disabled={!isConnected || isLoading || !approved || onCooldown}
           className={cn(
             "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-200",
-            isConnected && approved
+            isConnected && approved && !onCooldown
               ? "bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
               : "bg-secondary text-muted-foreground cursor-not-allowed"
           )}
