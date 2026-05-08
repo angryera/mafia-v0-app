@@ -162,7 +162,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             raceXp: getAddress("0x6B454a53581E3b1e93553485210A2172e4897FD0"),
             carCrusher: getAddress("0x5D9D43f6890868C88315411fd7B012b4194C96Ab"),
             jackpot: getAddress("0xeD548643332E019C97e3150736807839bf174dF9"),
-            lotteryHall: getAddress("0x9BD51e3Ff9FED76db11F718e9E3DcfcB7597e374"),
+            lotteryHall: getAddress("0xfFBff4aFc8e0Ed6a3b609c714C72e767F7ed5CC4"),
             safehouse: getAddress("0x67336ec867c5631c08F1A536FAdF9DC489EeFf71"),
             detectiveAgency: getAddress("0xB31B9f5a9f99871B30956B96CcDEC275C48D84F1"),
             rankStake: getAddress("0xcecf804016bd0cfDEE8F506EA273c6E5D74f6699"),

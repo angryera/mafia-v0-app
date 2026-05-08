@@ -45,6 +45,7 @@ import {
   ExternalLink,
   Loader2,
   RefreshCw,
+  UserRound,
   Ticket,
   Timer,
   Trophy,
@@ -107,6 +108,110 @@ function addressHue(addr: string): string {
   const h =
     parseInt(addr.slice(2, 10), 16) % 360;
   return `hsl(${h} 65% 42%)`;
+}
+
+type LotteryHallProfileBoardProps = {
+  ownerAddress: `0x${string}`;
+  ownerDisplayName: string | null;
+  namesLoading: boolean;
+  viewerAddress: `0x${string}` | undefined;
+  explorer: string;
+  ownerTotalProfitWei: bigint | undefined;
+};
+
+function LotteryHallProfileBoard({
+  ownerAddress,
+  ownerDisplayName,
+  namesLoading,
+  viewerAddress,
+  explorer,
+  ownerTotalProfitWei,
+}: LotteryHallProfileBoardProps) {
+  const isMissing = ownerAddress === zeroAddress;
+
+  const profitLabel =
+    ownerTotalProfitWei !== undefined
+      ? Number(formatUnits(ownerTotalProfitWei, 18)).toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+      })
+      : null;
+
+  return (
+    <div className="mb-5 rounded-xl border border-border bg-card p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <UserRound className="h-4 w-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold text-foreground">Lottery owner</h3>
+      </div>
+
+      {isMissing ? (
+        <p className="text-xs text-muted-foreground">
+          No lottery owner resolved (inventory item may be unset on-chain).
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className="inline-block h-10 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: addressHue(ownerAddress) }}
+              aria-hidden
+            />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                {ownerDisplayName ? (
+                  <Link
+                    href={
+                      viewerAddress &&
+                        ownerAddress.toLowerCase() === viewerAddress.toLowerCase()
+                        ? "/my-profile"
+                        : "/players"
+                    }
+                    className="truncate font-medium text-primary hover:underline"
+                  >
+                    {ownerDisplayName}
+                  </Link>
+                ) : namesLoading ? (
+                  <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading name…
+                  </span>
+                ) : (
+                  <a
+                    href={`${explorer}/address/${ownerAddress}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-mono text-sm text-muted-foreground hover:text-primary"
+                  >
+                    {`${ownerAddress.slice(0, 6)}…${ownerAddress.slice(-4)}`}
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  </a>
+                )}
+              </div>
+              {ownerDisplayName && (
+                <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
+                  {ownerAddress}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              "rounded-lg border px-3 py-2 sm:text-right",
+              "border-primary/20 bg-primary/5",
+            )}
+          >
+            <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Owner total profit
+            </p>
+            <p className="font-mono text-base font-semibold tabular-nums text-foreground">
+              {profitLabel !== null ? profitLabel : "—"}{" "}
+              <span className="text-xs font-normal text-muted-foreground">cash</span>
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Wagmi may decode multi-return as `{ list, amounts }` or tuple `[list, amounts]`. */
@@ -255,7 +360,18 @@ export function LotteryHallAction() {
     query: { enabled: configured, refetchInterval: REFETCH_MS },
   });
 
+  console.log(configured, lotteryOwnerRaw);
+
+  const { data: ownerTotalProfitRaw, refetch: refetchOwnerTotalProfit } = useReadContract({
+    address: lotteryHall,
+    abi: LOTTERY_HALL_ABI,
+    functionName: "ownerTotalProfit",
+    query: { enabled: configured, refetchInterval: REFETCH_MS },
+  });
+
   const lotteryOwner = (lotteryOwnerRaw ?? zeroAddress) as `0x${string}`;
+  const ownerTotalProfitWei =
+    ownerTotalProfitRaw != null ? BigInt(ownerTotalProfitRaw as bigint) : undefined;
   const isLotteryOwner =
     !!address &&
     lotteryOwner !== zeroAddress &&
@@ -297,8 +413,9 @@ export function LotteryHallAction() {
     const addrs = new Set<string>();
     participants.forEach((p) => addrs.add(p.addr.toLowerCase()));
     finishInfos.forEach((f) => addrs.add(f.winner.toLowerCase()));
+    if (lotteryOwner !== zeroAddress) addrs.add(lotteryOwner.toLowerCase());
     return [...addrs].sort().join(",");
-  }, [participants, finishInfos]);
+  }, [participants, finishInfos, lotteryOwner]);
 
   useEffect(() => {
     if (!profileLookupKey) {
@@ -424,6 +541,7 @@ export function LotteryHallAction() {
       refetchPartCount(),
       refetchParticipants(),
       refetchLotteryOwner(),
+      refetchOwnerTotalProfit(),
       refetchAllowance(),
     ]);
   }, [
@@ -433,6 +551,7 @@ export function LotteryHallAction() {
     refetchPartCount,
     refetchParticipants,
     refetchLotteryOwner,
+    refetchOwnerTotalProfit,
     refetchAllowance,
   ]);
 
@@ -668,6 +787,19 @@ export function LotteryHallAction() {
         </button>
       </div>
 
+      <LotteryHallProfileBoard
+        ownerAddress={lotteryOwner}
+        ownerDisplayName={
+          lotteryOwner !== zeroAddress
+            ? nameByAddr[lotteryOwner.toLowerCase()] ?? null
+            : null
+        }
+        namesLoading={profileNamesLoading}
+        viewerAddress={address}
+        explorer={explorer}
+        ownerTotalProfitWei={ownerTotalProfitWei}
+      />
+
       {round && currentRoundId > BigInt(0) && (
         <div className="mb-5 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-transparent p-5">
           <div className="mb-4 flex items-center justify-between">
@@ -694,7 +826,9 @@ export function LotteryHallAction() {
               {round.ended
                 ? "Ended"
                 : waitingForTimer
-                  ? `Waiting (${participantCount.toString()}/3)`
+                  ? participantCount === BigInt(0)
+                    ? "Waiting for first entry"
+                    : "Starting…"
                   : timerRunning
                     ? "Live"
                     : canDraw
@@ -741,7 +875,7 @@ export function LotteryHallAction() {
               />
               {waitingForTimer ? (
                 <p className="font-mono text-xs font-semibold text-yellow-400">
-                  Timer starts at 3 players
+                  {participantCount === BigInt(0) ? "—" : "Starting"}
                 </p>
               ) : timerRunning ? (
                 <p className="font-mono text-sm font-semibold text-green-400 tabular-nums">
@@ -750,7 +884,9 @@ export function LotteryHallAction() {
               ) : (
                 <p className="font-mono text-sm font-semibold text-muted-foreground">—</p>
               )}
-              <p className="text-[10px] text-muted-foreground">{countdownLabel}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {waitingForTimer ? "Starts after first entry" : countdownLabel}
+              </p>
             </div>
             <div className="rounded-lg border border-border bg-card px-3 py-2 text-center">
               <Trophy className="mx-auto mb-0.5 h-3.5 w-3.5 text-muted-foreground" />

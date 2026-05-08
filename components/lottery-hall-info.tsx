@@ -27,7 +27,7 @@ export function LotteryHallInfo() {
           <p className="break-all font-mono text-sm text-primary">enter(uint256 amount)</p>
           <p className="mt-1 text-[10px] text-muted-foreground leading-relaxed">
             Burns approved in-game cash via the game bank, credits your weighted tickets, and may
-            start the round timer after the third unique participant.
+            start the round timer after the first participant enters.
           </p>
         </div>
 
@@ -55,7 +55,7 @@ export function LotteryHallInfo() {
           <p className="font-mono text-[10px] text-primary leading-relaxed">
             rounds(uint256) · getCurrentPrize() · getParticipantsCount(uint256) ·
             getParticipants(uint256,uint256,uint256) · lotteryOwner() · ownerFeePercent() ·
-            getRoundFinishInfos(uint256,uint256)
+            ownerTotalProfit() · getRoundFinishInfos(uint256,uint256)
           </p>
         </div>
 
