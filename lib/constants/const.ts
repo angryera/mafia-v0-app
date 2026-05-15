@@ -6,6 +6,11 @@ export const INGAME_CURRENCY_APPROVE_AMOUNT = BigInt("10000000000000000000000000
 
 export const HELPER_BOT_BULLET_PRICE = 200;
 
+/** OG Crate keys (id 0) required to `purchaseFamilyHQ` / create family on map. */
+export const FAMILY_HQ_CREATION_OG_CRATE_KEYS = BigInt(10);
+
+export const OG_CRATE_KEY_TOKEN_ID = BigInt(0);
+
 // ========== Safehouse Contract ==========
 export const SAFEHOUSE_COST_PER_HOUR = 100_000;
 export const SAFEHOUSE_MIN_HOURS = 1;

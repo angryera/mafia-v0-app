@@ -1,53 +1,48 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  useAccount,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
-import { ExternalLink, Loader2, X } from "lucide-react";
-import { parseEther, maxUint256 } from "viem";
-import { toast } from "sonner";
 import {
   useChain,
   useChainAddresses,
   useChainExplorer,
 } from "@/components/chain-provider";
-import { ERC20_ABI, INGAME_CURRENCY_ABI } from "@/lib/contract";
-import {
-  FAMILY_HQ_CREATION_OG_CRATE_KEYS,
-  MAFIA_FAMILY_ABI,
-  MAFIA_MAP_ABI,
-  OG_CRATE_ABI,
-  OG_CRATE_KEY_TOKEN_ID,
-} from "@/lib/city-map-contract-abis";
+import { Input } from "@/components/ui/input";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
-import { slotHasOwner, type ParsedSlotInfo } from "@/lib/city-map-types";
 import {
   formatMafiaStakingFromWei,
   isMafiaStakingPositive,
 } from "@/lib/city-map-staking-format";
+import { slotHasOwner, type ParsedSlotInfo } from "@/lib/city-map-types";
 import {
   estimateGameCashYieldWeiLive,
   formatWeiWholeUnits,
   parseYieldPayoutRead,
 } from "@/lib/city-map-yield-accrual";
 import {
-  YIELD_TIER_MAX_ACCRUAL_DAYS,
-  YIELD_TIER_MIN_CLAIM_HOURS,
   canDepositActivateResidential,
   getActivateDepositMafiaHuman,
   getResidentialGameCashYieldPer24h,
   getResidentialUpgradeCost,
-  isResidentialGameCashYieldTier,
   getSlotBuildingLabel,
   isResidentialEmptyTile,
   isResidentialFullyUpgraded,
+  isResidentialGameCashYieldTier,
   RESIDENTIAL_LEVEL_NAMES,
+  YIELD_TIER_MAX_ACCRUAL_DAYS,
+  YIELD_TIER_MIN_CLAIM_HOURS,
 } from "@/lib/city-slot-config";
+import { MAFIA_FAMILY_ABI, MAFIA_MAP_ABI, OG_CRATE_ABI } from "@/lib/constants/abi";
+import { FAMILY_HQ_CREATION_OG_CRATE_KEYS, OG_CRATE_KEY_TOKEN_ID } from "@/lib/constants/const";
+import { ERC20_ABI, INGAME_CURRENCY_ABI } from "@/lib/contract";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
+import { ExternalLink, Loader2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { maxUint256, parseEther } from "viem";
+import {
+  useAccount,
+  useReadContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
 
 const MAX_FAMILY_NAME_LEN = 40;
 const MAX_FAMILY_NAME_SPACES = 2;

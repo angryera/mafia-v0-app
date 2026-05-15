@@ -9,7 +9,7 @@ import {
 import { toast } from "sonner";
 import { useChain, useChainAddresses } from "@/components/chain-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
-import { MAFIA_MAP_ABI, OG_CRATE_ABI } from "@/lib/city-map-contract-abis";
+import { MAFIA_MAP_ABI, OG_CRATE_ABI } from "@/lib/constants/abi";
 
 /** ~2 blocks on BSC-style chains; tune if needed. */
 const LAND_CLAIM_POLL_MS = 6000;

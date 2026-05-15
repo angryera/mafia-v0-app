@@ -13,7 +13,6 @@ import {
   getSlotTypeName,
   isResidentialGameCashYieldTier,
 } from "@/lib/city-slot-config";
-import { MAFIA_MAP_ABI } from "@/lib/city-map-contract-abis";
 import {
   estimateGameCashYieldWeiLive,
   formatWeiWholeUnits,
@@ -21,6 +20,7 @@ import {
 import { formatMafiaStakingFromWei } from "@/lib/city-map-staking-format";
 import { useChainAddresses } from "@/components/chain-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { MAFIA_MAP_ABI } from "@/lib/constants/abi";
 
 /** Same minimum claimable units as legacy client (human Game Cash, 18-decimal token). */
 const BULK_CLAIM_MIN_GAME_CASH = parseEther("100");
