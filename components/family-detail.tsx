@@ -1,19 +1,19 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import Link from "next/link";
-import { toast } from "sonner";
-import {
-  useAccount,
-  usePublicClient,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
-import { formatUnits, parseEther, zeroAddress } from "viem";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth-provider";
+import { useChain, useChainAddresses } from "@/components/chain-provider";
+import type { Family } from "@/components/family-table";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,14 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -40,41 +33,50 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Users,
-  Crown,
-  Shield,
-  User,
-  Skull,
-  Lock,
-  Copy,
-  Check,
-  ArrowLeft,
-  RefreshCw,
-  ExternalLink,
-  Loader2,
-  Landmark,
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  ScrollText,
-  ChevronLeft,
-  ChevronRight,
-  Gift,
-  UserCog,
-} from "lucide-react";
-import { useChain, useChainAddresses } from "@/components/chain-provider";
-import { useAuth } from "@/components/auth-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { MAFIA_FAMILY_ABI } from "@/lib/constants/abi";
+import { RANK_NAMES } from "@/lib/constants/const";
 import {
   FAMILY_GAME_CASH_BANK,
   INGAME_CURRENCY_ABI,
   INGAME_CURRENCY_APPROVE_AMOUNT,
 } from "@/lib/contract";
-import { RANK_NAMES } from "@/lib/constants/const";
 import { cn } from "@/lib/utils";
-import type { Family } from "@/components/family-table";
 import "@/types/mafia-globals";
-import { MAFIA_FAMILY_ABI } from "@/lib/constants/abi";
+import {
+  ArrowDownToLine,
+  ArrowLeft,
+  ArrowLeftRight,
+  ArrowUpFromLine,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Coins,
+  Copy,
+  Crown,
+  Gift,
+  Landmark,
+  Loader2,
+  Lock,
+  RefreshCw,
+  ScrollText,
+  Send,
+  Shield,
+  Skull,
+  User,
+  UserCog,
+  Users
+} from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { formatUnits, isAddress, parseEther, zeroAddress } from "viem";
+import {
+  useAccount,
+  usePublicClient,
+  useReadContract,
+  useWaitForTransactionReceipt,
+} from "wagmi";
 
 // Role hierarchy for sorting
 const ROLE_ORDER: Record<string, number> = {
@@ -153,7 +155,61 @@ function buildLeaderSlots(
 const BANK_REFETCH_MS = 10_000;
 const BANK_LOG_PAGE_SIZE = 20;
 
-const BANK_LOG_TYPE_LABELS = ["Deposit", "Withdraw", "Promotion"] as const;
+/** Mirrors `MafiaFamilyCashBank.LogType` (Solidity enum). */
+const BANK_LOG_TYPES = {
+  Deposit: 0,
+  Withdraw: 1,
+  Promotion: 2,
+  Tax: 3,
+  NativeTax: 4,
+  NativeWithdraw: 5,
+  NativeSwap: 6,
+  Seed: 7,
+} as const;
+
+const BANK_LOG_TYPE_LABELS: Record<number, string> = {
+  [BANK_LOG_TYPES.Deposit]: "Deposit",
+  [BANK_LOG_TYPES.Withdraw]: "Withdraw",
+  [BANK_LOG_TYPES.Promotion]: "Promotion",
+  [BANK_LOG_TYPES.Tax]: "Tax",
+  [BANK_LOG_TYPES.NativeTax]: "Native Tax",
+  [BANK_LOG_TYPES.NativeWithdraw]: "Native Withdraw",
+  [BANK_LOG_TYPES.NativeSwap]: "Native Swap",
+  [BANK_LOG_TYPES.Seed]: "Seed",
+};
+
+const NATIVE_LOG_TYPES = new Set<number>([
+  BANK_LOG_TYPES.NativeTax,
+  BANK_LOG_TYPES.NativeWithdraw,
+  BANK_LOG_TYPES.NativeSwap,
+]);
+
+function nativeSymbolForChain(chainId: string): string {
+  return chainId === "pulse" ? "PLS" : "BNB";
+}
+
+function bankLogTypeBadgeClass(logType: number): string {
+  switch (logType) {
+    case BANK_LOG_TYPES.Deposit:
+      return "border-green-500/40 bg-green-500/10 text-green-400";
+    case BANK_LOG_TYPES.Withdraw:
+      return "border-orange-500/40 bg-orange-500/10 text-orange-400";
+    case BANK_LOG_TYPES.Promotion:
+      return "border-purple-500/40 bg-purple-500/10 text-purple-400";
+    case BANK_LOG_TYPES.Tax:
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-400";
+    case BANK_LOG_TYPES.NativeTax:
+      return "border-teal-500/40 bg-teal-500/10 text-teal-400";
+    case BANK_LOG_TYPES.NativeWithdraw:
+      return "border-rose-500/40 bg-rose-500/10 text-rose-400";
+    case BANK_LOG_TYPES.NativeSwap:
+      return "border-sky-500/40 bg-sky-500/10 text-sky-400";
+    case BANK_LOG_TYPES.Seed:
+      return "border-amber-500/40 bg-amber-500/10 text-amber-400";
+    default:
+      return "border-border bg-secondary text-muted-foreground";
+  }
+}
 
 /** Player ranks shown in promotion rewards (Apprentice → Godfather). */
 const PROMOTION_REWARD_RANK_MIN = 0;
@@ -173,8 +229,11 @@ function getPromotionRewardRankIds(maxRank?: number): number[] {
 
 type BankLogEntry = {
   logType: number;
+  logSubType: string;
   user: `0x${string}`;
+  recipient: `0x${string}`;
   amount: bigint;
+  secondaryAmount: bigint;
   rank: number;
   timestamp: bigint;
 };
@@ -184,17 +243,23 @@ function parseBankLog(raw: unknown): BankLogEntry | null {
   if (Array.isArray(raw)) {
     return {
       logType: Number(raw[0] ?? 0),
-      user: (raw[1] ?? zeroAddress) as `0x${string}`,
-      amount: BigInt(raw[2] ?? 0),
-      rank: Number(raw[3] ?? 0),
-      timestamp: BigInt(raw[4] ?? 0),
+      logSubType: String(raw[1] ?? ""),
+      user: (raw[2] ?? zeroAddress) as `0x${string}`,
+      recipient: (raw[3] ?? zeroAddress) as `0x${string}`,
+      amount: BigInt(raw[4] ?? 0),
+      secondaryAmount: BigInt(raw[5] ?? 0),
+      rank: Number(raw[6] ?? 0),
+      timestamp: BigInt(raw[7] ?? 0),
     };
   }
   const o = raw as Record<string, unknown>;
   return {
     logType: Number(o.logType ?? 0),
+    logSubType: String(o.logSubType ?? ""),
     user: (o.user ?? zeroAddress) as `0x${string}`,
+    recipient: (o.recipient ?? zeroAddress) as `0x${string}`,
     amount: BigInt((o.amount as bigint | string | number) ?? 0),
+    secondaryAmount: BigInt((o.secondaryAmount as bigint | string | number) ?? 0),
     rank: Number(o.rank ?? 0),
     timestamp: BigInt((o.timestamp as bigint | string | number) ?? 0),
   };
@@ -209,6 +274,10 @@ function formatLogTimestamp(ts: bigint): string {
 
 function bankLogTypeLabel(logType: number): string {
   return BANK_LOG_TYPE_LABELS[logType] ?? `Type ${logType}`;
+}
+
+function bankLogIsNative(logType: number): boolean {
+  return NATIVE_LOG_TYPES.has(logType);
 }
 
 function promotionRankLabel(contractRank: number): string {
@@ -397,6 +466,11 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
   const [leaderManageIndex, setLeaderManageIndex] = useState<number | null>(null);
   const [leaderManageRoleLabel, setLeaderManageRoleLabel] = useState("");
   const [selectedLeaderMember, setSelectedLeaderMember] = useState("");
+  const [withdrawNativeDialogOpen, setWithdrawNativeDialogOpen] = useState(false);
+  const [withdrawNativeAmount, setWithdrawNativeAmount] = useState("");
+  const [withdrawNativeRecipient, setWithdrawNativeRecipient] = useState("");
+  const [swapNativeDialogOpen, setSwapNativeDialogOpen] = useState(false);
+  const [swapNativeAmount, setSwapNativeAmount] = useState("");
   const [bankLogs, setBankLogs] = useState<BankLogEntry[]>([]);
   const [bankLogsTotal, setBankLogsTotal] = useState<bigint>(BigInt(0));
   const [bankLogsPageIndex, setBankLogsPageIndex] = useState(0);
@@ -431,6 +505,25 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
 
   const familyBankBalanceWei =
     familyBalanceRaw != null ? BigInt(familyBalanceRaw as bigint) : undefined;
+
+  const {
+    data: familyNativeBalanceRaw,
+    refetch: refetchFamilyNativeBalance,
+  } = useReadContract({
+    address: familyGameCashBank,
+    abi: FAMILY_GAME_CASH_BANK,
+    functionName: "familyNativeBalance",
+    args: [BigInt(familyId)],
+    query: {
+      enabled: bankConfigured && familyId > 0,
+      refetchInterval: BANK_REFETCH_MS,
+    },
+  });
+
+  const familyNativeBalanceWei =
+    familyNativeBalanceRaw != null
+      ? BigInt(familyNativeBalanceRaw as bigint)
+      : undefined;
 
   const { data: maxRankRaw } = useReadContract({
     address: familyGameCashBank,
@@ -738,21 +831,45 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
   const { isLoading: updateLeaderConfirming, isSuccess: updateLeaderSuccess } =
     useWaitForTransactionReceipt({ hash: updateLeaderHash });
 
+  const {
+    writeContract: writeWithdrawNative,
+    data: withdrawNativeHash,
+    isPending: withdrawNativePending,
+    error: withdrawNativeError,
+    reset: resetWithdrawNative,
+  } = useChainWriteContract();
+  const { isLoading: withdrawNativeConfirming, isSuccess: withdrawNativeSuccess } =
+    useWaitForTransactionReceipt({ hash: withdrawNativeHash });
+
+  const {
+    writeContract: writeSwapNative,
+    data: swapNativeHash,
+    isPending: swapNativePending,
+    error: swapNativeError,
+    reset: resetSwapNative,
+  } = useChainWriteContract();
+  const { isLoading: swapNativeConfirming, isSuccess: swapNativeSuccess } =
+    useWaitForTransactionReceipt({ hash: swapNativeHash });
+
   const approveLoading = approvePending || approveConfirming;
   const depositLoading = depositPending || depositConfirming;
   const withdrawLoading = withdrawPending || withdrawConfirming;
   const setRewardsLoading = setRewardsPending || setRewardsConfirming;
   const updateLeaderLoading = updateLeaderPending || updateLeaderConfirming;
+  const withdrawNativeLoading = withdrawNativePending || withdrawNativeConfirming;
+  const swapNativeLoading = swapNativePending || swapNativeConfirming;
 
   const refetchBankData = useCallback(async () => {
     await Promise.all([
       refetchFamilyBalance(),
+      refetchFamilyNativeBalance(),
       refetchAllowance(),
       refetchCashBalance(),
       refetchPlayerInfo(),
     ]);
   }, [
     refetchFamilyBalance,
+    refetchFamilyNativeBalance,
     refetchAllowance,
     refetchCashBalance,
     refetchPlayerInfo,
@@ -817,6 +934,23 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
   }, [updateLeaderSuccess, updateLeaderHash, fetchFamily]);
 
   useEffect(() => {
+    if (!withdrawNativeSuccess || !withdrawNativeHash) return;
+    toast.success("Native withdrawal successful");
+    setWithdrawNativeAmount("");
+    setWithdrawNativeRecipient("");
+    setWithdrawNativeDialogOpen(false);
+    void refetchBankData();
+  }, [withdrawNativeSuccess, withdrawNativeHash, refetchBankData]);
+
+  useEffect(() => {
+    if (!swapNativeSuccess || !swapNativeHash) return;
+    toast.success("Swapped native to cash");
+    setSwapNativeAmount("");
+    setSwapNativeDialogOpen(false);
+    void refetchBankData();
+  }, [swapNativeSuccess, swapNativeHash, refetchBankData]);
+
+  useEffect(() => {
     if (!promotionRewardsDialogOpen) {
       promotionRewardsInputsSyncedRef.current = false;
       return;
@@ -833,8 +967,6 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
     setPromotionRewardInputs(
       promotionRewardInputsFromWei(promotionRewardsWei, promotionRewardRankIds),
     );
-
-    console.log(promotionRewardsWei, promotionRewardRankIds);
   }, [
     promotionRewardsDialogOpen,
     promotionRewardsRaw,
@@ -984,12 +1116,80 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
     });
   };
 
+  const handleWithdrawNative = () => {
+    if (!bankConfigured || !isConnected) return;
+    if (!canWithdrawFromBank) {
+      toast.error("Only Don, Consigliere, or Capodecina can withdraw");
+      return;
+    }
+    const recipient = withdrawNativeRecipient.trim();
+    if (!isAddress(recipient)) {
+      toast.error("Enter a valid recipient address");
+      return;
+    }
+    const wei = parseCashInput(withdrawNativeAmount);
+    if (wei === null) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    if (
+      familyNativeBalanceWei !== undefined &&
+      wei > familyNativeBalanceWei
+    ) {
+      toast.error("Amount exceeds native treasury balance");
+      return;
+    }
+    resetWithdrawNative();
+    writeWithdrawNative({
+      address: familyGameCashBank,
+      abi: FAMILY_GAME_CASH_BANK,
+      functionName: "withdrawNative",
+      args: [BigInt(familyId), recipient as `0x${string}`, wei],
+    });
+  };
+
+  const handleSwapNative = () => {
+    if (!bankConfigured || !isConnected) return;
+    if (!isFamilyMember) {
+      toast.error("Only members of this family can swap");
+      return;
+    }
+    const wei = parseCashInput(swapNativeAmount);
+    if (wei === null) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    if (
+      familyNativeBalanceWei !== undefined &&
+      wei > familyNativeBalanceWei
+    ) {
+      toast.error("Amount exceeds native treasury balance");
+      return;
+    }
+    resetSwapNative();
+    writeSwapNative({
+      address: familyGameCashBank,
+      abi: FAMILY_GAME_CASH_BANK,
+      functionName: "swapNativeToCash",
+      args: [BigInt(familyId), wei],
+    });
+  };
+
   const formatCashWei = (wei: bigint | undefined) => {
     if (wei === undefined) return "—";
     return Number(formatUnits(wei, 18)).toLocaleString(undefined, {
       maximumFractionDigits: 2,
     });
   };
+
+  const formatNativeWei = (wei: bigint | undefined) => {
+    if (wei === undefined) return "—";
+    return Number(formatUnits(wei, 18)).toLocaleString(undefined, {
+      maximumFractionDigits: 6,
+    });
+  };
+
+  const nativeSymbol = nativeSymbolForChain(chainConfig.id);
 
   const rosterNameByAddr = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1087,9 +1287,17 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
   useEffect(() => {
     if (!logsDialogOpen || bankLogs.length === 0) return;
 
-    const next: Record<string, string> = { ...rosterNameByAddr };
+    const interestingAddresses: string[] = [];
     for (const log of bankLogs) {
-      const key = log.user.toLowerCase();
+      interestingAddresses.push(log.user.toLowerCase());
+      const r = log.recipient?.toLowerCase();
+      if (r && r !== zeroAddress.toLowerCase()) {
+        interestingAddresses.push(r);
+      }
+    }
+
+    const next: Record<string, string> = { ...rosterNameByAddr };
+    for (const key of interestingAddresses) {
       if (!next[key]) {
         const fromRoster = rosterNameByAddr[key];
         if (fromRoster) next[key] = fromRoster;
@@ -1097,9 +1305,7 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
     }
     setLogNameByAddr(next);
 
-    const missing = bankLogs
-      .map((l) => l.user.toLowerCase())
-      .filter((k) => !next[k]);
+    const missing = interestingAddresses.filter((k) => !next[k]);
     if (missing.length === 0) return;
 
     const mafiaProfile = window.MafiaProfile;
@@ -1234,70 +1440,134 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
       {/* Family game cash bank */}
       {bankConfigured && (
         <>
-          <Card className="border-border/50 bg-card/50 backdrop-blur">
-            <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                  <Landmark className="h-5 w-5 text-primary" />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="border-border/50 bg-card/50 backdrop-blur">
+              <CardContent className="flex flex-col gap-4 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                    <Landmark className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Family cash treasury</p>
+                    <p className="font-mono text-2xl font-bold tabular-nums text-foreground">
+                      {formatCashWei(familyBankBalanceWei)}
+                      <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                        cash
+                      </span>
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Family game cash bank</p>
-                  <p className="font-mono text-2xl font-bold tabular-nums text-foreground">
-                    {formatCashWei(familyBankBalanceWei)}
-                    <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-                      cash
-                    </span>
-                  </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => setPromotionRewardsDialogOpen(true)}
+                  >
+                    <Gift className="h-3.5 w-3.5" />
+                    Rewards
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={openBankLogsDialog}
+                  >
+                    <ScrollText className="h-3.5 w-3.5" />
+                    Log
+                  </Button>
+                  {isConnected ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => setDepositDialogOpen(true)}
+                      >
+                        <ArrowDownToLine className="h-3.5 w-3.5" />
+                        Deposit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => setWithdrawDialogOpen(true)}
+                      >
+                        <ArrowUpFromLine className="h-3.5 w-3.5" />
+                        Withdraw
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="self-center text-xs text-muted-foreground">
+                      Connect wallet to deposit or withdraw
+                    </p>
+                  )}
                 </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5"
-                  onClick={() => setPromotionRewardsDialogOpen(true)}
-                >
-                  <Gift className="h-3.5 w-3.5" />
-                  Rewards
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5"
-                  onClick={openBankLogsDialog}
-                >
-                  <ScrollText className="h-3.5 w-3.5" />
-                  Log
-                </Button>
-                {isConnected ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5"
-                      onClick={() => setDepositDialogOpen(true)}
-                    >
-                      <ArrowDownToLine className="h-3.5 w-3.5" />
-                      Deposit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5"
-                      onClick={() => setWithdrawDialogOpen(true)}
-                    >
-                      <ArrowUpFromLine className="h-3.5 w-3.5" />
-                      Withdraw
-                    </Button>
-                  </>
-                ) : (
-                  <p className="self-center text-xs text-muted-foreground">
-                    Connect wallet to deposit or withdraw
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/50 bg-card/50 backdrop-blur">
+              <CardContent className="flex flex-col gap-4 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+                    <Coins className="h-5 w-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      Family native treasury
+                    </p>
+                    <p className="font-mono text-2xl font-bold tabular-nums text-foreground">
+                      {formatNativeWei(familyNativeBalanceWei)}
+                      <span className="ml-1.5 text-sm font-normal text-muted-foreground">
+                        {nativeSymbol}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {isConnected ? (
+                    <>
+                      {isFamilyMember && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5"
+                          onClick={() => setSwapNativeDialogOpen(true)}
+                          disabled={
+                            familyNativeBalanceWei === undefined ||
+                            familyNativeBalanceWei === BigInt(0)
+                          }
+                        >
+                          <ArrowLeftRight className="h-3.5 w-3.5" />
+                          Swap to Cash
+                        </Button>
+                      )}
+                      {canWithdrawFromBank && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5"
+                          onClick={() => setWithdrawNativeDialogOpen(true)}
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          Withdraw Native
+                        </Button>
+                      )}
+                      {!isFamilyMember && !canWithdrawFromBank && (
+                        <p className="self-center text-xs text-muted-foreground">
+                          Members can swap; top leaders can withdraw native.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="self-center text-xs text-muted-foreground">
+                      Connect wallet to interact with native treasury
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           <Dialog open={depositDialogOpen} onOpenChange={setDepositDialogOpen}>
             <DialogContent className="sm:max-w-md">
@@ -1432,6 +1702,160 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
           </Dialog>
 
           <Dialog
+            open={withdrawNativeDialogOpen}
+            onOpenChange={setWithdrawNativeDialogOpen}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Withdraw native from family</DialogTitle>
+                <DialogDescription>
+                  Send native {nativeSymbol} from the family treasury to a
+                  chosen recipient. Treasury balance:{" "}
+                  <span className="font-mono text-foreground">
+                    {formatNativeWei(familyNativeBalanceWei)} {nativeSymbol}
+                  </span>
+                </DialogDescription>
+              </DialogHeader>
+              {!canWithdrawFromBank ? (
+                <p className="text-sm text-amber-400">
+                  Only Don, Consigliere, or Capodecina can withdraw native.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label
+                      className="text-xs text-muted-foreground"
+                      htmlFor="withdraw-native-recipient"
+                    >
+                      Recipient address
+                    </Label>
+                    <Input
+                      id="withdraw-native-recipient"
+                      type="text"
+                      placeholder="0x…"
+                      value={withdrawNativeRecipient}
+                      onChange={(e) =>
+                        setWithdrawNativeRecipient(e.target.value)
+                      }
+                      disabled={withdrawNativeLoading}
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label
+                      className="text-xs text-muted-foreground"
+                      htmlFor="withdraw-native-amount"
+                    >
+                      Amount ({nativeSymbol})
+                    </Label>
+                    <Input
+                      id="withdraw-native-amount"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0"
+                      value={withdrawNativeAmount}
+                      onChange={(e) => setWithdrawNativeAmount(e.target.value)}
+                      disabled={withdrawNativeLoading}
+                      className="font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+              {withdrawNativeError && (
+                <p className="text-xs text-red-400">
+                  {withdrawNativeError.message.split("\n")[0]}
+                </p>
+              )}
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={() => setWithdrawNativeDialogOpen(false)}
+                  disabled={withdrawNativeLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleWithdrawNative}
+                  disabled={!canWithdrawFromBank || withdrawNativeLoading}
+                  className="gap-1.5"
+                >
+                  {withdrawNativeLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  Confirm withdraw
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={swapNativeDialogOpen} onOpenChange={setSwapNativeDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Swap native to cash</DialogTitle>
+                <DialogDescription>
+                  Convert family-owned {nativeSymbol} from the native treasury
+                  into in-game cash via the on-chain swap. Treasury balance:{" "}
+                  <span className="font-mono text-foreground">
+                    {formatNativeWei(familyNativeBalanceWei)} {nativeSymbol}
+                  </span>
+                </DialogDescription>
+              </DialogHeader>
+              {!isFamilyMember ? (
+                <p className="text-sm text-amber-400">
+                  Only family members can swap the native treasury.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <Label
+                    className="text-xs text-muted-foreground"
+                    htmlFor="swap-native-amount"
+                  >
+                    Amount ({nativeSymbol})
+                  </Label>
+                  <Input
+                    id="swap-native-amount"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={swapNativeAmount}
+                    onChange={(e) => setSwapNativeAmount(e.target.value)}
+                    disabled={swapNativeLoading}
+                    className="font-mono"
+                  />
+                </div>
+              )}
+              {swapNativeError && (
+                <p className="text-xs text-red-400">
+                  {swapNativeError.message.split("\n")[0]}
+                </p>
+              )}
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={() => setSwapNativeDialogOpen(false)}
+                  disabled={swapNativeLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSwapNative}
+                  disabled={!isFamilyMember || swapNativeLoading}
+                  className="gap-1.5"
+                >
+                  {swapNativeLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowLeftRight className="h-4 w-4" />
+                  )}
+                  Confirm swap
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
             open={promotionRewardsDialogOpen}
             onOpenChange={setPromotionRewardsDialogOpen}
           >
@@ -1540,12 +1964,12 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
           </Dialog>
 
           <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
-            <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-lg">
+            <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Family cash bank log</DialogTitle>
+                <DialogTitle>Family bank log</DialogTitle>
                 <DialogDescription>
-                  Deposits, withdrawals, and promotion payouts. Newest entries
-                  first.
+                  Cash & native treasury activity — deposits, withdrawals,
+                  taxes, promotions, swaps, and seeding. Newest entries first.
                 </DialogDescription>
               </DialogHeader>
 
@@ -1564,7 +1988,7 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
               </div>
 
               <div className="min-h-0 flex-1">
-                <ScrollArea className="h-[min(50vh,360px)] w-full rounded-md border border-border/60">
+                <ScrollArea className="h-[min(60vh,440px)] w-full rounded-md border border-border/60">
                   <div className="pr-3">
                     {bankLogsLoading ? (
                       <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
@@ -1591,46 +2015,92 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
                         </TableHeader>
                         <TableBody>
                           {bankLogs.map((log, idx) => {
-                            const key = log.user.toLowerCase();
-                            const displayName = logNameByAddr[key] ?? null;
+                            const userKey = log.user.toLowerCase();
+                            const recipientKey = log.recipient?.toLowerCase();
+                            const userName = logNameByAddr[userKey] ?? null;
+                            const recipientName =
+                              recipientKey && recipientKey !== zeroAddress.toLowerCase()
+                                ? (logNameByAddr[recipientKey] ?? null)
+                                : null;
                             const typeLabel = bankLogTypeLabel(log.logType);
-                            const rankLabel =
-                              log.logType === 2 ? bankLogRankLabel(log.rank) : null;
+                            const isNative = bankLogIsNative(log.logType);
+                            const isSwap = log.logType === BANK_LOG_TYPES.NativeSwap;
+                            const isPromotion =
+                              log.logType === BANK_LOG_TYPES.Promotion;
+                            const isNativeWithdraw =
+                              log.logType === BANK_LOG_TYPES.NativeWithdraw;
+                            const isSeed = log.logType === BANK_LOG_TYPES.Seed;
+                            const rankLabel = isPromotion
+                              ? bankLogRankLabel(log.rank)
+                              : null;
+                            const primaryUnit = isNative ? nativeSymbol : "cash";
+                            const primaryFormatted = isNative
+                              ? formatNativeWei(log.amount)
+                              : formatCashWei(log.amount);
                             return (
                               <TableRow
                                 key={`${log.timestamp}-${log.user}-${idx}`}
                                 className="border-border/30"
                               >
                                 <TableCell className="align-top py-2">
-                                  <Badge
-                                    variant="outline"
-                                    className={cn(
-                                      "text-[10px]",
-                                      log.logType === 0 &&
-                                      "border-green-500/40 bg-green-500/10 text-green-400",
-                                      log.logType === 1 &&
-                                      "border-orange-500/40 bg-orange-500/10 text-orange-400",
-                                      log.logType === 2 &&
-                                      "border-purple-500/40 bg-purple-500/10 text-purple-400",
+                                  <div className="flex flex-col items-start gap-1">
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        "text-[10px]",
+                                        bankLogTypeBadgeClass(log.logType),
+                                      )}
+                                    >
+                                      {typeLabel}
+                                      {rankLabel ? ` · ${rankLabel}` : ""}
+
+                                      {log.logSubType ? (
+                                        ` · ${log.logSubType}`
+                                      ) : null}
+                                    </Badge>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="max-w-[10rem] align-top py-2 text-xs">
+                                  <div className="flex gap-0.5">
+                                    {isSeed ? (
+                                      <span className="font-medium text-foreground">
+                                        Protocol
+                                      </span>
+                                    ) : userName ? (
+                                      <span className="font-medium text-foreground">
+                                        {userName}
+                                      </span>
+                                    ) : (
+                                      <span className="font-mono text-muted-foreground">
+                                        {formatAddress(log.user)}
+                                      </span>
                                     )}
-                                  >
-                                    {typeLabel}
-                                    {rankLabel ? ` · ${rankLabel}` : ""}
-                                  </Badge>
+                                    {isNativeWithdraw && recipientKey && (
+                                      <span className="font-medium text-muted-foreground">
+                                        →{" "}
+                                        {recipientName ??
+                                          formatAddress(log.recipient)}
+                                      </span>
+                                    )}
+                                  </div>
                                 </TableCell>
-                                <TableCell className="max-w-[8rem] align-top py-2 text-xs">
-                                  {displayName ? (
-                                    <span className="font-medium text-foreground">
-                                      {displayName}
+                                <TableCell className="align-top py-2 text-right">
+                                  <div className="flex flex-col items-end gap-0.5 font-mono text-xs tabular-nums">
+                                    <span className="text-foreground">
+                                      {primaryFormatted}
+                                      <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                                        {primaryUnit}
+                                      </span>
                                     </span>
-                                  ) : (
-                                    <span className="font-mono text-muted-foreground">
-                                      {formatAddress(log.user)}
-                                    </span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="align-top py-2 text-right font-mono text-xs tabular-nums">
-                                  {formatCashWei(log.amount)}
+                                    {isSwap && log.secondaryAmount > BigInt(0) ? (
+                                      <span className="text-[10px] text-emerald-400">
+                                        +{formatCashWei(log.secondaryAmount)}{" "}
+                                        <span className="text-muted-foreground">
+                                          cash
+                                        </span>
+                                      </span>
+                                    ) : null}
+                                  </div>
                                 </TableCell>
                                 <TableCell className="align-top py-2 text-right text-[10px] text-muted-foreground whitespace-nowrap">
                                   {formatLogTimestamp(log.timestamp)}

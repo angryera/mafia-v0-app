@@ -116,7 +116,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             ogCrate: getAddress("0x16B11C057cA6d354E81D58B375CB118f7930807c"),
             map: getAddress("0x1c88060e4509c59b4064A7a9818f64AeC41ef19E"),
             mafiaFamily: getAddress("0x1bC581fe134BdC7432eF8ba75BCeEd242F90BcD2"),
-            familyGameCashBank: getAddress("0x54FDB086Ec5D17068c8b1F6A6214013C121021ad"),
+            familyGameCashBank: getAddress("0x26cDB03a72Ac5866d43184526F4586D8942739F2"),
             bulletToken: getAddress("0xe92F5d948d8764904F9703ae878a3A9e6b3952eb"),
             ocLobby: getAddress("0x281C0Db67c96ee7Ad32AF25817cB3964Fc7E79cD"),
             ocJoin: getAddress("0x00D0933595F87eD8b50638796FCf5b22de3795a2"),
