@@ -422,6 +422,22 @@ const TAB_CONFIG: Record<
     contractAddress: "0xa08D627E071cB4b53C6D0611d77dbCB659902AA4",
     contractShort: "0xa08D...2AA4",
   },
+  "backfire-settings": {
+    title: "Backfire settings",
+    description:
+      "Configure how your account automatically returns fire when another player attacks you. Settings will be stored on-chain once the contract is deployed.",
+    codeSample: "setBackfireSettings(mode, rangeMin, rangeMax)",
+    contractAddress: "",
+    contractShort: "",
+  },
+  "kill-history": {
+    title: "Kill history",
+    description:
+      "View a log of successful kills. On-chain kill history will load here once the MafiaKill contract is deployed.",
+    codeSample: "KillSucceeded (event)",
+    contractAddress: "",
+    contractShort: "",
+  },
 };
 
 export { TAB_CONFIG };
@@ -430,9 +446,10 @@ interface PageWrapperProps {
   children: React.ReactNode;
   sidebar?: React.ReactNode;
   fullWidth?: boolean;
+  hideHeader?: boolean;
 }
 
-export function PageWrapper({ children, sidebar, fullWidth = false }: PageWrapperProps) {
+export function PageWrapper({ children, sidebar, fullWidth = false, hideHeader = false }: PageWrapperProps) {
   const pathname = usePathname();
   const activeTab = getTabFromPath(pathname);
   const { chainConfig } = useChain();
@@ -445,19 +462,21 @@ export function PageWrapper({ children, sidebar, fullWidth = false }: PageWrappe
     <>
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:py-8">
         {/* Page header */}
-        <section className="mb-8">
-          <h2 className="text-balance text-xl font-bold tracking-tight text-foreground sm:text-2xl">
-            {config.title}
-          </h2>
-          <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            {config.description}{" "}
-            {config.codeSample && (
-              <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs text-primary">
-                {config.codeSample}
-              </code>
-            )}
-          </p>
-        </section>
+        {!hideHeader && (
+          <section className="mb-8">
+            <h2 className="text-balance text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+              {config.title}
+            </h2>
+            <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              {config.description}{" "}
+              {config.codeSample && (
+                <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs text-primary">
+                  {config.codeSample}
+                </code>
+              )}
+            </p>
+          </section>
+        )}
 
         {/* Content */}
         {fullWidth ? (
