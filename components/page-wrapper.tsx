@@ -438,6 +438,14 @@ const TAB_CONFIG: Record<
     contractAddress: "",
     contractShort: "",
   },
+  "kill-initiation": {
+    title: "Kill Initiation",
+    description:
+      "Target a player and spend bullets to launch your attack. The target must be located via the Detective Agency, in your city, and out of the safehouse. On-chain initiation will be enabled once the MafiaKill contract is deployed.",
+    codeSample: "initiateKill(address,uint256)",
+    contractAddress: "",
+    contractShort: "",
+  },
 };
 
 export { TAB_CONFIG };

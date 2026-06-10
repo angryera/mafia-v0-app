@@ -144,7 +144,8 @@ export type Tab =
   | "create-profile"
   | "marketing-dao"
   | "backfire-settings"
-  | "kill-history";
+  | "kill-history"
+  | "kill-initiation";
 
 type NavItem = { id: Tab; label: string; icon: React.ReactNode };
 
@@ -169,7 +170,7 @@ export function getTabFromPath(pathname: string): Tab {
     "biz-slotmachine", "biz-jackpot", "biz-lottery-hall", "biz-safehouse", "biz-booze", "biz-narcs",
     "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
     "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-bullet", "exchange-liquidity", "exchange-otc", "referral",
-    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao", "backfire-settings", "kill-history"
+    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao", "backfire-settings", "kill-history", "kill-initiation"
   ];
   return validTabs.includes(firstSegment as Tab) ? (firstSegment as Tab) : "crime";
 }
@@ -181,6 +182,7 @@ const CRIME_SECTION: NavItem[] = [
   { id: "crime", label: "Crime", icon: <Crosshair className="h-4 w-4" /> },
   { id: "organized-crime", label: "Organized Crime", icon: <Users className="h-4 w-4" /> },
   { id: "nickcar", label: "Nick a Car", icon: <Car className="h-4 w-4" /> },
+  { id: "kill-initiation", label: "Kill Initiation", icon: <Target className="h-4 w-4" /> },
   { id: "killskill", label: "Kill Skill", icon: <Swords className="h-4 w-4" /> },
   { id: "backfire-settings", label: "Backfire", icon: <Target className="h-4 w-4" /> },
   { id: "kill-history", label: "Kill History", icon: <Crosshair className="h-4 w-4" /> },
