@@ -446,6 +446,14 @@ const TAB_CONFIG: Record<
     contractAddress: "",
     contractShort: "",
   },
+  "kill-attempt": {
+    title: "Kill attempts",
+    description:
+      "View non-fatal exchanges where both players survived. Shows bullets spent and health lost for each side. On-chain kill attempts will load here once the MafiaKill contract is deployed.",
+    codeSample: "KillAttempted (event)",
+    contractAddress: "",
+    contractShort: "",
+  },
 };
 
 export { TAB_CONFIG };

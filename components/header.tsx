@@ -145,7 +145,8 @@ export type Tab =
   | "marketing-dao"
   | "backfire-settings"
   | "kill-history"
-  | "kill-initiation";
+  | "kill-initiation"
+  | "kill-attempt";
 
 type NavItem = { id: Tab; label: string; icon: React.ReactNode };
 
@@ -170,7 +171,7 @@ export function getTabFromPath(pathname: string): Tab {
     "biz-slotmachine", "biz-jackpot", "biz-lottery-hall", "biz-safehouse", "biz-booze", "biz-narcs",
     "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
     "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-bullet", "exchange-liquidity", "exchange-otc", "referral",
-    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao", "backfire-settings", "kill-history", "kill-initiation"
+    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao", "backfire-settings", "kill-history", "kill-initiation", "kill-attempt"
   ];
   return validTabs.includes(firstSegment as Tab) ? (firstSegment as Tab) : "crime";
 }
@@ -182,14 +183,18 @@ const CRIME_SECTION: NavItem[] = [
   { id: "crime", label: "Crime", icon: <Crosshair className="h-4 w-4" /> },
   { id: "organized-crime", label: "Organized Crime", icon: <Users className="h-4 w-4" /> },
   { id: "nickcar", label: "Nick a Car", icon: <Car className="h-4 w-4" /> },
-  { id: "kill-initiation", label: "Kill Initiation", icon: <Target className="h-4 w-4" /> },
-  { id: "killskill", label: "Kill Skill", icon: <Swords className="h-4 w-4" /> },
-  { id: "backfire-settings", label: "Backfire", icon: <Target className="h-4 w-4" /> },
-  { id: "kill-history", label: "Kill History", icon: <Crosshair className="h-4 w-4" /> },
   { id: "racing", label: "Racing", icon: <Flag className="h-4 w-4" /> },
   { id: "travel", label: "Travel", icon: <Plane className="h-4 w-4" /> },
   { id: "jail", label: "Jail", icon: <Lock className="h-4 w-4" /> },
   { id: "helperbots", label: "Helper Bots", icon: <Bot className="h-4 w-4" /> },
+];
+
+const KILL_SECTION: NavItem[] = [
+  { id: "killskill", label: "Kill Skill", icon: <Swords className="h-4 w-4" /> },
+  { id: "kill-initiation", label: "Kill Initiation", icon: <Target className="h-4 w-4" /> },
+  { id: "backfire-settings", label: "Backfire", icon: <Target className="h-4 w-4" /> },
+  { id: "kill-history", label: "Kill History", icon: <Crosshair className="h-4 w-4" /> },
+  { id: "kill-attempt", label: "Kill Attempt", icon: <Swords className="h-4 w-4" /> },
 ];
 
 const CITY_SECTION: NavItem[] = [
@@ -244,6 +249,7 @@ const BUY_SECTION: NavItem[] = [
 function buildSections(cityLabel: string | null) {
   return [
     { label: "Crime", items: CRIME_SECTION },
+    { label: "Kill", items: KILL_SECTION },
     { label: cityLabel ?? "City", items: CITY_SECTION },
     { label: "Game", items: GAME_SECTION },
     { label: "Buy", items: BUY_SECTION },

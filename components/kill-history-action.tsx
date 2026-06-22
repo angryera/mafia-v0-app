@@ -32,7 +32,12 @@ interface KillEntry {
   attackerIsDead?: boolean;
   victimIsDead?: boolean;
   resultType: KillResultType;
-  bullets?: number;
+  // Bullets are tracked per direction so a single figure is never ambiguous:
+  // - attackerBullets: bullets the attacker fired at the victim.
+  // - backfireBullets: bullets returned by backfire that struck the attacker.
+  // A double kill carries both; a backfire kill is driven by backfireBullets.
+  attackerBullets?: number;
+  backfireBullets?: number;
 }
 
 const RESULT_LABELS: Record<KillResultType, string> = {
@@ -55,6 +60,9 @@ const RESULT_COLORS: Record<KillResultType, string> = {
 // contract is deployed, this should read its `KillSucceeded` events
 // and map them into KillEntry objects (names are already included in
 // the event payload, so no address→name resolution is needed here).
+// Map the event's bullet fields onto attackerBullets (attacker → victim)
+// and backfireBullets (return fire → attacker) so each figure stays
+// directional rather than collapsing into one ambiguous total.
 // ────────────────────────────────────────────────────────────────
 const NOW = Math.floor(Date.now() / 1000);
 const HOUR = 3600;
@@ -67,7 +75,7 @@ const MOCK_KILLS: KillEntry[] = [
     victimName: "PaulieWalnuts",
     victimIsDead: true,
     resultType: KillResultType.SingleKill,
-    bullets: 12500,
+    attackerBullets: 12500,
   },
   {
     id: "kill-2",
@@ -77,7 +85,8 @@ const MOCK_KILLS: KillEntry[] = [
     attackerIsDead: true,
     victimIsDead: true,
     resultType: KillResultType.DoubleKill,
-    bullets: 48000,
+    attackerBullets: 48000,
+    backfireBullets: 31000,
   },
   {
     id: "kill-3",
@@ -86,7 +95,8 @@ const MOCK_KILLS: KillEntry[] = [
     victimName: "TonySoprano",
     attackerIsDead: true,
     resultType: KillResultType.BackfireKill,
-    bullets: 22000,
+    attackerBullets: 9000,
+    backfireBullets: 22000,
   },
   {
     id: "kill-4",
@@ -95,7 +105,7 @@ const MOCK_KILLS: KillEntry[] = [
     victimName: "Adriana",
     victimIsDead: true,
     resultType: KillResultType.SingleKill,
-    bullets: 8500,
+    attackerBullets: 8500,
   },
   {
     id: "kill-5",
@@ -104,7 +114,8 @@ const MOCK_KILLS: KillEntry[] = [
     victimName: "VitoCorleone",
     attackerIsDead: true,
     resultType: KillResultType.BackfireKill,
-    bullets: 150000,
+    attackerBullets: 40000,
+    backfireBullets: 150000,
   },
   {
     id: "kill-6",
@@ -114,7 +125,8 @@ const MOCK_KILLS: KillEntry[] = [
     attackerIsDead: true,
     victimIsDead: true,
     resultType: KillResultType.DoubleKill,
-    bullets: 96000,
+    attackerBullets: 96000,
+    backfireBullets: 58000,
   },
 ];
 
@@ -156,6 +168,63 @@ function PlayerName({ name, crossed }: { name: string; crossed: boolean }) {
     >
       {name}
     </span>
+  );
+}
+
+// Builds an explicit, directional breakdown of bullets so no figure is
+// ambiguous: each amount is attributed to who fired it and at whom.
+interface BulletFigure {
+  key: string;
+  label: string;
+  amount: number;
+  tone: string;
+}
+
+function getBulletFigures(entry: KillEntry): BulletFigure[] {
+  const figures: BulletFigure[] = [];
+  if (entry.attackerBullets !== undefined) {
+    figures.push({
+      key: "attacker",
+      label: `${entry.attackerName} → ${entry.victimName}`,
+      amount: entry.attackerBullets,
+      tone: "text-foreground",
+    });
+  }
+  if (entry.backfireBullets !== undefined) {
+    figures.push({
+      key: "backfire",
+      label: `Backfire → ${entry.attackerName}`,
+      amount: entry.backfireBullets,
+      tone: "text-red-400",
+    });
+  }
+  return figures;
+}
+
+function BulletBreakdown({ entry }: { entry: KillEntry }) {
+  const figures = getBulletFigures(entry);
+  if (figures.length === 0) return null;
+
+  return (
+    <div className="mt-1.5 flex flex-col gap-0.5">
+      {figures.map((figure) => (
+        <div
+          key={figure.key}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+        >
+          <span className="shrink-0">{figure.label}</span>
+          <span
+            className={cn(
+              "font-mono tabular-nums font-medium",
+              figure.tone
+            )}
+          >
+            {figure.amount.toLocaleString()}
+          </span>
+          <span className="text-muted-foreground/60">bullets</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -274,11 +343,7 @@ export function KillHistoryAction() {
                       >
                         {RESULT_LABELS[entry.resultType]}
                       </span>
-                      {entry.bullets !== undefined && (
-                        <span className="ml-2 font-mono text-xs tabular-nums text-muted-foreground">
-                          {entry.bullets.toLocaleString()} bullets
-                        </span>
-                      )}
+                      <BulletBreakdown entry={entry} />
                     </TableCell>
                   </TableRow>
                 ))}
