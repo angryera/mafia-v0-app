@@ -146,6 +146,7 @@ export type Tab =
   | "backfire-settings"
   | "kill-history"
   | "kill-initiation"
+  | "kill-outcome"
   | "kill-attempt";
 
 type NavItem = { id: Tab; label: string; icon: React.ReactNode };
@@ -171,7 +172,7 @@ export function getTabFromPath(pathname: string): Tab {
     "biz-slotmachine", "biz-jackpot", "biz-lottery-hall", "biz-safehouse", "biz-booze", "biz-narcs",
     "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
     "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-bullet", "exchange-liquidity", "exchange-otc", "referral",
-    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao", "backfire-settings", "kill-history", "kill-initiation", "kill-attempt"
+    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao", "backfire-settings", "kill-history", "kill-initiation", "kill-outcome", "kill-attempt"
   ];
   return validTabs.includes(firstSegment as Tab) ? (firstSegment as Tab) : "crime";
 }

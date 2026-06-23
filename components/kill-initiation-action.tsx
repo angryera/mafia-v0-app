@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useAccount, usePublicClient } from "wagmi";
 import { isAddress, getAddress } from "viem";
@@ -14,6 +15,7 @@ import {
   MapPin,
   Clock,
   User,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChain, useChainAddresses } from "@/components/chain-provider";
@@ -27,17 +29,21 @@ import {
   computeKillEligibility,
   getEligibilityMessage,
   initiateKill,
+  MOCK_KILL_INITIATION_ENABLED,
   type KnownProfile,
   type PlayerCity,
   type DetectiveHireRecord,
   type KillBlockReason,
 } from "@/lib/killContract";
+import { useKillOutcome } from "@/components/kill-outcome-provider";
 
 function shortAddress(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
 export function KillInitiationAction() {
+  const router = useRouter();
+  const { setKillBattle } = useKillOutcome();
   const { address, isConnected } = useAccount();
   const { chainConfig } = useChain();
   const addresses = useChainAddresses();
@@ -49,22 +55,28 @@ export function KillInitiationAction() {
   const [playerCity, setPlayerCity] = useState<PlayerCity | null>(null);
 
   const refreshBullets = useCallback(async () => {
-    if (!publicClient || !address) return;
+    if (!publicClient || !address || !authData) return;
     try {
       const bal = await getBulletBalance({
         publicClient,
         bulletsAddress: addresses.bullets,
         wallet: address,
+        message: authData.message,
+        signature: authData.signature,
       });
       setBulletBalance(bal);
     } catch (e) {
       console.error("Failed to read bullet balance:", e);
     }
-  }, [publicClient, address, addresses.bullets]);
+  }, [publicClient, address, authData, addresses.bullets]);
 
   useEffect(() => {
+    if (!authData) {
+      setBulletBalance(null);
+      return;
+    }
     refreshBullets();
-  }, [refreshBullets]);
+  }, [refreshBullets, authData]);
 
   useEffect(() => {
     if (!publicClient || !address || !authData) {
@@ -108,33 +120,54 @@ export function KillInitiationAction() {
     };
   }, [chainConfig.id]);
 
-  // ── Detective hires ─────────────────────────────────────────────────────────
+  // ── Detective hires (on-chain, same source as Detective Agency page) ────────
   const [hires, setHires] = useState<DetectiveHireRecord[]>([]);
   const [hiresLoading, setHiresLoading] = useState(false);
+
+  const loadDetectiveHires = useCallback(async () => {
+    if (!publicClient || !address || !authData) return;
+    setHiresLoading(true);
+    try {
+      const list = await getUserDetectiveHires({
+        publicClient,
+        detectiveAgencyAddress: addresses.detectiveAgency,
+        wallet: address,
+        message: authData.message,
+        signature: authData.signature,
+      });
+      setHires(list);
+    } catch (e) {
+      console.error("Failed to read detective hires:", e);
+      setHires([]);
+    } finally {
+      setHiresLoading(false);
+    }
+  }, [
+    publicClient,
+    address,
+    authData,
+    addresses.detectiveAgency,
+  ]);
+
   useEffect(() => {
-    if (!address) {
+    if (!authData) {
       setHires([]);
       return;
     }
-    let cancelled = false;
-    setHiresLoading(true);
-    (async () => {
-      try {
-        const list = await getUserDetectiveHires({
-          wallet: address,
-          playerCityId: playerCity?.cityId ?? null,
-        });
-        if (!cancelled) setHires(list);
-      } catch (e) {
-        console.error("Failed to read detective hires:", e);
-      } finally {
-        if (!cancelled) setHiresLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [address, playerCity?.cityId]);
+    loadDetectiveHires();
+  }, [loadDetectiveHires, authData]);
+
+  // Attach profile names so name-based victim entry can match detective hires.
+  const hiresWithNames = useMemo(
+    () =>
+      hires.map((h) => {
+        const profile = knownProfiles.find(
+          (p) => p.address.toLowerCase() === h.target.toLowerCase(),
+        );
+        return profile ? { ...h, targetName: profile.name } : h;
+      }),
+    [hires, knownProfiles],
+  );
 
   // ── Victim field + target resolution ────────────────────────────────────────
   const [victim, setVictim] = useState("");
@@ -262,13 +295,13 @@ export function KillInitiationAction() {
   const eligibility = useMemo(
     () =>
       computeKillEligibility({
-        hires,
+        hires: hiresWithNames,
         targetAddress,
         targetName,
         playerCityId: playerCity?.cityId ?? null,
         now,
       }),
-    [hires, targetAddress, targetName, playerCity?.cityId, now],
+    [hiresWithNames, targetAddress, targetName, playerCity?.cityId, now],
   );
 
   const detectiveState: KillBlockReason = hiresLoading ? "checking" : eligibility.reason;
@@ -330,7 +363,7 @@ export function KillInitiationAction() {
     }
     // 7) Detective-agency eligibility
     const elig = computeKillEligibility({
-      hires,
+      hires: hiresWithNames,
       targetAddress,
       targetName,
       playerCityId: playerCity?.cityId ?? null,
@@ -351,10 +384,24 @@ export function KillInitiationAction() {
       return;
     }
 
-    // All checks passed → run the MOCK attack action.
+    // All checks passed → initiate the attack.
     setConfirming(true);
     try {
-      await initiateKill({ targetAddress, bulletAmount });
+      const outcome = await initiateKill({
+        targetAddress,
+        bulletAmount,
+        attackerAddress: address,
+        attackerName: playerCity?.username || shortAddress(address),
+        victimName: targetName || shortAddress(targetAddress),
+        cityName: playerCity?.cityName ?? "Unknown city",
+      });
+
+      if (MOCK_KILL_INITIATION_ENABLED && outcome) {
+        setKillBattle(outcome);
+        router.push("/kill-outcome");
+        return;
+      }
+
       toast.success(
         "Attack validated. On-chain kill initiation will be enabled in an upcoming update.",
       );
@@ -550,6 +597,13 @@ export function KillInitiationAction() {
                 icon={<Search className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
                 title="Target not located"
                 message={getEligibilityMessage("not_found", null)}
+              />
+            )}
+            {!targetInSafehouse && detectiveState === "not_revealed" && (
+              <DetectiveAlert
+                icon={<Eye className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
+                title="Location not revealed"
+                message={getEligibilityMessage("not_revealed", null)}
               />
             )}
             {!targetInSafehouse && detectiveState === "wrong_city" && (

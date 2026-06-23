@@ -21,6 +21,7 @@ import {
 import "@rainbow-me/rainbowkit/styles.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { ChainProvider, useChain } from "@/components/chain-provider";
+import { KillOutcomeProvider } from "@/components/kill-outcome-provider";
 
 const pulsechain: Chain = {
   id: 369,
@@ -142,19 +143,21 @@ export default function ClientProviders({
         <ChainProvider>
           <DynamicRainbowKit>
             <AuthProvider>
-              {children}
-              <Toaster
-                theme="dark"
-                position="top-center"
-                richColors
-                toastOptions={{
-                  style: {
-                    maxWidth: "92vw",
-                  },
-                }}
-                expand
-                visibleToasts={3}
-              />
+              <KillOutcomeProvider>
+                {children}
+                <Toaster
+                  theme="dark"
+                  position="top-center"
+                  richColors
+                  toastOptions={{
+                    style: {
+                      maxWidth: "92vw",
+                    },
+                  }}
+                  expand
+                  visibleToasts={3}
+                />
+              </KillOutcomeProvider>
             </AuthProvider>
           </DynamicRainbowKit>
         </ChainProvider>

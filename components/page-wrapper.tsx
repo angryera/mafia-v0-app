@@ -446,6 +446,14 @@ const TAB_CONFIG: Record<
     contractAddress: "",
     contractShort: "",
   },
+  "kill-outcome": {
+    title: "Battle outcome",
+    description:
+      "Review the result of your kill attempt — confrontation details, narrative, outcome, and claimable rewards.",
+    codeSample: "KillSucceeded / KillFailed (event)",
+    contractAddress: "",
+    contractShort: "",
+  },
   "kill-attempt": {
     title: "Kill attempts",
     description:

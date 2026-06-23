@@ -12,13 +12,14 @@
 //   • Target safehouse    → NOT WIRED (mock — see TODO; reading another player's
 //                            privacy-gated status is not possible with the current
 //                            signed-message ABI, so this is mocked for now)
-//   • Detective hires      → MOCK for development (see TODO for the real read)
+//   • Detective hires      → DEPLOYED  (real read via getUserDetectiveHires)
 //   • initiate kill (write)→ NOT DEPLOYED (mock — validates then resolves)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { formatEther, isAddress, type Abi } from "viem";
 import {
   BULLET_ABI,
+  DETECTIVE_AGENCY_ABI,
   USER_PROFILE_CONTRACT_ABI,
   TRAVEL_DESTINATIONS,
 } from "@/lib/contract";
@@ -65,16 +66,88 @@ export interface SafehouseStatus {
 export interface DetectiveHireRecord {
   target: string; // wallet address
   targetName?: string;
-  status: "pending" | "searching" | "revealed" | "failed" | string;
+  /** Contract enum: 0 Pending, 1 Success, 2 Failed — or legacy string labels */
+  status: "pending" | "searching" | "revealed" | "failed" | "success" | number;
   isTargetRevealed: boolean;
   targetCityId: number | null; // set once revealed
-  canKillUntilTime: number | null; // unix seconds; null/unknown ⇒ treated as active
+  canKillUntilTime: number | null; // unix seconds; null when not revealed
+}
+
+/** Matches `MafiaDetectiveAgency.DetectiveHireStatus` on-chain. */
+export const DetectiveHireStatus = {
+  Pending: 0,
+  Success: 1,
+  Failed: 2,
+} as const;
+
+type OnChainDetectiveHire = {
+  cityId: number;
+  target: `0x${string}`;
+  user: string;
+  requestBlock: bigint;
+  detectiveCount: bigint;
+  startedAt: bigint;
+  targetNumber: bigint;
+  totalCost: bigint;
+  status: number;
+  isTargetRevealed: boolean;
+  targetCityId: number;
+};
+
+function mapDetectiveHireStatus(status: number): DetectiveHireRecord["status"] {
+  switch (status) {
+    case DetectiveHireStatus.Pending:
+      return "pending";
+    case DetectiveHireStatus.Success:
+      return "success";
+    case DetectiveHireStatus.Failed:
+      return "failed";
+    default:
+      return status;
+  }
+}
+
+/** A hire is kill-eligible only after the player reveals the target city on-chain. */
+export function isDetectiveHireRevealed(h: DetectiveHireRecord): boolean {
+  if (!h.isTargetRevealed) return false;
+  if (h.targetCityId === null || h.targetCityId === undefined) return false;
+  const { status } = h;
+  if (typeof status === "number") {
+    return status === DetectiveHireStatus.Success;
+  }
+  return status === "revealed" || status === "success";
+}
+
+async function resolveCanKillUntilTime(params: {
+  publicClient: ReadClient;
+  detectiveAgencyAddress: `0x${string}`;
+  wallet: `0x${string}`;
+  hire: OnChainDetectiveHire;
+  targetFoundDuration: bigint;
+}): Promise<number | null> {
+  const { publicClient, detectiveAgencyAddress, wallet, hire, targetFoundDuration } =
+    params;
+  if (!hire.isTargetRevealed) return null;
+
+  try {
+    const until = await publicClient.readContract({
+      address: detectiveAgencyAddress,
+      abi: DETECTIVE_AGENCY_ABI as Abi,
+      functionName: "canKillUntil",
+      args: [wallet, hire.target, hire.targetCityId],
+    });
+    return Number(until as bigint);
+  } catch {
+    const foundTime = Number(hire.startedAt) + Number(hire.targetNumber) * 60;
+    return foundTime + Number(targetFoundDuration);
+  }
 }
 
 export type KillBlockReason =
   | "eligible"
   | "checking"
   | "not_found"
+  | "not_revealed"
   | "wrong_city"
   | "expired";
 
@@ -118,19 +191,23 @@ function delay(ms: number): Promise<void> {
 /**
  * Player's in-game bullet balance.
  *
- * REAL read against the deployed Bullets contract (`balanceOf`).
+ * REAL read against the deployed Bullets contract (`balanceOf`), which is
+ * privacy-gated by the connected wallet's signed auth message — same args as
+ * `exchange-bullet-action` and the header bullet balance chip.
  */
 export async function getBulletBalance(params: {
   publicClient: ReadClient;
   bulletsAddress: `0x${string}`;
   wallet: `0x${string}`;
+  message: string;
+  signature: `0x${string}`;
 }): Promise<number> {
-  const { publicClient, bulletsAddress, wallet } = params;
+  const { publicClient, bulletsAddress, wallet, message, signature } = params;
   const raw = await publicClient.readContract({
     address: bulletsAddress,
     abi: BULLET_ABI as Abi,
     functionName: "balanceOf",
-    args: [wallet],
+    args: [wallet, message, signature],
   });
   return Number(formatEther(raw as bigint));
 }
@@ -191,74 +268,74 @@ export async function getTargetSafehouseStatus(params: {
 /**
  * The connected player's detective hires (used to compute kill eligibility).
  *
- * MOCK: returns a deterministic list covering every eligibility scenario. The
- * "eligible" / "expired" / "safehouse" targets are placed in the player's own
- * city, while the "wrong city" target sits in a different city, so the demo
- * works regardless of where the player currently is.
- *
- * TODO(contract): replace with the paginated on-chain read, e.g.
- *   const [hireIds, list] = await publicClient.readContract({
- *     address: addresses.detectiveAgency, abi: DETECTIVE_AGENCY_ABI,
- *     functionName: "getUserDetectiveHires",
- *     args: [wallet, startIndex, pageSize, message, signature],
- *   });
- * then map each record to DetectiveHireRecord. Note `canKillUntilTime` is
- * derived: startedAt + targetNumber*60 + DETECTIVE_TARGET_FOUND_DURATION.
+ * REAL read: paginated `getUserDetectiveHires` on the Detective Agency contract,
+ * matching `detective-agency-action.tsx`. Kill windows use `canKillUntil` when
+ * the target has been revealed.
  */
 export async function getUserDetectiveHires(params: {
+  publicClient: ReadClient;
+  detectiveAgencyAddress: `0x${string}`;
   wallet: `0x${string}`;
-  playerCityId: number | null;
+  message: string;
+  signature: `0x${string}`;
 }): Promise<DetectiveHireRecord[]> {
-  await delay(600);
-  const now = Math.floor(Date.now() / 1000);
-  const sameCity = params.playerCityId ?? 0;
-  const otherCity = sameCity === 0 ? 1 : 0;
-  const TWO_HOURS = 2 * 60 * 60;
+  const {
+    publicClient,
+    detectiveAgencyAddress,
+    wallet,
+    message,
+    signature,
+  } = params;
 
-  return [
-    {
-      target: MOCK_TARGETS.eligible,
-      targetName: "Lucky Luciano",
-      status: "revealed",
-      isTargetRevealed: true,
-      targetCityId: sameCity,
-      canKillUntilTime: now + TWO_HOURS,
-    },
-    {
-      target: MOCK_TARGETS.wrongCity,
-      targetName: "Frank Costello",
-      status: "revealed",
-      isTargetRevealed: true,
-      targetCityId: otherCity,
-      canKillUntilTime: now + TWO_HOURS,
-    },
-    {
-      target: MOCK_TARGETS.expired,
-      targetName: "Meyer Lansky",
-      status: "revealed",
-      isTargetRevealed: true,
-      targetCityId: sameCity,
-      canKillUntilTime: now - 60, // window already closed
-    },
-    {
-      // Located but not yet revealed → counts as "not located" for kills.
-      target: MOCK_TARGETS.notLocated,
-      targetName: "Bugsy Siegel",
-      status: "pending",
-      isTargetRevealed: false,
-      targetCityId: null,
-      canKillUntilTime: null,
-    },
-    {
-      // Revealed + in-city, but the safehouse check will block this one first.
-      target: MOCK_TARGETS.safehouse,
-      targetName: "Al Capone",
-      status: "revealed",
-      isTargetRevealed: true,
-      targetCityId: sameCity,
-      canKillUntilTime: now + TWO_HOURS,
-    },
-  ];
+  const targetFoundDuration = (await publicClient.readContract({
+    address: detectiveAgencyAddress,
+    abi: DETECTIVE_AGENCY_ABI as Abi,
+    functionName: "targetFoundDuration",
+  })) as bigint;
+
+  const pageSize = 20;
+  let startIndex = 0;
+  const onChainHires: OnChainDetectiveHire[] = [];
+
+  while (true) {
+    const result = await publicClient.readContract({
+      address: detectiveAgencyAddress,
+      abi: DETECTIVE_AGENCY_ABI as Abi,
+      functionName: "getUserDetectiveHires",
+      args: [wallet, startIndex, pageSize, message, signature],
+    });
+
+    const [hireIds, list] = result as [readonly number[], readonly OnChainDetectiveHire[]];
+    if (!hireIds?.length) break;
+
+    for (let i = 0; i < hireIds.length; i++) {
+      onChainHires.push(list[i]);
+    }
+
+    if (hireIds.length < pageSize) break;
+    startIndex += pageSize;
+  }
+
+  const records: DetectiveHireRecord[] = [];
+  for (const hire of onChainHires) {
+    const canKillUntilTime = await resolveCanKillUntilTime({
+      publicClient,
+      detectiveAgencyAddress,
+      wallet,
+      hire,
+      targetFoundDuration,
+    });
+
+    records.push({
+      target: hire.target,
+      status: mapDetectiveHireStatus(hire.status),
+      isTargetRevealed: hire.isTargetRevealed,
+      targetCityId: hire.isTargetRevealed ? hire.targetCityId : null,
+      canKillUntilTime,
+    });
+  }
+
+  return records;
 }
 
 /**
@@ -316,20 +393,27 @@ export function computeKillEligibility(params: {
 
   // 1) Hires that match the entered target by address OR name.
   const matching = hires.filter((h) => {
-    const byAddr = addr !== null && h.target.toLowerCase() === addr;
+    const hireAddr = h.target.toLowerCase();
+    const byAddr = addr !== null && hireAddr === addr;
     const byName =
-      name !== null && (h.targetName?.toLowerCase() ?? "") === name;
+      name !== null &&
+      (h.targetName?.toLowerCase() ?? "") === name;
     return byAddr || byName;
   });
 
-  // 2) Keep only revealed hires with a known city.
-  const revealed = matching.filter(
-    (h) =>
-      (h.isTargetRevealed || h.status === "revealed") &&
-      h.targetCityId !== null &&
-      h.targetCityId !== undefined,
-  );
+  // 2) Keep only hires where the target city was revealed on-chain.
+  const revealed = matching.filter(isDetectiveHireRevealed);
   if (revealed.length === 0) {
+    const awaitingReveal = matching.some((h) => {
+      const succeeded =
+        typeof h.status === "number"
+          ? h.status === DetectiveHireStatus.Success
+          : h.status === "success";
+      return succeeded && !h.isTargetRevealed;
+    });
+    if (awaitingReveal) {
+      return { reason: "not_revealed", targetCityId: null, targetCityName: null };
+    }
     return { reason: "not_found", targetCityId: null, targetCityName: null };
   }
 
@@ -364,7 +448,9 @@ export function getEligibilityMessage(
   const city = cityName ?? "another city";
   switch (reason) {
     case "not_found":
-      return "This target has not been located. Hire detectives at the Detective Agency and reveal their location before initiating a kill.";
+      return "This target has not been located. Hire detectives at the Detective Agency, wait for them to find the target, then reveal their location before initiating a kill.";
+    case "not_revealed":
+      return "Detectives found this target, but their city has not been revealed yet. Return to the Detective Agency and reveal the location before initiating a kill.";
     case "wrong_city":
       return `Your target is in ${city}. Travel to the same city before initiating a kill.`;
     case "expired":
@@ -378,13 +464,21 @@ export function getEligibilityMessage(
 // Write
 // ─────────────────────────────────────────────────────────────────────────────
 
+import {
+  buildKillBattlePayload,
+  type KillBattlePayload,
+} from "@/lib/killOutcome";
+
+/** When true, `initiateKill` builds a mock battle payload for the outcome page. */
+export const MOCK_KILL_INITIATION_ENABLED = true;
+
 /**
  * Initiate a kill against `targetAddress`, spending `bulletAmount` bullets.
  *
  * MOCK: the MafiaKill contract is not deployed yet. This validates inputs and
- * resolves after a short delay to simulate a pending → success tx. The caller is
- * responsible for running all the gameplay checks first and showing the
- * "coming soon" message after this resolves.
+ * resolves after a short delay to simulate a pending → success tx. When
+ * `MOCK_KILL_INITIATION_ENABLED` is true, returns a deterministic battle payload
+ * for the kill-outcome page.
  *
  * TODO(contract): replace with a real wallet write + tx confirmation, e.g.
  *   const hash = await walletClient.writeContract({
@@ -393,12 +487,24 @@ export function getEligibilityMessage(
  *     args: [targetAddress, BigInt(bulletAmount), message, signature],
  *   });
  *   await publicClient.waitForTransactionReceipt({ hash });
+ * then map KillSucceeded / KillFailed events into KillBattlePayload.
  */
 export async function initiateKill(params: {
   targetAddress: `0x${string}`;
   bulletAmount: number;
-}): Promise<void> {
-  const { targetAddress, bulletAmount } = params;
+  attackerAddress: `0x${string}`;
+  attackerName: string;
+  victimName: string;
+  cityName: string;
+}): Promise<KillBattlePayload | void> {
+  const {
+    targetAddress,
+    bulletAmount,
+    attackerAddress,
+    attackerName,
+    victimName,
+    cityName,
+  } = params;
   if (!isAddress(targetAddress)) {
     throw new Error("Invalid target address");
   }
@@ -406,5 +512,16 @@ export async function initiateKill(params: {
     throw new Error("Invalid bullet amount");
   }
   await delay(900);
-  // No-op: real on-chain initiation lands here once the contract is deployed.
+
+  if (!MOCK_KILL_INITIATION_ENABLED) {
+    return;
+  }
+
+  return buildKillBattlePayload({
+    attacker: { name: attackerName, address: attackerAddress },
+    victim: { name: victimName, address: targetAddress },
+    bulletsFired: bulletAmount,
+    cityName,
+    txHash: `0x${"ab".repeat(32)}`,
+  });
 }
