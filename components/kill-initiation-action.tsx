@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useAccount, usePublicClient } from "wagmi";
 import { isAddress, getAddress } from "viem";
@@ -16,6 +17,7 @@ import {
   Clock,
   User,
   Eye,
+  Swords,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChain, useChainAddresses } from "@/components/chain-provider";
@@ -35,6 +37,10 @@ import {
   type DetectiveHireRecord,
   type KillBlockReason,
 } from "@/lib/killContract";
+import {
+  getEquippedWeaponInCity,
+  type EquippedWeaponInfo,
+} from "@/lib/equipmentContract";
 import { useKillOutcome } from "@/components/kill-outcome-provider";
 
 function shortAddress(addr: string): string {
@@ -102,6 +108,90 @@ export function KillInitiationAction() {
       cancelled = true;
     };
   }, [publicClient, address, authData, addresses.userProfile]);
+
+  // ── Weapon equipped in current city ───────────────────────────────────────
+  const [inventoryScriptReady, setInventoryScriptReady] = useState(
+    () => typeof window !== "undefined" && !!window.MafiaInventory,
+  );
+  const [weaponChecking, setWeaponChecking] = useState(false);
+  const [equippedWeapon, setEquippedWeapon] = useState<EquippedWeaponInfo | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (inventoryScriptReady) return;
+    if (typeof window !== "undefined" && window.MafiaInventory) {
+      setInventoryScriptReady(true);
+      return;
+    }
+    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
+    if (existing) {
+      existing.addEventListener("load", () => setInventoryScriptReady(true));
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "/js/mafia-utils.js";
+    script.async = true;
+    script.onload = () => setInventoryScriptReady(true);
+    document.head.appendChild(script);
+  }, [inventoryScriptReady]);
+
+  const loadEquippedWeapon = useCallback(async (): Promise<EquippedWeaponInfo | null> => {
+    if (
+      !publicClient ||
+      !address ||
+      !authData ||
+      playerCity?.cityId === undefined ||
+      !inventoryScriptReady
+    ) {
+      return null;
+    }
+    return getEquippedWeaponInCity({
+      publicClient,
+      equipmentAddress: addresses.equipment,
+      inventoryAddress: addresses.inventory,
+      chain: chainConfig.id,
+      account: address,
+      cityId: playerCity.cityId,
+      signMsg: authData.message,
+      signature: authData.signature,
+    });
+  }, [
+    publicClient,
+    address,
+    authData,
+    playerCity?.cityId,
+    addresses.equipment,
+    addresses.inventory,
+    chainConfig.id,
+    inventoryScriptReady,
+  ]);
+
+  useEffect(() => {
+    if (!authData || playerCity?.cityId === undefined || !inventoryScriptReady) {
+      setEquippedWeapon(null);
+      setWeaponChecking(false);
+      return;
+    }
+    let cancelled = false;
+    setWeaponChecking(true);
+    (async () => {
+      try {
+        const weapon = await loadEquippedWeapon();
+        if (!cancelled) setEquippedWeapon(weapon);
+      } catch (e) {
+        console.error("Failed to read equipped weapon:", e);
+        if (!cancelled) setEquippedWeapon(null);
+      } finally {
+        if (!cancelled) setWeaponChecking(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadEquippedWeapon, authData, playerCity?.cityId, inventoryScriptReady]);
+
+  const hasWeaponEquipped = equippedWeapon !== null;
 
   // ── Known profiles (autocomplete) ───────────────────────────────────────────
   const [knownProfiles, setKnownProfiles] = useState<KnownProfile[]>([]);
@@ -318,7 +408,9 @@ export function KillInitiationAction() {
     safehouseChecking ||
     targetInSafehouse ||
     hiresLoading ||
-    detectiveBlocked;
+    detectiveBlocked ||
+    weaponChecking ||
+    !hasWeaponEquipped;
 
   const handleConfirm = async () => {
     // 1) Wallet connected
@@ -332,23 +424,39 @@ export function KillInitiationAction() {
       requestSignature();
       return;
     }
-    // 3) Empty victim
+    // 3) Weapon equipped in current city — fresh read
+    let weapon = equippedWeapon;
+    try {
+      weapon = await loadEquippedWeapon();
+      setEquippedWeapon(weapon);
+    } catch (e) {
+      console.error("Weapon re-check failed:", e);
+    }
+    if (!weapon) {
+      toast.error(
+        playerCity?.cityName
+          ? `Equip a weapon in ${playerCity.cityName} before initiating a kill.`
+          : "Equip a weapon in your current city before initiating a kill.",
+      );
+      return;
+    }
+    // 4) Empty victim
     const trimmed = victim.trim();
     if (trimmed.length === 0) {
       toast.error("Please enter a victim name or wallet address.");
       return;
     }
-    // 4) No resolved target
+    // 5) No resolved target
     if (!targetAddress) {
       toast.error("Target not found. Select a valid profile or wallet address.");
       return;
     }
-    // 5) Self-target
+    // 6) Self-target
     if (isSelfTarget) {
       toast.error("You cannot target yourself.");
       return;
     }
-    // 6) Safehouse — fresh read
+    // 7) Safehouse — fresh read
     let inSafehouse = targetInSafehouse;
     try {
       const status = await getTargetSafehouseStatus({ target: targetAddress });
@@ -361,7 +469,7 @@ export function KillInitiationAction() {
       toast.error("This target is in the safehouse and cannot be attacked.");
       return;
     }
-    // 7) Detective-agency eligibility
+    // 8) Detective-agency eligibility
     const elig = computeKillEligibility({
       hires: hiresWithNames,
       targetAddress,
@@ -373,12 +481,12 @@ export function KillInitiationAction() {
       toast.error(getEligibilityMessage(elig.reason, elig.targetCityName));
       return;
     }
-    // 8) Bullet amount valid
+    // 9) Bullet amount valid
     if (!Number.isFinite(bulletAmount) || bulletAmount < 1) {
       toast.error("Enter a valid bullet amount to spend on this attack.");
       return;
     }
-    // 9) Enough bullets
+    // 10) Enough bullets
     if (bulletBalance !== null && bulletAmount > bulletBalance) {
       toast.error("You don't have enough bullets for this attack.");
       return;
@@ -456,6 +564,56 @@ export function KillInitiationAction() {
       </div>
 
       <div className="rounded-xl border border-border bg-card p-6">
+        {/* Weapon requirement (player readiness) */}
+        {authData && playerCity && (
+          <div className="mb-4">
+            {weaponChecking ? (
+              <div className="flex items-center gap-2 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-400">
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                <span>Checking weapon in {playerCity.cityName}…</span>
+              </div>
+            ) : hasWeaponEquipped && equippedWeapon ? (
+              <div className="flex items-center gap-2 rounded-md border border-green-400/30 bg-green-400/10 px-3 py-2">
+                <Swords className="h-3.5 w-3.5 shrink-0 text-green-400" />
+                <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                  <span className="font-medium">{equippedWeapon.name}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · #{equippedWeapon.itemId} ·{" "}
+                  </span>
+                  <span className="font-mono text-red-400/90">
+                    {equippedWeapon.offense} OFF
+                  </span>
+                  <span className="text-muted-foreground"> / </span>
+                  <span className="font-mono text-cyan-400/90">
+                    {equippedWeapon.defense} DEF
+                  </span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {playerCity.cityName}
+                  </span>
+                </span>
+                <Link
+                  href="/equipment"
+                  className="shrink-0 text-[10px] font-medium text-green-400 hover:underline"
+                >
+                  Change
+                </Link>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-md border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-400">
+                <Swords className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 flex-1">
+                  No weapon in {playerCity.cityName}.{" "}
+                  <Link href="/equipment" className="font-medium hover:underline">
+                    Equip
+                  </Link>
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Fields: victim + bullets side by side */}
         <div className="flex flex-col gap-4 sm:flex-row">
           {/* Victim */}

@@ -85,6 +85,7 @@ import {
   Flag,
   Wallet,
   ArrowRightLeft,
+  Skull,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -147,7 +148,9 @@ export type Tab =
   | "kill-history"
   | "kill-initiation"
   | "kill-outcome"
-  | "kill-attempt";
+  | "kill-attempt"
+  | "rebirth"
+  | "unstake-mafia";
 
 type NavItem = { id: Tab; label: string; icon: React.ReactNode };
 
@@ -172,7 +175,7 @@ export function getTabFromPath(pathname: string): Tab {
     "biz-slotmachine", "biz-jackpot", "biz-lottery-hall", "biz-safehouse", "biz-booze", "biz-narcs",
     "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
     "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-bullet", "exchange-liquidity", "exchange-otc", "referral",
-    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao", "backfire-settings", "kill-history", "kill-initiation", "kill-outcome", "kill-attempt"
+    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao", "backfire-settings", "kill-history", "kill-initiation", "kill-outcome", "kill-attempt", "rebirth", "unstake-mafia"
   ];
   return validTabs.includes(firstSegment as Tab) ? (firstSegment as Tab) : "crime";
 }
@@ -196,6 +199,7 @@ const KILL_SECTION: NavItem[] = [
   { id: "backfire-settings", label: "Backfire", icon: <Target className="h-4 w-4" /> },
   { id: "kill-history", label: "Kill History", icon: <Crosshair className="h-4 w-4" /> },
   { id: "kill-attempt", label: "Kill Attempt", icon: <Swords className="h-4 w-4" /> },
+  { id: "rebirth", label: "Rebirth", icon: <Skull className="h-4 w-4" /> },
 ];
 
 const CITY_SECTION: NavItem[] = [

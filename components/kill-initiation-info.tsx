@@ -1,6 +1,6 @@
 "use client";
 
-import { Crosshair, ShieldAlert, Search, MapPin, Clock } from "lucide-react";
+import { Crosshair, ShieldAlert, Search, MapPin, Clock, Swords } from "lucide-react";
 
 export function KillInitiationInfo() {
   return (
@@ -19,6 +19,11 @@ export function KillInitiationInfo() {
       </p>
 
       <div className="flex flex-col gap-2.5">
+        <Requirement
+          icon={<Swords className="h-3.5 w-3.5 text-red-400" />}
+          title="Weapon equipped"
+          text="You must have a weapon equipped in your current city before you can attack."
+        />
         <Requirement
           icon={<Search className="h-3.5 w-3.5 text-amber-400" />}
           title="Located via detectives"

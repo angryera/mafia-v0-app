@@ -462,6 +462,22 @@ const TAB_CONFIG: Record<
     contractAddress: "",
     contractShort: "",
   },
+  rebirth: {
+    title: "Rebirth",
+    description:
+      "Return from the dead by choosing a rebirth bundle. Cost scales with your rank — rewards are minted fresh; lost inventory is not restored.",
+    codeSample: "rebirth(uint8 optionId)",
+    contractAddress: "",
+    contractShort: "",
+  },
+  "unstake-mafia": {
+    title: "Unstake $MAFIA",
+    description:
+      "View $MAFIA staked through equipment per city and unstake it back to your wallet.",
+    codeSample: "equipItems(cityId, itemIds, delta)",
+    contractAddress: "0xa2AA522B4CCBc95Dec0aFCa2B0c645f9C126cD24",
+    contractShort: "0xa2AA...cD24",
+  },
 };
 
 export { TAB_CONFIG };

@@ -1,10 +1,8 @@
 "use client";
 
-import { use } from "react";
-import { usePathname } from "next/navigation";
-import { ShellLayout } from "@/components/shell-layout";
-import { FamilyDetail } from "@/components/family-detail";
 import { useChain } from "@/components/chain-provider";
+import { FamilyDetail } from "@/components/family-detail";
+import { use } from "react";
 
 export default function FamilyDetailPage({
   params,
