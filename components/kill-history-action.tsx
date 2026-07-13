@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { format } from "date-fns";
+import { usePublicClient } from "wagmi";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,11 @@ import {
 } from "@/components/ui/table";
 import { Crosshair, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useChain } from "@/components/chain-provider";
+import {
+  fetchKillHistory,
+  type KillHistoryEntry,
+} from "@/lib/killHistoryService";
 
 // ────────────────────────────────────────────────────────────────
 // Data model
@@ -26,16 +32,12 @@ enum KillResultType {
 
 interface KillEntry {
   id: string;
-  timestamp: number; // unix seconds
+  timestamp: number;
   attackerName: string;
   victimName: string;
   attackerIsDead?: boolean;
   victimIsDead?: boolean;
   resultType: KillResultType;
-  // Bullets are tracked per direction so a single figure is never ambiguous:
-  // - attackerBullets: bullets the attacker fired at the victim.
-  // - backfireBullets: bullets returned by backfire that struck the attacker.
-  // A double kill carries both; a backfire kill is driven by backfireBullets.
   attackerBullets?: number;
   backfireBullets?: number;
 }
@@ -46,95 +48,29 @@ const RESULT_LABELS: Record<KillResultType, string> = {
   [KillResultType.BackfireKill]: "Backfire kill",
 };
 
-// Distinct accent color per result type.
 const RESULT_COLORS: Record<KillResultType, string> = {
   [KillResultType.SingleKill]: "text-amber-400",
   [KillResultType.DoubleKill]: "text-red-400",
   [KillResultType.BackfireKill]: "text-purple-400",
 };
 
-// ────────────────────────────────────────────────────────────────
-// Mock data source
-//
-// TODO: Replace this mock with on-chain data. Once the `MafiaKill`
-// contract is deployed, this should read its `KillSucceeded` events
-// and map them into KillEntry objects (names are already included in
-// the event payload, so no address→name resolution is needed here).
-// Map the event's bullet fields onto attackerBullets (attacker → victim)
-// and backfireBullets (return fire → attacker) so each figure stays
-// directional rather than collapsing into one ambiguous total.
-// ────────────────────────────────────────────────────────────────
-const NOW = Math.floor(Date.now() / 1000);
-const HOUR = 3600;
-
-const MOCK_KILLS: KillEntry[] = [
-  {
-    id: "kill-1",
-    timestamp: NOW - 2 * HOUR,
-    attackerName: "TonySoprano",
-    victimName: "PaulieWalnuts",
-    victimIsDead: true,
-    resultType: KillResultType.SingleKill,
-    attackerBullets: 12500,
-  },
-  {
-    id: "kill-2",
-    timestamp: NOW - 8 * HOUR,
-    attackerName: "VitoCorleone",
-    victimName: "Salvatore",
-    attackerIsDead: true,
-    victimIsDead: true,
-    resultType: KillResultType.DoubleKill,
-    attackerBullets: 48000,
-    backfireBullets: 31000,
-  },
-  {
-    id: "kill-3",
-    timestamp: NOW - 14 * HOUR,
-    attackerName: "Christopher",
-    victimName: "TonySoprano",
-    attackerIsDead: true,
-    resultType: KillResultType.BackfireKill,
-    attackerBullets: 9000,
-    backfireBullets: 22000,
-  },
-  {
-    id: "kill-4",
-    timestamp: NOW - 26 * HOUR,
-    attackerName: "Silvio",
-    victimName: "Adriana",
-    victimIsDead: true,
-    resultType: KillResultType.SingleKill,
-    attackerBullets: 8500,
-  },
-  {
-    id: "kill-5",
-    timestamp: NOW - 36 * HOUR,
-    attackerName: "Salvatore",
-    victimName: "VitoCorleone",
-    attackerIsDead: true,
-    resultType: KillResultType.BackfireKill,
-    attackerBullets: 40000,
-    backfireBullets: 150000,
-  },
-  {
-    id: "kill-6",
-    timestamp: NOW - 52 * HOUR,
-    attackerName: "PaulieWalnuts",
-    victimName: "Christopher",
-    attackerIsDead: true,
-    victimIsDead: true,
-    resultType: KillResultType.DoubleKill,
-    attackerBullets: 96000,
-    backfireBullets: 58000,
-  },
-];
-
-// Simulates an async data source so the loading state can be exercised.
-function fetchKillHistory(): Promise<KillEntry[]> {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(MOCK_KILLS), 700);
-  });
+function mapHistoryEntry(entry: KillHistoryEntry): KillEntry {
+  const resultType = entry.resultType as KillResultType;
+  return {
+    id: entry.id,
+    timestamp: entry.timestamp,
+    attackerName: entry.attackerName,
+    victimName: entry.victimName,
+    attackerIsDead:
+      resultType === KillResultType.DoubleKill ||
+      resultType === KillResultType.BackfireKill,
+    victimIsDead:
+      resultType === KillResultType.SingleKill ||
+      resultType === KillResultType.DoubleKill,
+    resultType,
+    attackerBullets: entry.attackerBullets,
+    backfireBullets: entry.backfireBullets,
+  };
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -229,20 +165,26 @@ function BulletBreakdown({ entry }: { entry: KillEntry }) {
 }
 
 export function KillHistoryAction() {
+  const publicClient = usePublicClient();
+  const { activeChain } = useChain();
   const [kills, setKills] = useState<KillEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
 
   const loadKills = useCallback(async () => {
+    if (!publicClient) return;
     setIsLoading(true);
     try {
-      const data = await fetchKillHistory();
-      setKills(data);
+      const data = await fetchKillHistory({
+        publicClient,
+        chainId: activeChain,
+      });
+      setKills(data.map(mapHistoryEntry));
     } finally {
       setIsLoading(false);
       setHasLoaded(true);
     }
-  }, []);
+  }, [publicClient, activeChain]);
 
   useEffect(() => {
     loadKills();

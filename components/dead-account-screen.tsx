@@ -110,10 +110,10 @@ export function DeadAccountScreen({
   const [killerInfo, setKillerInfo] = useState<DeadAccountKillerInfo | null>(
     null,
   );
-  const [killerLoading, setKillerLoading] = useState(false);
+  const [killerLoading, setKillerLoading] = useState(Boolean(victimAddress));
 
   useEffect(() => {
-    if (!publicClient || !victimAddress) {
+    if (!victimAddress) {
       setKillerInfo(null);
       setKillerLoading(false);
       return;
@@ -124,7 +124,7 @@ export function DeadAccountScreen({
     setKillerInfo(null);
 
     fetchDeadAccountKillerInfo({
-      publicClient,
+      publicClient: publicClient ?? undefined,
       chainId: activeChain,
       victimAddress,
       victimName,
@@ -176,18 +176,19 @@ export function DeadAccountScreen({
           </p>
         </div>
 
-        {killerLoading && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading killer details...
-          </div>
-        )}
-
-        {!killerLoading && killerInfo && (
-          <div className="w-full">
+        <div className="w-full space-y-2 text-left">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+            Killer information
+          </p>
+          {killerLoading ? (
+            <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading killer details...
+            </div>
+          ) : killerInfo ? (
             <KillerInfoCard info={killerInfo} />
-          </div>
-        )}
+          ) : null}
+        </div>
 
         {showActions && (
           <div className="flex w-full flex-col gap-3 sm:max-w-sm">
@@ -210,7 +211,7 @@ export function DeadAccountScreen({
               size="lg"
               variant="outline"
               className="w-full"
-              onClick={() => router.push("/create-profile")}
+              onClick={() => router.push("/buy")}
             >
               Create new account
             </Button>

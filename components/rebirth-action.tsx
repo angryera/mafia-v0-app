@@ -401,7 +401,7 @@ export function RebirthAction() {
               </Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link href="/equipment">
+              <Link href="/unstake-mafia">
                 <Wrench className="mr-2 h-4 w-4" />
                 Equipment
               </Link>

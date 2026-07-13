@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import {
   useWaitForTransactionReceipt,
   useReadContract,
@@ -22,6 +23,7 @@ import {
   useChainExplorer,
 } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
+import { usePlayerDeadState } from "@/hooks/use-player-dead-state";
 import {
   Loader2,
   CheckCircle2,
@@ -39,6 +41,7 @@ import {
   Building2,
   Users,
   Wrench,
+  Skull,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -70,6 +73,8 @@ export function RankActivationAction() {
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
   const { authData } = useAuth();
+  const { isDead, profileLoaded } = usePlayerDeadState();
+  const deadView = profileLoaded && isDead;
 
   // ── Contract reads ───────────────────────
   const { data: stakingInfoRaw, refetch: refetchStaking } = useReadContract({
@@ -410,6 +415,121 @@ export function RankActivationAction() {
         <p className="mt-3 text-sm text-muted-foreground">
           Connect your wallet to view rank activation.
         </p>
+      </div>
+    );
+  }
+
+  if (deadView) {
+    return (
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-5">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight text-foreground">
+            Unstake rank MAFIA
+          </h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            Withdraw your rank MAFIA stakes while your account is dead. This
+            does not revive your account.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-border bg-card p-5">
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Coins className="h-4 w-4 text-primary" />
+            Total Rank Stake
+          </h3>
+          <div className="flex items-baseline gap-2">
+            <span className="font-mono text-2xl font-bold text-foreground">
+              {totalStaked.toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })}
+            </span>
+            <span className="text-sm text-muted-foreground">MAFIA</span>
+          </div>
+          {currentStakeLevel > 2 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Latest staked rank:{" "}
+              <span className="font-semibold text-foreground">
+                {RANK_NAMES[currentStakeLevel]}
+              </span>
+            </p>
+          )}
+        </div>
+
+        {currentStakeLevel > 2 ? (
+          <div className="rounded-xl border border-border bg-card p-5">
+            <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-foreground">
+              <ArrowDown className="h-4 w-4 text-red-400" />
+              Unstake
+            </h3>
+            <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+              Unstake MAFIA from your latest staked rank (
+              <span className="font-semibold text-foreground">
+                {RANK_NAMES[currentStakeLevel]}
+              </span>
+              ). After unstaking, a cooldown applies before you can unstake
+              again.
+            </p>
+
+            {unstakeCooldownRemaining > 0 ? (
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-background/50 p-3">
+                <Timer className="h-4 w-4 text-amber-400" />
+                <span className="text-xs text-muted-foreground">
+                  Cooldown:{" "}
+                  <span className="font-mono font-semibold text-foreground">
+                    {fmtCooldown(unstakeCooldownRemaining)}
+                  </span>
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={handleUnstake}
+                disabled={isBusy}
+                className={cn(
+                  "flex w-full items-center justify-center gap-2 rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400 transition-all hover:bg-red-500/20 active:scale-[0.98]",
+                  isBusy && "cursor-not-allowed opacity-60",
+                )}
+              >
+                {unstakePending || unstakeConfirming ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {unstakeConfirming ? "Confirming..." : "Unstaking..."}
+                  </>
+                ) : (
+                  <>
+                    <ArrowDown className="h-4 w-4" />
+                    Unstake {RANK_NAMES[currentStakeLevel]}
+                  </>
+                )}
+              </button>
+            )}
+
+            {unstakeHash && (
+              <a
+                href={`${explorer}/tx/${unstakeHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 block text-center text-xs text-primary hover:underline"
+              >
+                View transaction
+              </a>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">
+            You have no rank MAFIA staked above the free ranks.
+          </div>
+        )}
+
+        <Link
+          href="/rebirth"
+          className={cn(
+            "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-all",
+            "bg-red-600 text-white hover:bg-red-500 active:scale-[0.98]",
+          )}
+        >
+          <Skull className="h-4 w-4" />
+          Go to rebirth page
+        </Link>
       </div>
     );
   }

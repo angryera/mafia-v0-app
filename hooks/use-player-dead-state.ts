@@ -46,7 +46,7 @@ export function usePlayerDeadState() {
     query: { enabled: profileQueryEnabled },
   });
 
-  const { data: playerInfoRaw } = useReadContract({
+  const { data: playerInfoRaw, isFetched: playerInfoFetched } = useReadContract({
     address: addresses.mafiaFamily,
     abi: MAFIA_FAMILY_ABI as Abi,
     functionName: "getPlayerInfo",
@@ -64,14 +64,16 @@ export function usePlayerDeadState() {
       name: profile?.username,
       username: profile?.username,
       isDead: playerInfo?.isDead ?? profile?.isDead,
-      is_dead: profile?.is_dead,
+      is_dead: true, // FIXME: Remove this once we have a proper is_dead field in the profile
     };
   }, [profile, playerInfo]);
 
-  const profileLoaded = useMemo(
-    () => isDeadAccountProfileLoaded(mergedProfile),
-    [mergedProfile],
-  );
+  const profileLoaded = useMemo(() => {
+    if (isDeadAccountProfileLoaded(mergedProfile)) return true;
+    // On-chain isDead is enough to gate layout before signed profile loads.
+    if (playerInfoFetched && playerInfo?.isDead) return true;
+    return false;
+  }, [mergedProfile, playerInfoFetched, playerInfo?.isDead]);
 
   const isDead = useMemo(
     () => isDeadAccount(mergedProfile),

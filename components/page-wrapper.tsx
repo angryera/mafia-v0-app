@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { getTabFromPath } from "@/components/header";
 import type { Tab } from "@/components/header";
 import { useChain } from "@/components/chain-provider";
+import { useDeadAccountMinimalLayout } from "@/hooks/use-dead-account-minimal-layout";
 
 const TAB_CONFIG: Record<
   Tab,
@@ -493,16 +494,21 @@ export function PageWrapper({ children, sidebar, fullWidth = false, hideHeader =
   const pathname = usePathname();
   const activeTab = getTabFromPath(pathname);
   const { chainConfig } = useChain();
+  const deadMinimalLayout = useDeadAccountMinimalLayout();
 
   // Ensure config always has a valid value with explicit fallback
   const rawConfig = TAB_CONFIG[activeTab];
   const config = rawConfig ?? TAB_CONFIG.crime;
 
+  const showPageSidebar = Boolean(sidebar) && !deadMinimalLayout;
+  const showPageHeader = !hideHeader && !deadMinimalLayout;
+  const useFullWidth = fullWidth || deadMinimalLayout;
+
   return (
     <>
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:py-8">
         {/* Page header */}
-        {!hideHeader && (
+        {showPageHeader && (
           <section className="mb-8">
             <h2 className="text-balance text-xl font-bold tracking-tight text-foreground sm:text-2xl">
               {config.title}
@@ -519,11 +525,11 @@ export function PageWrapper({ children, sidebar, fullWidth = false, hideHeader =
         )}
 
         {/* Content */}
-        {fullWidth ? (
+        {useFullWidth ? (
           children
         ) : (
           <div className="flex flex-col gap-8 lg:flex-row">
-            {sidebar && (
+            {showPageSidebar && (
               <aside className="lg:w-80 shrink-0">
                 <div className="sticky top-20">{sidebar}</div>
               </aside>
@@ -534,6 +540,7 @@ export function PageWrapper({ children, sidebar, fullWidth = false, hideHeader =
       </div>
 
       {/* Footer */}
+      {!deadMinimalLayout && (
       <footer className="border-t border-border py-6 mt-8">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">
           <p className="text-center text-xs text-muted-foreground">
@@ -556,6 +563,7 @@ export function PageWrapper({ children, sidebar, fullWidth = false, hideHeader =
           </p>
         </div>
       </footer>
+      )}
     </>
   );
 }

@@ -84,16 +84,16 @@ export function shouldShowDeadAccountFullscreen(
   return isDead && !isDeadAccountPathAllowed(pathname);
 }
 
+export function isDeadAccountMinimalPath(pathname: string): boolean {
+  return MINIMAL_LAYOUT_PATHS.some((base) => matchesPathPrefix(pathname, base));
+}
+
 export function shouldUseDeadAccountMinimalLayout(
   pathname: string,
   isDead: boolean,
 ): boolean {
   if (!isDead) return false;
-  const onMinimalPath = MINIMAL_LAYOUT_PATHS.some((base) =>
-    matchesPathPrefix(pathname, base),
-  );
-  const wouldShowFullscreen = shouldShowDeadAccountFullscreen(pathname, isDead);
-  return onMinimalPath || wouldShowFullscreen;
+  return isDeadAccountMinimalPath(pathname);
 }
 
 export const KILL_RESULT_LABELS: Record<DeadAccountKillerResultType, string> = {

@@ -51,6 +51,8 @@ export type ChainConfig = {
         map: `0x${string}`;
         /** MafiaFamily — `getPlayerInfo(player)` for familyId / level / isDead. */
         mafiaFamily: `0x${string}`;
+        /** MafiaKill — `KillSucceeded` events; zero address until deployed. */
+        kill: `0x${string}`;
         /** MafiaFamilyCashBank — family in-game cash treasury (deposit / withdraw). */
         familyGameCashBank: `0x${string}`;
         /**
@@ -116,6 +118,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             ogCrate: getAddress("0x16B11C057cA6d354E81D58B375CB118f7930807c"),
             map: getAddress("0x1c88060e4509c59b4064A7a9818f64AeC41ef19E"),
             mafiaFamily: getAddress("0x1bC581fe134BdC7432eF8ba75BCeEd242F90BcD2"),
+            kill: getAddress("0x0000000000000000000000000000000000000000"),
             familyGameCashBank: getAddress("0x26cDB03a72Ac5866d43184526F4586D8942739F2"),
             bulletToken: getAddress("0xe92F5d948d8764904F9703ae878a3A9e6b3952eb"),
             ocLobby: getAddress("0x281C0Db67c96ee7Ad32AF25817cB3964Fc7E79cD"),
@@ -175,6 +178,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             ogCrate: getAddress("0x3325E42aA71188939216b669E8d431718e5bd790"),
             map: getAddress("0xE571Aa670EDeEBd88887eb5687576199652A714F"),
             mafiaFamily: getAddress("0x3363cf983ae23AF2D95a81bA4A39C36084f8BEc4"),
+            kill: getAddress("0x0000000000000000000000000000000000000000"),
             familyGameCashBank: getAddress("0x0000000000000000000000000000000000000000"),
             bulletToken: getAddress("0xe193484ef0f7880eb42c3bc34c1929f2e7680D64"),
             ocLobby: getAddress("0xE9680c72817477f9e51596bD39821C670790a66E"),

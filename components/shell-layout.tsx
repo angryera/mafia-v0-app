@@ -1,15 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { TopBar, Sidebar, getTabFromPath } from "@/components/header";
 import { ProfileGate } from "@/components/profile-gate";
 import { MinimalHeader } from "@/components/minimal-header";
 import { DeadAccountFullscreenGate } from "@/components/dead-account-fullscreen-gate";
+import { useDeadAccountMinimalLayout } from "@/hooks/use-dead-account-minimal-layout";
 import { usePlayerDeadState } from "@/hooks/use-player-dead-state";
-import {
-  shouldShowDeadAccountFullscreen,
-  shouldUseDeadAccountMinimalLayout,
-} from "@/lib/deadAccount";
+import { shouldShowDeadAccountFullscreen } from "@/lib/deadAccount";
+import { TopBar, Sidebar, getTabFromPath } from "@/components/header";
 
 interface ShellLayoutProps {
   children: React.ReactNode;
@@ -23,10 +21,9 @@ export function ShellLayout({ children }: ShellLayoutProps) {
   const deadGateActive = profileLoaded && isDead;
   const showFullscreen =
     deadGateActive && shouldShowDeadAccountFullscreen(pathname, true);
-  const useMinimalLayout =
-    deadGateActive && shouldUseDeadAccountMinimalLayout(pathname, true);
+  const useMinimalLayout = useDeadAccountMinimalLayout();
 
-  if (!showFullscreen) {
+  if (showFullscreen) {
     return <DeadAccountFullscreenGate />;
   }
 
