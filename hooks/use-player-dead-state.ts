@@ -64,7 +64,7 @@ export function usePlayerDeadState() {
       name: profile?.username,
       username: profile?.username,
       isDead: playerInfo?.isDead ?? profile?.isDead,
-      is_dead: true, // FIXME: Remove this once we have a proper is_dead field in the profile
+      is_dead: false, // FIXME: Remove this once we have a proper is_dead field in the profile
     };
   }, [profile, playerInfo]);
 

@@ -164,7 +164,11 @@ function BulletBreakdown({ entry }: { entry: KillEntry }) {
   );
 }
 
-export function KillHistoryAction() {
+export function KillHistoryAction({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const publicClient = usePublicClient();
   const { activeChain } = useChain();
   const [kills, setKills] = useState<KillEntry[]>([]);
@@ -197,22 +201,31 @@ export function KillHistoryAction() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      {/* Header */}
-      <div className="text-center">
-        <div className="flex items-center justify-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
-            <Crosshair className="h-5 w-5" />
+    <div className={cn(embedded ? "space-y-4" : "mx-auto max-w-3xl space-y-6")}>
+      {/* Header — only when used as a standalone page */}
+      {!embedded && (
+        <div className="text-center">
+          <div className="flex items-center justify-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
+              <Crosshair className="h-5 w-5" />
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">
+              Kill history
+            </h2>
           </div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Kill history
-          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+            Preview data — on-chain kill history will load here after the contract
+            is deployed.
+          </p>
         </div>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+      )}
+
+      {embedded && (
+        <p className="text-center text-sm text-muted-foreground">
           Preview data — on-chain kill history will load here after the contract
           is deployed.
         </p>
-      </div>
+      )}
 
       {/* Refresh control */}
       <div className="flex justify-center">

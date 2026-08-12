@@ -9,9 +9,8 @@
 // Status of each contract today:
 //   • Bullet balance      → DEPLOYED  (real read implemented below)
 //   • Player profile/city → DEPLOYED  (real read implemented below)
-//   • Target safehouse    → NOT WIRED (mock — see TODO; reading another player's
-//                            privacy-gated status is not possible with the current
-//                            signed-message ABI, so this is mocked for now)
+//   • Attacker safehouse  → DEPLOYED  (real read via getUserInfo; attacker cannot
+//                            initiate while protected)
 //   • Detective hires      → DEPLOYED  (real read via getUserDetectiveHires)
 //   • initiate kill (write)→ NOT DEPLOYED (mock — validates then resolves)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -20,6 +19,7 @@ import { formatEther, isAddress, type Abi } from "viem";
 import {
   BULLET_ABI,
   DETECTIVE_AGENCY_ABI,
+  SAFEHOUSE_ABI,
   USER_PROFILE_CONTRACT_ABI,
   TRAVEL_DESTINATIONS,
 } from "@/lib/contract";
@@ -165,7 +165,6 @@ export const MOCK_TARGETS = {
   wrongCity: "0x2222222222222222222222222222222222222222" as `0x${string}`,
   expired: "0x3333333333333333333333333333333333333333" as `0x${string}`,
   notLocated: "0x4444444444444444444444444444444444444444" as `0x${string}`,
-  safehouse: "0x5555555555555555555555555555555555555555" as `0x${string}`,
 };
 
 // Known profiles that power the victim-name autocomplete. The mock targets are
@@ -175,7 +174,7 @@ const MOCK_PROFILES: KnownProfile[] = [
   { name: "Frank Costello", address: MOCK_TARGETS.wrongCity },
   { name: "Meyer Lansky", address: MOCK_TARGETS.expired },
   { name: "Bugsy Siegel", address: MOCK_TARGETS.notLocated },
-  { name: "Al Capone", address: MOCK_TARGETS.safehouse },
+  { name: "Al Capone", address: "0x5555555555555555555555555555555555555555" },
   { name: "Carlo Gambino", address: "0x6666666666666666666666666666666666666666" },
   { name: "Vito Genovese", address: "0x7777777777777777777777777777777777777777" },
 ];
@@ -238,30 +237,29 @@ export async function getPlayerCity(params: {
 }
 
 /**
- * Target's safehouse status.
+ * Connected player's (attacker) safehouse status.
  *
- * MOCK: returns protected only for the mock "Al Capone" target. A real read is
- * not currently possible — Safehouse `getUserInfo(address, message, signature)`
- * is gated by the *target's* signature, which an attacker cannot produce.
- *
- * TODO(contract): replace with a public read once the kill contract (or a
- * companion view) exposes a target's safehouse expiry, e.g.
- *   const info = await publicClient.readContract({
- *     address: addresses.safehouse, abi: SAFEHOUSE_ABI,
- *     functionName: "getProtectionUntil", args: [target],
- *   });
- *   const safeUntil = Number(info);
- *   return { inSafehouse: safeUntil > Date.now() / 1000, safeUntil };
+ * REAL read against Safehouse `getUserInfo` — privacy-gated by the attacker's
+ * own signed auth message. Attackers cannot initiate a kill while protected.
  */
-export async function getTargetSafehouseStatus(params: {
-  target: `0x${string}`;
+export async function getAttackerSafehouseStatus(params: {
+  publicClient: ReadClient;
+  safehouseAddress: `0x${string}`;
+  wallet: `0x${string}`;
+  message: string;
+  signature: `0x${string}`;
 }): Promise<SafehouseStatus> {
-  await delay(400);
-  const isProtected =
-    params.target.toLowerCase() === MOCK_TARGETS.safehouse.toLowerCase();
+  const { publicClient, safehouseAddress, wallet, message, signature } = params;
+  const raw = await publicClient.readContract({
+    address: safehouseAddress,
+    abi: SAFEHOUSE_ABI as Abi,
+    functionName: "getUserInfo",
+    args: [wallet, message, signature],
+  });
+  const safeUntil = Number((raw as { safeUntil: bigint }).safeUntil);
   return {
-    inSafehouse: isProtected,
-    safeUntil: isProtected ? Math.floor(Date.now() / 1000) + 3600 : 0,
+    inSafehouse: safeUntil > Math.floor(Date.now() / 1000),
+    safeUntil,
   };
 }
 

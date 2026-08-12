@@ -25,7 +25,7 @@ import { useAuth } from "@/components/auth-provider";
 import {
   getBulletBalance,
   getPlayerCity,
-  getTargetSafehouseStatus,
+  getAttackerSafehouseStatus,
   getUserDetectiveHires,
   getKnownProfiles,
   computeKillEligibility,
@@ -346,33 +346,51 @@ export function KillInitiationAction() {
   const isValidBulletAmount =
     bulletInput.length > 0 && Number.isFinite(bulletAmount) && bulletAmount >= 1;
 
-  // ── Live safehouse status for the resolved target ───────────────────────────
+  // ── Live safehouse status for the attacker (connected player) ───────────────
   const [safehouseChecking, setSafehouseChecking] = useState(false);
-  const [targetInSafehouse, setTargetInSafehouse] = useState(false);
+  const [attackerInSafehouse, setAttackerInSafehouse] = useState(false);
+
+  const refreshAttackerSafehouse = useCallback(async () => {
+    if (!publicClient || !address || !authData) return false;
+    const status = await getAttackerSafehouseStatus({
+      publicClient,
+      safehouseAddress: addresses.safehouse,
+      wallet: address,
+      message: authData.message,
+      signature: authData.signature,
+    });
+    setAttackerInSafehouse(status.inSafehouse);
+    return status.inSafehouse;
+  }, [publicClient, address, authData, addresses.safehouse]);
 
   useEffect(() => {
-    if (!hasValidTarget || !targetAddress) {
-      setTargetInSafehouse(false);
+    if (!publicClient || !address || !authData) {
+      setAttackerInSafehouse(false);
       setSafehouseChecking(false);
       return;
     }
     let cancelled = false;
     setSafehouseChecking(true);
-    setTargetInSafehouse(false);
     (async () => {
       try {
-        const status = await getTargetSafehouseStatus({ target: targetAddress });
-        if (!cancelled) setTargetInSafehouse(status.inSafehouse);
+        await refreshAttackerSafehouse();
       } catch (e) {
-        console.error("Failed to read target safehouse status:", e);
+        console.error("Failed to read attacker safehouse status:", e);
+        if (!cancelled) setAttackerInSafehouse(false);
       } finally {
         if (!cancelled) setSafehouseChecking(false);
       }
     })();
+    const id = setInterval(() => {
+      refreshAttackerSafehouse().catch(() => {
+        /* ignore tick errors */
+      });
+    }, 15000);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
-  }, [hasValidTarget, targetAddress]);
+  }, [publicClient, address, authData, refreshAttackerSafehouse]);
 
   // ── Ticking clock (for kill-window expiry) ──────────────────────────────────
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
@@ -406,7 +424,7 @@ export function KillInitiationAction() {
     !hasValidTarget ||
     !isValidBulletAmount ||
     safehouseChecking ||
-    targetInSafehouse ||
+    attackerInSafehouse ||
     hiresLoading ||
     detectiveBlocked ||
     weaponChecking ||
@@ -456,17 +474,17 @@ export function KillInitiationAction() {
       toast.error("You cannot target yourself.");
       return;
     }
-    // 7) Safehouse — fresh read
-    let inSafehouse = targetInSafehouse;
-    try {
-      const status = await getTargetSafehouseStatus({ target: targetAddress });
-      inSafehouse = status.inSafehouse;
-      setTargetInSafehouse(status.inSafehouse);
-    } catch (e) {
-      console.error("Safehouse re-check failed:", e);
+    // 7) Safehouse — attacker must not be protected (fresh read)
+    let inSafehouse = attackerInSafehouse;
+    if (publicClient) {
+      try {
+        inSafehouse = await refreshAttackerSafehouse();
+      } catch (e) {
+        console.error("Safehouse re-check failed:", e);
+      }
     }
     if (inSafehouse) {
-      toast.error("This target is in the safehouse and cannot be attacked.");
+      toast.error("You are in the safehouse and cannot initiate an attack.");
       return;
     }
     // 8) Detective-agency eligibility
@@ -724,54 +742,55 @@ export function KillInitiationAction() {
           </div>
         </div>
 
-        {/* Conditional alerts (only once a valid target is entered) */}
-        {hasValidTarget && (
-          <div className="mt-4 flex flex-col gap-3">
-            {/* Safehouse alert */}
-            {targetInSafehouse && (
-              <div className="flex items-start gap-3 rounded-lg border border-red-400/30 bg-red-400/10 p-3.5">
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-                <div>
-                  <p className="text-sm font-semibold text-red-400">
-                    Target is in safehouse
-                  </p>
-                  <p className="mt-0.5 text-xs text-red-400/80">
-                    This target is in the safehouse and cannot be attacked.
-                  </p>
-                </div>
-              </div>
-            )}
+        {/* Attacker safehouse block (independent of target) */}
+        {attackerInSafehouse && (
+          <div className="mt-4 flex items-start gap-3 rounded-lg border border-red-400/30 bg-red-400/10 p-3.5">
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <div>
+              <p className="text-sm font-semibold text-red-400">
+                You are in the safehouse
+              </p>
+              <p className="mt-0.5 text-xs text-red-400/80">
+                Leave the safehouse (wait for protection to end) before initiating
+                an attack.
+              </p>
+            </div>
+          </div>
+        )}
 
+        {/* Conditional alerts (only once a valid target is entered) */}
+        {hasValidTarget && !attackerInSafehouse && (
+          <div className="mt-4 flex flex-col gap-3">
             {/* Detective requirement alert */}
-            {!targetInSafehouse && detectiveState === "checking" && (
+            {detectiveState === "checking" && (
               <DetectiveAlert
                 icon={<Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-amber-400" />}
                 title="Checking detective records"
                 message="Verifying whether this target has been located."
               />
             )}
-            {!targetInSafehouse && detectiveState === "not_found" && (
+            {detectiveState === "not_found" && (
               <DetectiveAlert
                 icon={<Search className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
                 title="Target not located"
                 message={getEligibilityMessage("not_found", null)}
               />
             )}
-            {!targetInSafehouse && detectiveState === "not_revealed" && (
+            {detectiveState === "not_revealed" && (
               <DetectiveAlert
                 icon={<Eye className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
                 title="Location not revealed"
                 message={getEligibilityMessage("not_revealed", null)}
               />
             )}
-            {!targetInSafehouse && detectiveState === "wrong_city" && (
+            {detectiveState === "wrong_city" && (
               <DetectiveAlert
                 icon={<MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
                 title="Wrong city"
                 message={getEligibilityMessage("wrong_city", eligibility.targetCityName)}
               />
             )}
-            {!targetInSafehouse && detectiveState === "expired" && (
+            {detectiveState === "expired" && (
               <DetectiveAlert
                 icon={<Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
                 title="Location expired"

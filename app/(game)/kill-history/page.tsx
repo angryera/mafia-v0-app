@@ -1,12 +1,20 @@
 "use client";
 
-import { PageWrapper } from "@/components/page-wrapper";
-import { KillHistoryAction } from "@/components/kill-history-action";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
-export default function KillHistoryPage() {
+/** Legacy route — kill history now lives under /graveyard?tab=history */
+export default function KillHistoryRedirectPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/graveyard?tab=history");
+  }, [router]);
+
   return (
-    <PageWrapper fullWidth hideHeader>
-      <KillHistoryAction />
-    </PageWrapper>
+    <div className="flex justify-center py-16 text-muted-foreground">
+      <Loader2 className="h-8 w-8 animate-spin text-red-400" />
+    </div>
   );
 }

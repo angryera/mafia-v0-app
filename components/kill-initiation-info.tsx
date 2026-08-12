@@ -13,9 +13,9 @@ export function KillInitiationInfo() {
       </div>
 
       <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
-        Before an attack is allowed, your target must pass every check below. The
-        on-chain kill contract is not deployed yet — confirming runs a validated
-        preview only.
+        Before an attack is allowed, you and your target must pass every check
+        below. The on-chain kill contract is not deployed yet — confirming runs a
+        validated preview only.
       </p>
 
       <div className="flex flex-col gap-2.5">
@@ -23,6 +23,11 @@ export function KillInitiationInfo() {
           icon={<Swords className="h-3.5 w-3.5 text-red-400" />}
           title="Weapon equipped"
           text="You must have a weapon equipped in your current city before you can attack."
+        />
+        <Requirement
+          icon={<ShieldAlert className="h-3.5 w-3.5 text-red-400" />}
+          title="Not in safehouse"
+          text="You cannot initiate an attack while you are protected in the safehouse."
         />
         <Requirement
           icon={<Search className="h-3.5 w-3.5 text-amber-400" />}
@@ -38,11 +43,6 @@ export function KillInitiationInfo() {
           icon={<Clock className="h-3.5 w-3.5 text-amber-400" />}
           title="Active kill window"
           text="The located target's kill window must not have expired."
-        />
-        <Requirement
-          icon={<ShieldAlert className="h-3.5 w-3.5 text-red-400" />}
-          title="Not in safehouse"
-          text="A target hiding in the safehouse cannot be attacked."
         />
       </div>
 
