@@ -68,6 +68,8 @@ export type ChainConfig = {
         xpMarket: `0x${string}`;
         inventoryMarketplace: `0x${string}`;
         raceLobby: `0x${string}`;
+        /** MafiaRebirth — `initiateRebirth` / `quoteRebirth`; zero until deployed per chain. */
+        rebirth: `0x${string}`;
     };
 };
 
@@ -130,6 +132,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             xpMarket: getAddress("0x49F23822AFa248D4bE453d630F7e0dF8fcF80854"),
             inventoryMarketplace: getAddress("0x1fb8C9F810afd99A6FAE3E81aBe0806f8796ba73"),
             raceLobby: getAddress("0xE3a3892fEC9bA9457fEE08Fe3d2E7b32bCeb33Ad"),
+            rebirth: getAddress("0x5D20a828693058C5370C6dCb54297f41eC3e2868"),
         },
     },
     pulse: {
@@ -190,6 +193,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             xpMarket: getAddress("0xc5731c6C3627F4912B54A2c6e13A8BFaeD69A39C"),
             inventoryMarketplace: getAddress("0x321e27aaB7e6F5DE221AE3eAe63306345f3A465d"),
             raceLobby: getAddress("0x10D0D93BD141a76F8cBcA1cd94CAf8081C5d0427"),
+            rebirth: getAddress("0x0000000000000000000000000000000000000000"),
         },
     },
 };

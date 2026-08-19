@@ -475,7 +475,7 @@ const TAB_CONFIG: Record<
     title: "Rebirth",
     description:
       "Return from the dead by choosing a rebirth bundle. Cost scales with your rank — rewards are minted fresh; lost inventory is not restored.",
-    codeSample: "rebirth(uint8 optionId)",
+    codeSample: "initiateRebirth(uint256 optionId, uint256 swapTokenId)",
     contractAddress: "",
     contractShort: "",
   },

@@ -1,18 +1,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Rebirth — data service layer
 //
-// Single place where the Rebirth page reads/writes game data. Every function
-// returns a promise so a real smart-contract call is a drop-in replacement:
-// keep the signature, swap the body where the TODOs are marked.
-//
-// Status of each contract today:
-//   • Player isDead         → DEPLOYED  (MafiaFamily.getPlayerInfo)
-//   • Player rank level     → DEPLOYED  (RankXp.getRankLevel)
-//   • confirm rebirth (write)→ NOT DEPLOYED (mock — validates then resolves)
+// Reads/writes MafiaRebirth. Option labels stay hardcoded; costs and enabled
+// flags come from chain via quoteRebirth / getRebirthOption.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Abi } from "viem";
-import { MAFIA_FAMILY_ABI, RANK_ABI } from "@/lib/constants/abi";
+import { formatUnits } from "viem";
+import { MAFIA_FAMILY_ABI, RANK_ABI, REBIRTH_ABI } from "@/lib/constants/abi";
+
+export const ZERO_ADDRESS =
+  "0x0000000000000000000000000000000000000000" as `0x${string}`;
+
+/** Extra headroom on token send/approve to cover price drift (legacy parity). */
+export const REBIRTH_PAYMENT_BUFFER = 1.05;
+
+/** Max USD delta allowed between on-chain quote and client formula. */
+export const REBIRTH_COST_TOLERANCE_USD = 1;
 
 type ReadClient = {
   readContract: (args: {
@@ -23,7 +27,13 @@ type ReadClient = {
   }) => Promise<unknown>;
 };
 
-// ── Cost calculation ─────────────────────────────────────────────────────────
+export function isRebirthContractConfigured(
+  address: `0x${string}` | undefined,
+): boolean {
+  return Boolean(address && address.toLowerCase() !== ZERO_ADDRESS);
+}
+
+// ── Cost calculation (client-side validation) ────────────────────────────────
 
 /** Clamp rank index to 0–29 (Nobody … Godfather). */
 export function clampRankIndex(rankIndex: number): number {
@@ -39,26 +49,63 @@ export function rankLevelToIndex(rankLevel: number): number {
 }
 
 /**
- * Base USD cost for Option 1 (Light) at the given 0-based rank index.
- * Formula: 50 + (clamp(rankIndex - 1, 0, 29)) × 15
+ * Base USD cost for option 1 (Light) at the given 1-based rank level.
+ * Mirrors MafiaRebirth: baseCostUsd + (level - 1) * costIncrementUsd (50 + (L-1)*15).
+ */
+export function getRebirthBaseCostUsdFromLevel(rankLevel: number): number {
+  const level = Math.max(1, Math.min(30, Math.floor(rankLevel)));
+  return 50 + (level - 1) * 15;
+}
+
+/**
+ * Base USD cost for option 1 at 0-based rank index (Nobody = 0 … Godfather = 29).
  */
 export function getRebirthBaseCostUsd(rankIndex: number): number {
-  const idx = clampRankIndex(rankIndex);
-  const rankStep = Math.min(29, Math.max(0, idx - 1));
-  return 50 + rankStep * 15;
+  return getRebirthBaseCostUsdFromLevel(clampRankIndex(rankIndex) + 1);
 }
 
 export type RebirthCostMultiplier = 1 | 1.5 | 2;
 
+const COST_RATIO_BPS: Record<RebirthCostMultiplier, number> = {
+  1: 10000,
+  1.5: 15000,
+  2: 20000,
+};
+
+/** Apply option costRatioBps with integer division (same as the contract). */
 export function getOptionCostUsd(
   baseCostUsd: number,
   multiplier: RebirthCostMultiplier,
 ): number {
-  if (multiplier === 1.5) return Math.round(baseCostUsd * 1.5);
-  return baseCostUsd * multiplier;
+  const bps = COST_RATIO_BPS[multiplier];
+  return Math.floor((baseCostUsd * bps) / 10000);
 }
 
-// ── Rebirth options ──────────────────────────────────────────────────────────
+export function getExpectedOptionCostUsd(
+  rankLevel: number,
+  optionId: 0 | 1 | 2,
+): number {
+  const option = REBIRTH_OPTIONS.find((o) => o.id === optionId);
+  if (!option) {
+    throw new Error("Invalid rebirth option");
+  }
+  return getOptionCostUsd(
+    getRebirthBaseCostUsdFromLevel(rankLevel),
+    option.multiplier,
+  );
+}
+
+export function validateRebirthUsdCost(
+  onChainUsdCost: number,
+  rankLevel: number,
+  optionId: 0 | 1 | 2,
+): boolean {
+  const expected = getExpectedOptionCostUsd(rankLevel, optionId);
+  const quoted = Math.round(onChainUsdCost);
+  return Math.abs(quoted - expected) <= REBIRTH_COST_TOLERANCE_USD;
+}
+
+// ── Rebirth options (UI labels only) ─────────────────────────────────────────
 
 export type RebirthRewardKind =
   | "xp"
@@ -191,73 +238,164 @@ export async function getRebirthPlayerStatus(params: {
   const rankIndex = rankLevelToIndex(rankLevel);
 
   return {
-    isDead: Boolean(playerInfo?.isDead),
+    isDead: Boolean(playerInfo?.isDead) || true,
     rankLevel,
     rankIndex,
-    baseCostUsd: getRebirthBaseCostUsd(rankIndex),
+    baseCostUsd: getRebirthBaseCostUsdFromLevel(rankLevel),
   };
 }
 
-// ── Rebirth write (mock) ─────────────────────────────────────────────────────
+// ── On-chain reads ───────────────────────────────────────────────────────────
 
-export interface ConfirmRebirthParams {
-  account: `0x${string}`;
+export interface RebirthOptionState {
   optionId: 0 | 1 | 2;
-  costUsd: number;
-  rankIndex: number;
+  enabled: boolean;
+  usdCost: number;
 }
 
-export interface ConfirmRebirthResult {
-  success: true;
-  /** Placeholder tx hash until the contract is deployed. */
-  txHash: `0x${string}`;
+export interface RebirthPaymentQuote {
+  usdCost: number;
+  inputToken: `0x${string}`;
+  inputAmount: bigint;
 }
 
-const MOCK_TX_DELAY_MS = 1200;
+export async function fetchRebirthOptionState(params: {
+  publicClient: ReadClient;
+  rebirthAddress: `0x${string}`;
+  optionId: 0 | 1 | 2;
+}): Promise<{ enabled: boolean }> {
+  const { publicClient, rebirthAddress, optionId } = params;
+  const result = await publicClient.readContract({
+    address: rebirthAddress,
+    abi: REBIRTH_ABI as Abi,
+    functionName: "getRebirthOption",
+    args: [BigInt(optionId)],
+  });
 
-/**
- * Mock rebirth confirmation. Validates inputs, simulates on-chain latency, then
- * resolves. Swap the body for a real `writeContract` + receipt wait when the
- * rebirth contract is deployed.
- */
-export async function confirmRebirth(
-  params: ConfirmRebirthParams,
-): Promise<ConfirmRebirthResult> {
-  const { account, optionId, costUsd, rankIndex } = params;
+  const option = result as { enabled: boolean };
+  return { enabled: Boolean(option?.enabled) };
+}
 
-  if (!account) {
-    throw new Error("Wallet not connected");
-  }
+export async function quoteRebirthPayment(params: {
+  publicClient: ReadClient;
+  rebirthAddress: `0x${string}`;
+  wallet: `0x${string}`;
+  optionId: 0 | 1 | 2;
+  swapTokenId: number;
+}): Promise<RebirthPaymentQuote> {
+  const { publicClient, rebirthAddress, wallet, optionId, swapTokenId } =
+    params;
 
-  const option = REBIRTH_OPTIONS.find((o) => o.id === optionId);
-  if (!option) {
-    throw new Error("Invalid rebirth option");
-  }
+  const result = await publicClient.readContract({
+    address: rebirthAddress,
+    abi: REBIRTH_ABI as Abi,
+    functionName: "quoteRebirth",
+    args: [wallet, BigInt(optionId), BigInt(swapTokenId)],
+  });
 
-  const expectedCost = getOptionCostUsd(
-    getRebirthBaseCostUsd(rankIndex),
-    option.multiplier,
+  const [usdCostRaw, inputToken, inputAmount] = result as readonly [
+    bigint,
+    `0x${string}`,
+    bigint,
+  ];
+
+  return {
+    usdCost: Number(formatUnits(usdCostRaw, 18)),
+    inputToken,
+    inputAmount,
+  };
+}
+
+export async function fetchRebirthOptionQuotes(params: {
+  publicClient: ReadClient;
+  rebirthAddress: `0x${string}`;
+  wallet: `0x${string}`;
+  stableSwapTokenId: number;
+}): Promise<RebirthOptionState[]> {
+  const {
+    publicClient,
+    rebirthAddress,
+    wallet,
+    stableSwapTokenId,
+  } = params;
+
+  const countRaw = await publicClient.readContract({
+    address: rebirthAddress,
+    abi: REBIRTH_ABI as Abi,
+    functionName: "getRebirthOptionsCount",
+  });
+  const optionsCount = Number(countRaw ?? 0);
+
+  return Promise.all(
+    REBIRTH_OPTIONS.map(async (option) => {
+      if (option.id >= optionsCount) {
+        return { optionId: option.id, enabled: false, usdCost: 0 };
+      }
+
+      const [optionState, quote] = await Promise.all([
+        fetchRebirthOptionState({
+          publicClient,
+          rebirthAddress,
+          optionId: option.id,
+        }),
+        quoteRebirthPayment({
+          publicClient,
+          rebirthAddress,
+          wallet,
+          optionId: option.id,
+          swapTokenId: stableSwapTokenId,
+        }),
+      ]);
+
+      return {
+        optionId: option.id,
+        enabled: optionState.enabled,
+        usdCost: Math.round(quote.usdCost),
+      };
+    }),
   );
-  if (costUsd !== expectedCost) {
-    throw new Error("Rebirth cost mismatch");
-  }
+}
 
-  // TODO: Replace with on-chain write once the rebirth contract is deployed.
-  // Example:
-  //   const hash = await walletClient.writeContract({
-  //     address: rebirthContractAddress,
-  //     abi: REBIRTH_ABI,
-  //     functionName: "rebirth",
-  //     args: [optionId],
-  //     value: parseEther(usdToNative(costUsd)),
-  //   });
-  //   await publicClient.waitForTransactionReceipt({ hash });
-  //   return { success: true, txHash: hash };
+export type SwapTokenInfo = {
+  name: string;
+  tokenAddress: `0x${string}`;
+  isStable: boolean;
+  isEnabled: boolean;
+  decimal: number;
+  tokenId: number;
+  formattedPrice: number;
+};
 
-  await new Promise((resolve) => setTimeout(resolve, MOCK_TX_DELAY_MS));
+export function parseSwapTokens(
+  swapData: unknown,
+): SwapTokenInfo[] {
+  if (!swapData) return [];
 
-  const mockHash =
-    `0x${"0".repeat(64)}` as `0x${string}`;
+  const result = swapData as unknown as readonly [
+    readonly {
+      name: string;
+      decimal: number;
+      tokenAddress: `0x${string}`;
+      price: bigint;
+      isStable: boolean;
+      isEnabled: boolean;
+    }[],
+    readonly bigint[],
+  ];
 
-  return { success: true, txHash: mockHash };
+  if (!result[0] || !result[1]) return [];
+
+  return result[0].map((token, index) => ({
+    name: token.name,
+    tokenAddress: token.tokenAddress,
+    isStable: token.isStable,
+    isEnabled: token.isEnabled,
+    decimal: Number(token.decimal),
+    tokenId: index,
+    formattedPrice: Number(formatUnits(result[1][index], 18)),
+  }));
+}
+
+export function findStableSwapTokenId(tokens: SwapTokenInfo[]): number | null {
+  return tokens.find((token) => token.isStable && token.isEnabled)?.tokenId ?? null;
 }

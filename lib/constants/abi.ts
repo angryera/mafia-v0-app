@@ -1113,6 +1113,72 @@ export const SWAP_ROUTER_ABI: Abi = [
     },
 ] as const;
 
+// ========== Rebirth Contract ==========
+export const REBIRTH_ABI: Abi = [
+    {
+        type: "function",
+        name: "quoteRebirth",
+        inputs: [
+            { name: "user", type: "address", internalType: "address" },
+            { name: "optionId", type: "uint256", internalType: "uint256" },
+            { name: "swapTokenId", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [
+            { name: "usdCost", type: "uint256", internalType: "uint256" },
+            { name: "inputToken", type: "address", internalType: "address" },
+            { name: "inputAmount", type: "uint256", internalType: "uint256" },
+        ],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "getRebirthOption",
+        inputs: [
+            { name: "optionId", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [
+            {
+                name: "",
+                type: "tuple",
+                internalType: "struct MafiaRebirth.RebirthOption",
+                components: [
+                    { name: "costRatioBps", type: "uint16", internalType: "uint16" },
+                    {
+                        name: "rewards",
+                        type: "tuple[]",
+                        internalType: "struct MafiaRebirth.AssetSpec[]",
+                        components: [
+                            { name: "kind", type: "uint8", internalType: "enum MafiaRebirth.AssetKind" },
+                            { name: "target", type: "address", internalType: "address" },
+                            { name: "arg1", type: "uint256", internalType: "uint256" },
+                            { name: "arg2", type: "uint256", internalType: "uint256" },
+                        ],
+                    },
+                    { name: "enabled", type: "bool", internalType: "bool" },
+                ],
+            },
+        ],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "getRebirthOptionsCount",
+        inputs: [],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "initiateRebirth",
+        inputs: [
+            { name: "optionId", type: "uint256", internalType: "uint256" },
+            { name: "swapTokenId", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [],
+        stateMutability: "payable",
+    },
+] as const;
+
 // ========== Hospital Contract ==========
 export const HOSPITAL_CONTRACT_ABI: Abi = [
     {
