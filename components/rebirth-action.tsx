@@ -38,9 +38,10 @@ import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import { ERC20_ABI, RANK_NAMES, REBIRTH_ABI, SWAP_ROUTER_ABI } from "@/lib/contract";
 import {
   REBIRTH_OPTIONS,
-  REBIRTH_PAYMENT_BUFFER,
+  applyRebirthPaymentBuffer,
   fetchRebirthOptionQuotes,
   findStableSwapTokenId,
+  getRebirthPaymentBuffer,
   getRebirthPlayerStatus,
   isRebirthContractConfigured,
   parseSwapTokens,
@@ -336,12 +337,17 @@ export function RebirthAction() {
 
   const selectedCostUsd = selectedOption?.costUsd ?? null;
 
+  const paymentBuffer = useMemo(() => {
+    if (!selectedToken) return 1;
+    return getRebirthPaymentBuffer(selectedToken, addresses.mafia);
+  }, [selectedToken, addresses.mafia]);
+
   const totalTokenCost = useMemo(() => {
     if (!selectedCostUsd || !selectedToken || selectedToken.formattedPrice === 0) {
       return null;
     }
-    return (selectedCostUsd * REBIRTH_PAYMENT_BUFFER) / selectedToken.formattedPrice;
-  }, [selectedCostUsd, selectedToken]);
+    return (selectedCostUsd * paymentBuffer) / selectedToken.formattedPrice;
+  }, [selectedCostUsd, selectedToken, paymentBuffer]);
 
   const { data: allowanceData, refetch: refetchAllowance } = useReadContract({
     address: selectedToken?.tokenAddress,
@@ -479,9 +485,10 @@ export function RebirthAction() {
         return;
       }
 
-      const bufferedAmount =
-        (quote.inputAmount * BigInt(Math.round(REBIRTH_PAYMENT_BUFFER * 100))) /
-        BigInt(100);
+      const bufferedAmount = applyRebirthPaymentBuffer(
+        quote.inputAmount,
+        getRebirthPaymentBuffer(selectedToken, addresses.mafia),
+      );
 
       if (isNativeToken) {
         writeRebirth({
@@ -510,6 +517,7 @@ export function RebirthAction() {
     selectedToken,
     rebirthConfigured,
     addresses.rebirth,
+    addresses.mafia,
     selectedTokenId,
     rankLevel,
     loadOptionQuotes,

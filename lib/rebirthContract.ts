@@ -12,7 +12,7 @@ import { MAFIA_FAMILY_ABI, RANK_ABI, REBIRTH_ABI } from "@/lib/constants/abi";
 export const ZERO_ADDRESS =
   "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
-/** Extra headroom on token send/approve to cover price drift (legacy parity). */
+/** 5% headroom when paying with MAFIA only — stables/native use exact quote. */
 export const REBIRTH_PAYMENT_BUFFER = 1.05;
 
 /** Max USD delta allowed between on-chain quote and client formula. */
@@ -398,4 +398,29 @@ export function parseSwapTokens(
 
 export function findStableSwapTokenId(tokens: SwapTokenInfo[]): number | null {
   return tokens.find((token) => token.isStable && token.isEnabled)?.tokenId ?? null;
+}
+
+export function isMafiaSwapToken(
+  token: Pick<SwapTokenInfo, "tokenAddress">,
+  mafiaAddress: `0x${string}`,
+): boolean {
+  return token.tokenAddress.toLowerCase() === mafiaAddress.toLowerCase();
+}
+
+/** 1.05 for MAFIA, 1.0 for stable/native/other tokens. */
+export function getRebirthPaymentBuffer(
+  token: Pick<SwapTokenInfo, "tokenAddress">,
+  mafiaAddress: `0x${string}`,
+): number {
+  return isMafiaSwapToken(token, mafiaAddress)
+    ? REBIRTH_PAYMENT_BUFFER
+    : 1;
+}
+
+export function applyRebirthPaymentBuffer(
+  amount: bigint,
+  buffer: number,
+): bigint {
+  if (buffer <= 1) return amount;
+  return (amount * BigInt(Math.round(buffer * 100))) / BigInt(100);
 }
