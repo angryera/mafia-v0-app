@@ -2861,11 +2861,37 @@ export const FAMILY_SHARE_STAKE_ABI: Abi = [
     },
     {
         type: "function",
-        name: "getUserActiveStakeAt",
+        name: "getFamilyActiveStakes",
         inputs: [
-            { name: "user", type: "address", internalType: "address" },
-            { name: "index", type: "uint256", internalType: "uint256" },
+            { name: "familyId", type: "uint256", internalType: "uint256" },
+            { name: "offset", type: "uint256", internalType: "uint256" },
+            { name: "limit", type: "uint256", internalType: "uint256" },
         ],
+        outputs: [{ name: "", type: "uint256[]", internalType: "uint256[]" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "getFamilyActiveStakesCount",
+        inputs: [{ name: "familyId", type: "uint256", internalType: "uint256" }],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "getFamilyActiveStakes",
+        inputs: [
+            { name: "familyId", type: "uint256", internalType: "uint256" },
+            { name: "offset", type: "uint256", internalType: "uint256" },
+            { name: "limit", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [{ name: "", type: "uint256[]", internalType: "uint256[]" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "getFamilyActiveStakesCount",
+        inputs: [{ name: "familyId", type: "uint256", internalType: "uint256" }],
         outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
         stateMutability: "view",
     },
@@ -2895,6 +2921,16 @@ export const FAMILY_SHARE_STAKE_ABI: Abi = [
             { name: "familyAddress", type: "address", internalType: "address" },
         ],
         outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "initializeActiveFamilyStakesIndex",
+        inputs: [
+            { name: "offset", type: "uint256", internalType: "uint256" },
+            { name: "limit", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [{ name: "processed", type: "uint256", internalType: "uint256" }],
         stateMutability: "nonpayable",
     },
     {

@@ -24,9 +24,9 @@ import {
   Crown,
   Skull,
   ChevronRight,
-  ExternalLink,
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
+import { MyFamilyShareStakesButton } from "@/components/my-family-share-stakes";
 import { cn } from "@/lib/utils";
 
 // Data structures
@@ -184,6 +184,14 @@ export function FamilyTable() {
     };
   }, [families]);
 
+  const familyNames = useMemo(() => {
+    const map: Record<number, string> = {};
+    for (const f of families) {
+      map[f.familyId] = f.name;
+    }
+    return map;
+  }, [families]);
+
   // Get don name for a family
   const getDonName = (family: Family): string => {
     const don = family.leaders.find((l) => l.role === "Don");
@@ -213,7 +221,9 @@ export function FamilyTable() {
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <MyFamilyShareStakesButton familyNames={familyNames} />
+
               <div className="flex items-center gap-2">
                 <Switch
                   id="active-only"

@@ -151,7 +151,7 @@ export function FamilyShareStake({
 
   const [stakeDialogOpen, setStakeDialogOpen] = useState(false);
   const [stakeInput, setStakeInput] = useState("");
-  const [myStakes, setMyStakes] = useState<FamilyStakeEntry[]>([]);
+  const [familyStakes, setFamilyStakes] = useState<FamilyStakeEntry[]>([]);
   const [stakesLoading, setStakesLoading] = useState(false);
   const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
   const [withdrawingId, setWithdrawingId] = useState<bigint | null>(null);
@@ -235,9 +235,9 @@ export function FamilyShareStake({
     return Math.min(100, (Number(familyStakedWei) / Number(maxStakeWei)) * 100);
   }, [familyStakedWei, maxStakeWei]);
 
-  const fetchMyStakes = useCallback(async () => {
-    if (!publicClient || !address || !configured) {
-      setMyStakes([]);
+  const fetchFamilyStakes = useCallback(async () => {
+    if (!publicClient || !configured || familyId <= 0) {
+      setFamilyStakes([]);
       return;
     }
     setStakesLoading(true);
@@ -245,24 +245,24 @@ export function FamilyShareStake({
       const count = (await publicClient.readContract({
         address: shareStake,
         abi: FAMILY_SHARE_STAKE_ABI,
-        functionName: "getUserActiveStakesCount",
-        args: [address],
+        functionName: "getFamilyActiveStakesCount",
+        args: [BigInt(familyId)],
       })) as bigint;
 
       if (count === BigInt(0)) {
-        setMyStakes([]);
+        setFamilyStakes([]);
         return;
       }
 
       const ids = (await publicClient.readContract({
         address: shareStake,
         abi: FAMILY_SHARE_STAKE_ABI,
-        functionName: "getUserActiveStakes",
-        args: [address, BigInt(0), count],
+        functionName: "getFamilyActiveStakes",
+        args: [BigInt(familyId), BigInt(0), count],
       })) as readonly bigint[];
 
       if (!ids.length) {
-        setMyStakes([]);
+        setFamilyStakes([]);
         return;
       }
 
@@ -275,37 +275,30 @@ export function FamilyShareStake({
         })),
       });
 
-      const familyIdBig = BigInt(familyId);
       const parsed: FamilyStakeEntry[] = [];
       for (let i = 0; i < ids.length; i++) {
         const r = results[i];
         if (r.status !== "success") continue;
         const entry = parseFamilyStake(ids[i], r.result);
-        if (
-          entry &&
-          entry.isActive &&
-          entry.familyId === familyIdBig
-        ) {
-          parsed.push(entry);
-        }
+        if (entry?.isActive) parsed.push(entry);
       }
       parsed.sort((a, b) => Number(b.startedAt - a.startedAt));
-      setMyStakes(parsed);
+      setFamilyStakes(parsed);
     } catch (e) {
       console.error("Family share stakes fetch failed", e);
-      setMyStakes([]);
+      setFamilyStakes([]);
     } finally {
       setStakesLoading(false);
     }
-  }, [publicClient, address, configured, shareStake, familyId]);
+  }, [publicClient, configured, shareStake, familyId]);
 
   useEffect(() => {
-    if (isConnected && address && configured) {
-      void fetchMyStakes();
+    if (configured && familyId > 0) {
+      void fetchFamilyStakes();
     } else {
-      setMyStakes([]);
+      setFamilyStakes([]);
     }
-  }, [isConnected, address, configured, fetchMyStakes]);
+  }, [configured, familyId, fetchFamilyStakes]);
 
   const refetchAll = useCallback(async () => {
     await Promise.all([
@@ -313,14 +306,14 @@ export function FamilyShareStake({
       refetchMaxStake(),
       refetchAllowance(),
       refetchMafiaBalance(),
-      fetchMyStakes(),
+      fetchFamilyStakes(),
     ]);
   }, [
     refetchFamilyStaked,
     refetchMaxStake,
     refetchAllowance,
     refetchMafiaBalance,
-    fetchMyStakes,
+    fetchFamilyStakes,
   ]);
 
   const {
@@ -460,9 +453,20 @@ export function FamilyShareStake({
     });
   };
 
+  const myStakedTotal = useMemo(() => {
+    if (!address) return BigInt(0);
+    const key = address.toLowerCase();
+    return familyStakes.reduce(
+      (sum, s) =>
+        s.user.toLowerCase() === key ? sum + s.amount : sum,
+      BigInt(0),
+    );
+  }, [familyStakes, address]);
+
   if (!configured) return null;
 
-  const myStakedTotal = myStakes.reduce((sum, s) => sum + s.amount, BigInt(0));
+  const formatAddr = (addr: string) =>
+    `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
   return (
     <>
@@ -533,14 +537,12 @@ export function FamilyShareStake({
                     Only family members can stake to this share.
                   </p>
                 )}
-                {isFamilyMember && (
-                  <span className="text-xs text-muted-foreground">
-                    Your stake:{" "}
-                    <span className="font-mono text-foreground">
-                      {formatMafiaWei(myStakedTotal)} MAFIA
-                    </span>
+                <span className="text-xs text-muted-foreground">
+                  Your stake:{" "}
+                  <span className="font-mono text-foreground">
+                    {formatMafiaWei(myStakedTotal)} MAFIA
                   </span>
-                )}
+                </span>
               </>
             ) : (
               <p className="text-xs text-muted-foreground">
@@ -549,70 +551,87 @@ export function FamilyShareStake({
             )}
           </div>
 
-          {isConnected && isFamilyMember && (
-            <div className="rounded-md border border-border/60">
-              {stakesLoading && myStakes.length === 0 ? (
-                <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading your stakes…
-                </div>
-              ) : myStakes.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  You have no active stakes in this family share.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="text-[10px] uppercase">Amount</TableHead>
-                      <TableHead className="text-[10px] uppercase">Staked</TableHead>
-                      <TableHead className="text-[10px] uppercase">Cooldown</TableHead>
-                      <TableHead className="text-right text-[10px] uppercase">
-                        Action
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {myStakes.map((stake) => {
-                      const unlockAt =
-                        Number(stake.startedAt) + withdrawCooldownSec;
-                      const remaining = Math.max(0, unlockAt - nowSec);
-                      const canWithdraw = remaining <= 0;
-                      const isThisWithdrawing =
-                        withdrawingId === stake.id && withdrawLoading;
-                      return (
-                        <TableRow
-                          key={stake.id.toString()}
-                          className="border-border/30"
-                        >
-                          <TableCell className="py-2 font-mono text-sm tabular-nums">
-                            {formatMafiaWei(stake.amount)}
-                          </TableCell>
-                          <TableCell className="py-2 text-xs text-muted-foreground whitespace-nowrap">
-                            {Number(stake.startedAt)
-                              ? new Date(
-                                  Number(stake.startedAt) * 1000,
-                                ).toLocaleString()
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="py-2">
-                            {canWithdraw ? (
-                              <Badge
-                                variant="outline"
-                                className="border-green-500/40 bg-green-500/10 text-[10px] text-green-400"
-                              >
-                                Ready
-                              </Badge>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-xs text-amber-400">
-                                <Timer className="h-3 w-3" />
-                                <span className="font-mono tabular-nums">
-                                  {formatLongCooldown(remaining)}
-                                </span>
-                              </span>
+          <div className="rounded-md border border-border/60">
+            {stakesLoading && familyStakes.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading family stakes…
+              </div>
+            ) : familyStakes.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No active stakes in this family share yet.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="text-[10px] uppercase">Staker</TableHead>
+                    <TableHead className="text-[10px] uppercase">Amount</TableHead>
+                    <TableHead className="text-[10px] uppercase">Staked</TableHead>
+                    <TableHead className="text-[10px] uppercase">Cooldown</TableHead>
+                    <TableHead className="text-right text-[10px] uppercase">
+                      Action
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {familyStakes.map((stake) => {
+                    const unlockAt =
+                      Number(stake.startedAt) + withdrawCooldownSec;
+                    const remaining = Math.max(0, unlockAt - nowSec);
+                    const canWithdraw = remaining <= 0;
+                    const isMine =
+                      !!address &&
+                      stake.user.toLowerCase() === address.toLowerCase();
+                    const isThisWithdrawing =
+                      withdrawingId === stake.id && withdrawLoading;
+                    return (
+                      <TableRow
+                        key={stake.id.toString()}
+                        className="border-border/30"
+                      >
+                        <TableCell className="py-2 text-xs">
+                          <span
+                            className={cn(
+                              "font-mono",
+                              isMine
+                                ? "text-primary"
+                                : "text-muted-foreground",
                             )}
-                          </TableCell>
-                          <TableCell className="py-2 text-right">
+                            title={stake.user}
+                          >
+                            {isMine ? "You" : formatAddr(stake.user)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-2 font-mono text-sm tabular-nums">
+                          {formatMafiaWei(stake.amount)}
+                        </TableCell>
+                        <TableCell className="py-2 text-xs text-muted-foreground whitespace-nowrap">
+                          {Number(stake.startedAt)
+                            ? new Date(
+                                Number(stake.startedAt) * 1000,
+                              ).toLocaleString()
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="py-2">
+                          {canWithdraw ? (
+                            <Badge
+                              variant="outline"
+                              className="border-green-500/40 bg-green-500/10 text-[10px] text-green-400"
+                            >
+                              Ready
+                            </Badge>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-amber-400">
+                              <Timer className="h-3 w-3" />
+                              <span className="font-mono tabular-nums">
+                                {formatLongCooldown(remaining)}
+                              </span>
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2 text-right">
+                          {isMine ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -632,15 +651,17 @@ export function FamilyShareStake({
                               )}
                               Withdraw
                             </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          )}
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
 
           {withdrawCooldownSec > 0 && (
             <p className="text-[10px] text-muted-foreground">
