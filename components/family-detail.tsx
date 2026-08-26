@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { FamilyShareStake } from "@/components/family-share-stake";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import { MAFIA_FAMILY_ABI } from "@/lib/constants/abi";
 import { RANK_NAMES } from "@/lib/constants/const";
@@ -2152,6 +2153,11 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
           </Dialog>
         </>
       )}
+
+      <FamilyShareStake
+        familyId={familyId}
+        isFamilyMember={isFamilyMember}
+      />
 
       {/* Family Stats */}
       <div className="grid gap-4 sm:grid-cols-3">
