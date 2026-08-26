@@ -55,6 +55,8 @@ export type ChainConfig = {
         kill: `0x${string}`;
         /** MafiaFamilyCashBank — family in-game cash treasury (deposit / withdraw). */
         familyGameCashBank: `0x${string}`;
+        /** MafiaFamilyShareStake — stake MAFIA for family share benefits. */
+        familyShareStake: `0x${string}`;
         /**
          * Wallet ERC20 bullet (bridge/deposit). Used for on-chain DEX + deposit into in-game `bullets`.
          */
@@ -122,6 +124,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             mafiaFamily: getAddress("0x1bC581fe134BdC7432eF8ba75BCeEd242F90BcD2"),
             kill: getAddress("0x0000000000000000000000000000000000000000"),
             familyGameCashBank: getAddress("0x26cDB03a72Ac5866d43184526F4586D8942739F2"),
+            familyShareStake: getAddress("0xbb4E73e1809a9cB0B1a6ACC885eac10ba85a7310"),
             bulletToken: getAddress("0xe92F5d948d8764904F9703ae878a3A9e6b3952eb"),
             ocLobby: getAddress("0x281C0Db67c96ee7Ad32AF25817cB3964Fc7E79cD"),
             ocJoin: getAddress("0x00D0933595F87eD8b50638796FCf5b22de3795a2"),
@@ -183,6 +186,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             mafiaFamily: getAddress("0x3363cf983ae23AF2D95a81bA4A39C36084f8BEc4"),
             kill: getAddress("0x0000000000000000000000000000000000000000"),
             familyGameCashBank: getAddress("0x0000000000000000000000000000000000000000"),
+            familyShareStake: getAddress("0x781373e300B0A8bE65cC7365a86318157627e58C"),
             bulletToken: getAddress("0xe193484ef0f7880eb42c3bc34c1929f2e7680D64"),
             ocLobby: getAddress("0xE9680c72817477f9e51596bD39821C670790a66E"),
             ocJoin: getAddress("0xE79495F0982FCC3e884E5bCC2960D6d48439fCB6"),

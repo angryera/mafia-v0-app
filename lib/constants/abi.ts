@@ -2822,6 +2822,221 @@ export const RANK_STAKE_ABI: Abi = [
     },
 ] as const;
 
+// ========== Family Share Stake Contract ==========
+export const FAMILY_SHARE_STAKE_ABI: Abi = [
+    {
+        type: "function",
+        name: "family",
+        inputs: [],
+        outputs: [{ name: "", type: "address", internalType: "contract IMafiaFamily" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "familyStakeIds",
+        inputs: [],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "familyStakedAmount",
+        inputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "familyStakes",
+        inputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        outputs: [
+            { name: "user", type: "address", internalType: "address" },
+            { name: "familyId", type: "uint256", internalType: "uint256" },
+            { name: "amount", type: "uint256", internalType: "uint256" },
+            { name: "startedAt", type: "uint256", internalType: "uint256" },
+            { name: "endedAt", type: "uint256", internalType: "uint256" },
+            { name: "isActive", type: "bool", internalType: "bool" },
+        ],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "getUserActiveStakeAt",
+        inputs: [
+            { name: "user", type: "address", internalType: "address" },
+            { name: "index", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "getUserActiveStakes",
+        inputs: [
+            { name: "user", type: "address", internalType: "address" },
+            { name: "offset", type: "uint256", internalType: "uint256" },
+            { name: "limit", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [{ name: "", type: "uint256[]", internalType: "uint256[]" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "getUserActiveStakesCount",
+        inputs: [{ name: "user", type: "address", internalType: "address" }],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "initialize",
+        inputs: [
+            { name: "mafiaAddress", type: "address", internalType: "address" },
+            { name: "familyAddress", type: "address", internalType: "address" },
+        ],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "initializeActiveStakesIndex",
+        inputs: [
+            { name: "offset", type: "uint256", internalType: "uint256" },
+            { name: "limit", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [{ name: "processed", type: "uint256", internalType: "uint256" }],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "mafia",
+        inputs: [],
+        outputs: [{ name: "", type: "address", internalType: "contract IERC20" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "maxStakePerFamily",
+        inputs: [],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "owner",
+        inputs: [],
+        outputs: [{ name: "", type: "address", internalType: "address" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "playerStatusChecker",
+        inputs: [],
+        outputs: [{ name: "", type: "address", internalType: "contract IMafiaPlayerStatusChecker" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "renounceOwnership",
+        inputs: [],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "setMaxStakePerFamily",
+        inputs: [{ name: "value", type: "uint256", internalType: "uint256" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "setPlayerStatusCheckerAddress",
+        inputs: [{ name: "addr", type: "address", internalType: "address" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "setWithdrawCooldown",
+        inputs: [{ name: "value", type: "uint256", internalType: "uint256" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "stake",
+        inputs: [
+            { name: "familyId", type: "uint256", internalType: "uint256" },
+            { name: "amount", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "transferOwnership",
+        inputs: [{ name: "newOwner", type: "address", internalType: "address" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "withdraw",
+        inputs: [{ name: "id", type: "uint256", internalType: "uint256" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "withdrawCooldown",
+        inputs: [],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "event",
+        name: "EndFamilyStake",
+        inputs: [
+            { name: "id", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "endedAt", type: "uint256", indexed: false, internalType: "uint256" },
+        ],
+    },
+    {
+        type: "event",
+        name: "FamilyStakeAmountChanged",
+        inputs: [
+            { name: "familyId", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "amount", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "timestamp", type: "uint256", indexed: false, internalType: "uint256" },
+        ],
+    },
+    {
+        type: "event",
+        name: "Initialized",
+        inputs: [{ name: "version", type: "uint8", indexed: false, internalType: "uint8" }],
+    },
+    {
+        type: "event",
+        name: "NewFamilyStake",
+        inputs: [
+            { name: "id", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "familyId", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "user", type: "address", indexed: false, internalType: "address" },
+            { name: "amount", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "startedAt", type: "uint256", indexed: false, internalType: "uint256" },
+        ],
+    },
+    {
+        type: "event",
+        name: "OwnershipTransferred",
+        inputs: [
+            { name: "previousOwner", type: "address", indexed: true, internalType: "address" },
+            { name: "newOwner", type: "address", indexed: true, internalType: "address" },
+        ],
+    },
+] as const;
+
 // ========== Bodyguard Training Contract ==========
 export const BODYGUARD_TRAINING_ABI: Abi = [
     {
