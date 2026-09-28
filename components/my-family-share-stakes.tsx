@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { FAMILY_SHARE_STAKE_ABI } from "@/lib/contract";
 import { cn } from "@/lib/utils";
 import {
@@ -30,14 +30,13 @@ import {
   RefreshCw,
   Timer,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { formatUnits, zeroAddress } from "viem";
 import {
   useAccount,
   usePublicClient,
   useReadContract,
-  useWaitForTransactionReceipt,
 } from "wagmi";
 
 type FamilyStakeEntry = {
@@ -207,32 +206,21 @@ export function MyFamilyShareStakesButton({
     }
   }, [open, isConnected, address, configured, fetchStakes]);
 
-  const {
-    writeContract: writeWithdraw,
-    data: withdrawHash,
-    isPending: withdrawPending,
-    error: withdrawError,
-    reset: resetWithdraw,
-  } = useChainWriteContract();
-  const { isLoading: withdrawConfirming, isSuccess: withdrawSuccess } =
-    useWaitForTransactionReceipt({ hash: withdrawHash });
-
-  const withdrawLoading = withdrawPending || withdrawConfirming;
-
-  useEffect(() => {
-    if (!withdrawSuccess || !withdrawHash) return;
-    toast.success("Withdrew family share stake");
-    setWithdrawingId(null);
-    void fetchStakes();
-  }, [withdrawSuccess, withdrawHash, fetchStakes]);
-
-  useEffect(() => {
-    if (withdrawError) {
-      toast.error(getErrorMessage(withdrawError) || "Withdraw failed");
+  const withdrawResetRef = useRef<() => void>(() => {});
+  const withdraw = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Withdrew family share stake");
       setWithdrawingId(null);
-      resetWithdraw();
-    }
-  }, [withdrawError, resetWithdraw]);
+      void fetchStakes();
+    },
+    onWriteError: (error) => {
+      toast.error(getErrorMessage(error) || "Withdraw failed");
+      setWithdrawingId(null);
+      withdrawResetRef.current();
+    },
+  });
+  withdrawResetRef.current = withdraw.reset;
+  const withdrawLoading = withdraw.isLoading;
 
   const totalWei = useMemo(
     () => stakes.reduce((sum, s) => sum + s.amount, BigInt(0)),
@@ -252,9 +240,9 @@ export function MyFamilyShareStakesButton({
       toast.error("Withdraw cooldown not reached");
       return;
     }
-    resetWithdraw();
+    withdraw.reset();
     setWithdrawingId(stakeId);
-    writeWithdraw({
+    withdraw.write({
       address: shareStake,
       abi: FAMILY_SHARE_STAKE_ABI,
       functionName: "withdraw",

@@ -1,14 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  useAccount,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { toast } from "sonner";
 import { useChain, useChainAddresses } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { MAFIA_MAP_ABI, OG_CRATE_ABI } from "@/lib/constants/abi";
 
 /** ~2 blocks on BSC-style chains; tune if needed. */
@@ -105,47 +101,33 @@ export function useMapLandClaim({
 
   const crateApproved = crateApprovedRaw === true;
 
-  const {
-    writeContract: writeApproveCrate,
-    data: approveHash,
-    isPending: approveWalletPending,
-    error: approveWriteError,
-    reset: resetApproveWrite,
-  } = useChainWriteContract();
-
-  const {
-    isLoading: approveConfirming,
-    isSuccess: approveSuccess,
-    isError: approveReceiptError,
-  } = useWaitForTransactionReceipt({ hash: approveHash });
-
-  const {
-    writeContract: writeRequestSlot,
-    data: requestHash,
-    isPending: requestWalletPending,
-    error: requestWriteError,
-    reset: resetRequestWrite,
-  } = useChainWriteContract();
-
-  const {
-    isLoading: requestConfirming,
-    isSuccess: requestSuccess,
-    isError: requestReceiptError,
-  } = useWaitForTransactionReceipt({ hash: requestHash });
-
-  const {
-    writeContract: writeFinishSlot,
-    data: finishHash,
-    isPending: finishWalletPending,
-    error: finishWriteError,
-    reset: resetFinishWrite,
-  } = useChainWriteContract();
-
-  const {
-    isLoading: finishConfirming,
-    isSuccess: finishSuccess,
-    isError: finishReceiptError,
-  } = useWaitForTransactionReceipt({ hash: finishHash });
+  const approve = useContractTransaction();
+  const request = useContractTransaction();
+  const finish = useContractTransaction();
+  const writeApproveCrate = approve.write;
+  const resetApproveWrite = approve.reset;
+  const approveHash = approve.hash;
+  const approveWriteError = approve.writeError;
+  const approveReceiptError = approve.receiptError;
+  const approveWalletPending = approve.isPending;
+  const approveConfirming = approve.isConfirming;
+  const approveSuccess = approve.isSuccess;
+  const writeRequestSlot = request.write;
+  const resetRequestWrite = request.reset;
+  const requestHash = request.hash;
+  const requestWriteError = request.writeError;
+  const requestReceiptError = request.receiptError;
+  const requestWalletPending = request.isPending;
+  const requestConfirming = request.isConfirming;
+  const requestSuccess = request.isSuccess;
+  const writeFinishSlot = finish.write;
+  const resetFinishWrite = finish.reset;
+  const finishHash = finish.hash;
+  const finishWriteError = finish.writeError;
+  const finishReceiptError = finish.receiptError;
+  const finishWalletPending = finish.isPending;
+  const finishConfirming = finish.isConfirming;
+  const finishSuccess = finish.isSuccess;
 
   // Wallet rejected or RPC error before tx — reset phase so the button works again.
   useEffect(() => {

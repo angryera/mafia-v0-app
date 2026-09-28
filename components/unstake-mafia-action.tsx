@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useAccount, usePublicClient, useWaitForTransactionReceipt } from "wagmi";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useAccount, usePublicClient } from "wagmi";
 import { toast } from "sonner";
 import { Coins, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/components/auth-provider";
 import { useChainAddresses } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { usePlayerDeadState } from "@/hooks/use-player-dead-state";
 import { EQUIPMENT_ABI } from "@/lib/contract";
 import {
@@ -48,16 +48,26 @@ export function UnstakeMafiaAction() {
     Math.floor(Date.now() / 1000),
   );
 
-  const {
-    writeContract,
-    data: unstakeHash,
-    isPending: unstakePending,
-    error: unstakeError,
-    reset: resetUnstake,
-  } = useChainWriteContract();
-
-  const { isLoading: unstakeConfirming, isSuccess: unstakeSuccess } =
-    useWaitForTransactionReceipt({ hash: unstakeHash });
+  const unstakeResetRef = useRef<() => void>(() => {});
+  const unstake = useContractTransaction({
+    onSuccess: () => {
+      if (!pendingUnstake) return;
+      toast.success(
+        `Unstaked ${formatMafiaAmountFromNumber(pendingUnstake.mafiaAmount)} $MAFIA from ${pendingUnstake.cityName}`,
+      );
+      setUnstakingCityId(null);
+      setPendingUnstake(null);
+      unstakeResetRef.current();
+      void fetchStakes();
+    },
+    onWriteError: (error) => {
+      toast.error(error.message || "Failed to unstake MAFIA");
+      setUnstakingCityId(null);
+      setPendingUnstake(null);
+      unstakeResetRef.current();
+    },
+  });
+  unstakeResetRef.current = unstake.reset;
 
   const fetchStakes = useCallback(async () => {
     if (!publicClient || !address || !authData) return;
@@ -95,27 +105,6 @@ export function UnstakeMafiaAction() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (unstakeSuccess && unstakeHash && pendingUnstake) {
-      toast.success(
-        `Unstaked ${formatMafiaAmountFromNumber(pendingUnstake.mafiaAmount)} $MAFIA from ${pendingUnstake.cityName}`,
-      );
-      setUnstakingCityId(null);
-      setPendingUnstake(null);
-      resetUnstake();
-      void fetchStakes();
-    }
-  }, [unstakeSuccess, unstakeHash, pendingUnstake, fetchStakes, resetUnstake]);
-
-  useEffect(() => {
-    if (unstakeError) {
-      toast.error(unstakeError.message || "Failed to unstake MAFIA");
-      setUnstakingCityId(null);
-      setPendingUnstake(null);
-      resetUnstake();
-    }
-  }, [unstakeError, resetUnstake]);
-
   const activeStakes = useMemo(
     () => (cityStakes ?? []).filter((s) => s.mafiaAmountWei > BigInt(0)),
     [cityStakes],
@@ -151,16 +140,16 @@ export function UnstakeMafiaAction() {
         return;
       }
 
-      if (unstakingCityId !== null || unstakePending || unstakeConfirming) {
+      if (unstakingCityId !== null || unstake.isLoading) {
         return;
       }
 
-      resetUnstake();
+      unstake.reset();
       setUnstakingCityId(stake.cityId);
       setPendingUnstake(stake);
 
       const args = buildUnstakeEquipArgs(stake);
-      writeContract({
+      unstake.write({
         address: addresses.equipment,
         abi: EQUIPMENT_ABI,
         functionName: "equipItems",
@@ -175,10 +164,9 @@ export function UnstakeMafiaAction() {
       currentTime,
       isDead,
       unstakingCityId,
-      unstakePending,
-      unstakeConfirming,
-      resetUnstake,
-      writeContract,
+      unstake.isLoading,
+      unstake.reset,
+      unstake.write,
       addresses.equipment,
     ],
   );
@@ -309,7 +297,7 @@ export function UnstakeMafiaAction() {
                 );
                 const isRowUnstaking =
                   unstakingCityId === stake.cityId &&
-                  (unstakePending || unstakeConfirming);
+                  unstake.isLoading;
 
                 return (
                   <TableRow key={stake.cityId}>

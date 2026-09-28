@@ -1,11 +1,8 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import {
-  useWaitForTransactionReceipt,
-  useAccount,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useAccount } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   INGAME_CURRENCY_ABI,
   INGAME_CURRENCY_APPROVE_AMOUNT,
@@ -24,28 +21,18 @@ export function TravelApprove() {
   const { isConnected } = useAccount();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
-  const {
-    writeContract,
-    data: hash,
-    isPending,
-    error,
-    reset,
-  } = useChainWriteContract();
-
-  const { isLoading: isConfirming, isSuccess } =
-    useWaitForTransactionReceipt({ hash });
+  const approve = useContractTransaction();
+  const { hash, isPending, error, isConfirming, isSuccess, isLoading } = approve;
 
   const handleApprove = () => {
-    reset();
-    writeContract({
+    approve.reset();
+    approve.write({
       address: addresses.ingameCurrency,
       abi: INGAME_CURRENCY_ABI,
       functionName: "approveInGameCurrency",
       args: [INGAME_CURRENCY_APPROVE_AMOUNT],
     });
   };
-
-  const isLoading = isPending || isConfirming;
 
   if (isSuccess && hash) {
     return (

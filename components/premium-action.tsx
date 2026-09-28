@@ -1,12 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import {
-  useWaitForTransactionReceipt,
-  useReadContract,
-  useAccount,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useReadContract, useAccount } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { formatUnits, parseUnits } from "viem";
 import {
   PLAYER_SUBSCRIPTION_ABI,
@@ -263,44 +259,20 @@ export function PremiumAction() {
     }
   }, [isNativeToken, needsApproval]);
 
-  // ── Approve tx ──────────────────────────────────────────────
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-
-  // ── Subscribe tx ────────────────────────────────────────────
-  const {
-    writeContract: writeSubscribe,
-    data: subHash,
-    isPending: subPending,
-    error: subError,
-    reset: resetSub,
-  } = useChainWriteContract();
-
-  const { isLoading: subConfirming, isSuccess: subSuccess } =
-    useWaitForTransactionReceipt({ hash: subHash });
-
-  useEffect(() => {
-    if (approveSuccess) {
+  const approve = useContractTransaction({
+    onSuccess: () => {
       refetchAllowance();
       setStep("buy");
-    }
-  }, [approveSuccess, refetchAllowance]);
+    },
+  });
 
-  useEffect(() => {
-    if (subSuccess) {
+  const subscribe = useContractTransaction({
+    onSuccess: () => {
       refetchSub();
       refetchUnlimited();
       refetchSubInfo();
-    }
-  }, [subSuccess, refetchSub, refetchUnlimited, refetchSubInfo]);
+    },
+  });
 
   const handleApprove = () => {
     if (!selectedToken || !totalTokenCost) return;
@@ -308,7 +280,7 @@ export function PremiumAction() {
       (totalTokenCost * 1.05).toFixed(selectedToken.decimal),
       selectedToken.decimal
     );
-    writeApprove({
+    approve.write({
       address: selectedToken.tokenAddress,
       abi: ERC20_ABI,
       functionName: "approve",
@@ -323,7 +295,7 @@ export function PremiumAction() {
         (totalTokenCost * 1.005).toFixed(18),
         18
       );
-      writeSubscribe({
+      subscribe.write({
         address: addresses.playerSubscription,
         abi: PLAYER_SUBSCRIPTION_ABI,
         functionName: "subscribe",
@@ -331,7 +303,7 @@ export function PremiumAction() {
         value: sendAmount,
       } as any);
     } else {
-      writeSubscribe({
+      subscribe.write({
         address: addresses.playerSubscription,
         abi: PLAYER_SUBSCRIPTION_ABI,
         functionName: "subscribe",
@@ -341,15 +313,15 @@ export function PremiumAction() {
   };
 
   const handleReset = () => {
-    resetApprove();
-    resetSub();
+    approve.reset();
+    subscribe.reset();
     setStep(needsApproval && !isNativeToken ? "approve" : "buy");
   };
 
-  const isPending = approvePending || subPending;
-  const isConfirming = approveConfirming || subConfirming;
-  const error = approveError || subError;
-  const txHash = subHash || approveHash;
+  const isPending = approve.isPending || subscribe.isPending;
+  const isConfirming = approve.isConfirming || subscribe.isConfirming;
+  const error = approve.error || subscribe.error;
+  const txHash = subscribe.hash || approve.hash;
 
   return (
     <div className="space-y-6">
@@ -435,7 +407,7 @@ export function PremiumAction() {
       )}
 
       {/* ── Success state ──────────────────────────────────── */}
-      {subSuccess ? (
+      {subscribe.isSuccess ? (
         <div className="space-y-4">
           <div className="flex flex-col items-center gap-3 rounded-xl bg-emerald-400/10 p-8 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-400/15">
@@ -458,9 +430,9 @@ export function PremiumAction() {
                 plan
               </p>
             </div>
-            {subHash && (
+            {subscribe.hash && (
               <a
-                href={`${explorer}/tx/${subHash}`}
+                href={`${explorer}/tx/${subscribe.hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
@@ -622,8 +594,8 @@ export function PremiumAction() {
                           onClick={() => {
                             setSelectedTokenId(t.tokenId);
                             setTokenMenuOpen(false);
-                            resetApprove();
-                            resetSub();
+                            approve.reset();
+                            subscribe.reset();
                           }}
                           className={cn(
                             "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-primary/5",
@@ -700,7 +672,7 @@ export function PremiumAction() {
                 </div>
               </div>
 
-              {approveSuccess && (
+              {approve.isSuccess && (
                 <div className="mb-3 flex items-center gap-2 rounded-lg bg-emerald-400/10 px-3 py-2">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                   <span className="text-[10px] text-emerald-400">
@@ -711,13 +683,13 @@ export function PremiumAction() {
 
               <button
                 onClick={handleApprove}
-                disabled={!isConnected || approvePending || approveConfirming}
+                disabled={!isConnected || approve.isPending || approve.isConfirming}
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary/90 px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary active:scale-[0.98] disabled:opacity-50"
               >
-                {approvePending || approveConfirming ? (
+                {approve.isPending || approve.isConfirming ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    {approvePending
+                    {approve.isPending
                       ? "Confirm in wallet..."
                       : "Confirming..."}
                   </>
@@ -755,10 +727,10 @@ export function PremiumAction() {
                 : "bg-secondary text-muted-foreground cursor-not-allowed",
             )}
           >
-            {subPending || subConfirming ? (
+            {subscribe.isPending || subscribe.isConfirming ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {subPending ? "Confirm in wallet..." : "Subscribing..."}
+                {subscribe.isPending ? "Confirm in wallet..." : "Subscribing..."}
               </>
             ) : (
               <>

@@ -3,11 +3,10 @@
 import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  useWaitForTransactionReceipt,
   useAccount,
 } from "wagmi";
 import { decodeEventLog } from "viem";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   STORY_MODE_ABI,
   MYSTERY_BOX_REWARDS,
@@ -119,20 +118,15 @@ export function MysteryBoxAction() {
     }
   }, [isConnected, address, fetchMysteryBoxes]);
 
-  // Contract write hook
-  const {
-    writeContract,
-    data: openHash,
-    isPending: isOpenPending,
-    error: openError,
-    reset: resetOpen,
-  } = useChainWriteContract();
-
-  const {
-    isLoading: isConfirming,
-    isSuccess: isConfirmed,
-    data: receipt,
-  } = useWaitForTransactionReceipt({ hash: openHash });
+  const openTx = useContractTransaction();
+  const writeContract = openTx.write;
+  const openHash = openTx.hash;
+  const isOpenPending = openTx.isPending;
+  const openError = openTx.error;
+  const resetOpen = openTx.reset;
+  const isConfirming = openTx.isConfirming;
+  const isConfirmed = openTx.isSuccess;
+  const receipt = openTx.receipt.data;
 
   // Handle transaction confirmation and event parsing
   useEffect(() => {

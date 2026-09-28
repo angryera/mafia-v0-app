@@ -2,7 +2,7 @@
 
 import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { Button } from "@/components/ui/button";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useToast } from "@/hooks/use-toast";
 import {
   MARKETPLACE_ITEM_NAMES,
@@ -25,9 +25,9 @@ import {
   Trophy,
   XCircle,
 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { formatEther } from "viem";
-import { useAccount, useReadContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 
 type LobbyFinishInfo = {
   isSuccess: boolean;
@@ -241,18 +241,14 @@ export function OrganizedCrimeOutcome({
     ? parseLobbyFinishInfo(finishInfosRaw[0])
     : null;
 
-  // Claim reward hooks
-  const { writeContract, data: claimHash, isPending, reset } = useChainWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash: claimHash });
-
-  // Handle claim success
-  useEffect(() => {
-    if (isSuccess) {
+  const claimResetRef = useRef<() => void>(() => {});
+  const claim = useContractTransaction({
+    onSuccess: () => {
       toast({
         title: "Reward Claimed",
         description: (
           <a
-            href={`${explorer}/tx/${claimHash}`}
+            href={`${explorer}/tx/${claim.hash}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 underline"
@@ -261,10 +257,11 @@ export function OrganizedCrimeOutcome({
           </a>
         ),
       });
-      reset();
+      claimResetRef.current();
       onRefresh();
-    }
-  }, [isSuccess, claimHash, explorer, toast, reset, onRefresh]);
+    },
+  });
+  claimResetRef.current = claim.reset;
 
   // Reveal delay effect
   useEffect(() => {
@@ -278,7 +275,7 @@ export function OrganizedCrimeOutcome({
   const isLeader = address?.toLowerCase() === lobby.leader.toLowerCase();
 
   const handleClaimReward = () => {
-    writeContract({
+    claim.write({
       address: addresses.ocExecution,
       abi: OC_EXECUTION_ABI,
       functionName: "claimLobbyReward",
@@ -286,7 +283,7 @@ export function OrganizedCrimeOutcome({
     });
   };
 
-  const isClaiming = isPending || isConfirming;
+  const isClaiming = claim.isLoading;
 
   // Calculate rewards for display
   const rewards = lobby.rewards.map((r) => ({

@@ -1,13 +1,9 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  useAccount,
-  usePublicClient,
-  useWaitForTransactionReceipt,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useState, useEffect, useCallback } from "react";
+import { useAccount, usePublicClient } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   HELPERBOT_CONTRACT_ABI,
   parseHelperBotInfo,
@@ -85,21 +81,25 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
     ...Array.from({ length: 50 }, (_, i) => (i + 1) * 100),
   ].filter((v) => v >= minAttempts && v <= maxAttempts);
 
-  // ---------- Start bot ----------
-  const {
-    writeContract: writeStart,
-    data: startHash,
-    isPending: startPending,
-    error: startError,
-    reset: resetStart,
-  } = useChainWriteContract();
+  const refreshAfterHire = () => {
+    fetchBotInfo();
+    onCreditChange?.();
+    window.setTimeout(() => {
+      fetchBotInfo();
+      onCreditChange?.();
+    }, 3000);
+  };
 
-  const { isLoading: startConfirming, isSuccess: startSuccess } =
-    useWaitForTransactionReceipt({ hash: startHash });
+  const start = useContractTransaction({
+    onSuccess: () => {
+      toast.success(`${bot.label} hired successfully`);
+      refreshAfterHire();
+    },
+  });
 
   const handleStart = () => {
-    resetStart();
-    writeStart({
+    start.reset();
+    start.write({
       address: addresses.helperbot,
       abi: HELPERBOT_CONTRACT_ABI,
       functionName: bot.startFn,
@@ -108,35 +108,17 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
     });
   };
 
-  const startToastFired = useRef(false);
-  useEffect(() => {
-    if (startSuccess && startHash && !startToastFired.current) {
-      startToastFired.current = true;
-      toast.success(`${bot.label} hired successfully`);
-      fetchBotInfo();
-      onCreditChange?.();
-      const t = setTimeout(() => { fetchBotInfo(); onCreditChange?.(); }, 3000);
-      return () => clearTimeout(t);
-    }
-    if (!startHash) startToastFired.current = false;
-  }, [startSuccess, startHash, bot.label, fetchBotInfo, onCreditChange]);
-
-  // ---------- End bot ----------
-  const {
-    writeContract: writeEnd,
-    data: endHash,
-    isPending: endPending,
-    error: endError,
-    reset: resetEnd,
-  } = useChainWriteContract();
-
-  const { isLoading: endConfirming, isSuccess: endSuccess } =
-    useWaitForTransactionReceipt({ hash: endHash });
+  const end = useContractTransaction({
+    onSuccess: () => {
+      toast.success(`${bot.label} withdrawn successfully`);
+      refreshAfterHire();
+    },
+  });
 
   const handleEnd = () => {
-    resetEnd();
+    end.reset();
     if (bot.endType === "none") {
-      writeEnd({
+      end.write({
         address: addresses.helperbot,
         abi: HELPERBOT_CONTRACT_ABI,
         functionName: bot.endFn,
@@ -148,7 +130,7 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
         toast.error("Authentication required. Please sign in first.");
         return;
       }
-      writeEnd({
+      end.write({
         address: addresses.helperbot,
         abi: HELPERBOT_CONTRACT_ABI,
         functionName: bot.endFn,
@@ -160,7 +142,7 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
         toast.error("Authentication required. Please sign in first.");
         return;
       }
-      writeEnd({
+      end.write({
         address: addresses.helperbot,
         abi: HELPERBOT_CONTRACT_ABI,
         functionName: bot.endFn,
@@ -170,26 +152,13 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
     }
   };
 
-  const endToastFired = useRef(false);
-  useEffect(() => {
-    if (endSuccess && endHash && !endToastFired.current) {
-      endToastFired.current = true;
-      toast.success(`${bot.label} withdrawn successfully`);
-      fetchBotInfo();
-      onCreditChange?.();
-      const t = setTimeout(() => { fetchBotInfo(); onCreditChange?.(); }, 3000);
-      return () => clearTimeout(t);
-    }
-    if (!endHash) endToastFired.current = false;
-  }, [endSuccess, endHash, bot.label, fetchBotInfo, onCreditChange]);
-
   // ---------- Derived state ----------
-  const startLoading = startPending || startConfirming;
-  const endLoading = endPending || endConfirming;
+  const startLoading = start.isLoading;
+  const endLoading = end.isLoading;
   const isLoading = startLoading || endLoading;
-  const error = startError || endError;
-  const txHash = startHash || endHash;
-  const txSuccess = startSuccess || endSuccess;
+  const error = start.error || end.error;
+  const txHash = start.hash || end.hash;
+  const txSuccess = start.isSuccess || end.isSuccess;
 
   // End time countdown
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
@@ -484,7 +453,7 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
             {startLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{startPending ? "Confirm in wallet..." : "Starting..."}</span>
+                <span>{start.isPending ? "Confirm in wallet..." : "Starting..."}</span>
               </>
             ) : (
               <>
@@ -514,7 +483,7 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
             {endLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{endPending ? "Confirm in wallet..." : "Withdrawing..."}</span>
+                <span>{end.isPending ? "Confirm in wallet..." : "Withdrawing..."}</span>
               </>
             ) : (
               <>

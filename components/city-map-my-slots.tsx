@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, MapPin, RefreshCw, X } from "lucide-react";
-import { useAccount, useReadContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { parseEther } from "viem";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ import {
 } from "@/lib/city-map-yield-accrual";
 import { formatMafiaStakingFromWei } from "@/lib/city-map-staking-format";
 import { useChainAddresses } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { MAFIA_MAP_ABI } from "@/lib/constants/abi";
 
 /** Same minimum claimable units as legacy client (human Game Cash, 18-decimal token). */
@@ -179,33 +179,16 @@ export function CityMapMySlotsPanel({
     return claimBatch.reduce((s, e) => s + e.wei, BigInt(0));
   }, [claimBatch]);
 
-  const {
-    writeContractAsync: writeBulkClaim,
-    isPending: bulkWritePending,
-    data: bulkHash,
-    reset: resetBulkWrite,
-  } = useChainWriteContract();
-
-  const { isLoading: bulkConfirming, isSuccess: bulkSuccess } =
-    useWaitForTransactionReceipt({ hash: bulkHash });
-
-  const bulkToastFired = useRef(false);
-  useEffect(() => {
-    if (bulkSuccess && bulkHash && !bulkToastFired.current) {
-      bulkToastFired.current = true;
+  const bulkResetRef = useRef<() => void>(() => {});
+  const bulk = useContractTransaction({
+    onSuccess: () => {
       toast.success("Claimed Game Cash yield (bulk).");
-      resetBulkWrite();
+      bulkResetRef.current();
       void refetchBulkYield();
       onRefresh();
-    }
-    if (!bulkHash) bulkToastFired.current = false;
-  }, [
-    bulkSuccess,
-    bulkHash,
-    resetBulkWrite,
-    refetchBulkYield,
-    onRefresh,
-  ]);
+    },
+  });
+  bulkResetRef.current = bulk.reset;
 
   useEffect(() => {
     if (!open) return;
@@ -222,7 +205,7 @@ export function CityMapMySlotsPanel({
       return;
     }
     try {
-      await writeBulkClaim({
+      await bulk.writeAsync({
         address: mapAddress,
         abi: MAFIA_MAP_ABI,
         functionName: "bulkClaimYieldPayout",
@@ -240,7 +223,7 @@ export function CityMapMySlotsPanel({
 
   if (!open) return null;
 
-  const bulkBusy = bulkWritePending || bulkConfirming;
+  const bulkBusy = bulk.isLoading;
   /** Show bulk strip whenever the user has any owned slots in this city (not only yield-tier rows). */
   const showBulkClaimBar =
     isConnected && !!address && !slotsLoading && rows.length > 0;
