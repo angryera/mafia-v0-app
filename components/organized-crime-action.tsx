@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/auth-provider";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, formatCooldownClock, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -485,9 +486,11 @@ export function OrganizedCrimeAction() {
     abi: OC_LOBBY_ABI,
     functionName: "nextLobbyTime",
     args: address ? [address] : undefined,
-    query: { enabled: !!address && isConnected },
+    query: { enabled: !!address && isConnected, ...COOLDOWN_READ_QUERY },
   });
-  const nextLobbyTime = nextLobbyTimeRaw !== undefined ? Number(nextLobbyTimeRaw) : 0;
+  const lobbyCooldownSeconds = cooldownSecondsLeft(
+    useCooldownRemaining(nextLobbyTimeRaw === undefined ? undefined : Number(nextLobbyTimeRaw)),
+  );
 
   const { data: healthBalanceRaw } = useReadContract({
     address: addresses.health,
@@ -500,10 +503,10 @@ export function OrganizedCrimeAction() {
     ? Number(formatEther(healthBalanceRaw as bigint))
     : null;
 
-  const now = Math.floor(Date.now() / 1000);
-  const isOnCooldown = nextLobbyTime > now;
+  const isOnCooldown = lobbyCooldownSeconds !== null && lobbyCooldownSeconds > 0;
+  const cooldownKnown = lobbyCooldownSeconds !== null;
   const hasEnoughHealth = healthBalance !== null && healthBalance >= OC_MIN_HEALTH;
-  const canCreateLobby = !isInLobby && !isOnCooldown && hasEnoughHealth;
+  const canCreateLobby = cooldownKnown && !isInLobby && !isOnCooldown && hasEnoughHealth;
 
   // Load lobbies using getLobbyCount to get the total count
   const loadLobbies = useCallback(async () => {
@@ -594,6 +597,11 @@ export function OrganizedCrimeAction() {
           <p className="text-sm text-muted-foreground">
             Join or create a crew to pull off the big heist
           </p>
+          {isOnCooldown && (
+            <p className="mt-1 font-mono text-xs text-amber-400">
+              Lobby cooldown {formatCooldownClock(lobbyCooldownSeconds ?? 0)}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

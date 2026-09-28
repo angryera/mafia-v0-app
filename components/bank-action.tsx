@@ -9,9 +9,9 @@ import {
   useSignMessage,
 } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
-import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, formatCooldownClock, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
-import { BANK_TRANSFER_ABI, TRAVEL_DESTINATIONS, USER_PROFILE_CONTRACT_ABI } from "@/lib/contract";
+import { BANK_TRANSFER_ABI, BANK_TRANSFER_COOLDOWN_SECONDS, TRAVEL_DESTINATIONS, USER_PROFILE_CONTRACT_ABI } from "@/lib/contract";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -145,29 +145,30 @@ export function BankAction() {
     }
   }, [cityOwnerFee]);
 
-  // Cooldown: lastTransferTime + 15 min
-  const { data: lastTransferTimeRaw } = useReadContract({
+  const { data: lastTransferTimeRaw, refetch: refetchCooldown } = useReadContract({
     address: addresses.ingameCurrency,
     abi: BANK_TRANSFER_ABI,
     functionName: "lastTransferTime",
     args: address ? [address] : undefined,
     query: {
       enabled: isConnected && !!address,
-      refetchInterval: 15_000,
+      ...COOLDOWN_READ_QUERY,
     },
   });
 
-  const cooldownRemaining = useCooldownRemaining(
-    lastTransferTimeRaw === undefined
-      ? undefined
-      : Number(lastTransferTimeRaw) + 15 * 60,
+  const cooldownSeconds = cooldownSecondsLeft(
+    useCooldownRemaining(
+      lastTransferTimeRaw === undefined
+        ? undefined
+        : Number(lastTransferTimeRaw) + BANK_TRANSFER_COOLDOWN_SECONDS,
+    ),
   );
+  const cooldownReady = cooldownSeconds === 0;
+  const onCooldown = isConnected && cooldownSeconds !== 0;
 
-  const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
-  const cooldownMinutes = Math.floor(cooldownSeconds / 60);
-  const cooldownSecs = cooldownSeconds % 60;
-  const cooldownReady = cooldownSeconds <= 0;
-  const onCooldown = isConnected && !cooldownReady;
+  useEffect(() => {
+    if (isSuccess) void refetchCooldown();
+  }, [isSuccess, refetchCooldown]);
 
   const fetchBankBusinessItems = useCallback(async () => {
     if (!inventoryReady || !addresses.inventory || cityId === undefined) {
@@ -387,13 +388,15 @@ export function BankAction() {
           />
           <div className="flex flex-1 items-center justify-between">
             <span className="text-sm text-muted-foreground">Next Transfer</span>
-            {cooldownReady ? (
+            {cooldownSeconds === null ? (
+              <span className="font-mono text-sm text-muted-foreground">...</span>
+            ) : cooldownReady ? (
               <span className="font-mono text-sm font-semibold text-green-400">
                 Now
               </span>
             ) : (
               <span className="font-mono text-sm font-semibold text-primary tabular-nums">
-                {cooldownMinutes}:{cooldownSecs.toString().padStart(2, "0")}
+                {formatCooldownClock(cooldownSeconds)}
               </span>
             )}
           </div>

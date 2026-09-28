@@ -17,6 +17,9 @@ export const SAFEHOUSE_MIN_HOURS = 1;
 export const SAFEHOUSE_MAX_HOURS = 100;
 export const SAFEHOUSE_BASE_COOLDOWN = 6 * 60 * 60; // 6 hours
 
+/** Bank transfers unlock 15 minutes after `lastTransferTime`. */
+export const BANK_TRANSFER_COOLDOWN_SECONDS = 15 * 60;
+
 // ========== Detective Agency Contract ==========
 export const DETECTIVE_HIRING_TIME = 40 * 60; // 40 minutes in seconds
 export const DETECTIVE_TARGET_FOUND_DURATION = 2 * 60 * 60; // 2 hours

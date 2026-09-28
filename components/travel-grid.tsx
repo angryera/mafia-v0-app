@@ -1,6 +1,6 @@
 "use client";
 
-import { getErrorMessage } from "@/lib/format";
+import { getErrorMessage, getTravelCityName } from "@/lib/format";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   useReadContract,
@@ -16,6 +16,7 @@ import {
 import { useChainAddresses, useChain } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { COOLDOWN_READ_QUERY } from "@/hooks/use-cooldown-remaining";
 import { formatEther, parseEther } from "viem";
 import {
   Timer,
@@ -51,13 +52,6 @@ interface TravelInfo {
   itemId: number;
 }
 
-interface ProfileData {
-  profileId: bigint;
-  username: string;
-  cityId: number;
-  isActive: boolean;
-}
-
 interface ShopItem {
   itemId: number;
   owner: string;
@@ -90,6 +84,17 @@ function formatTimeRemaining(endTime: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
+/** Contract tuples come back as arrays or named objects depending on the decoder. */
+function readField(raw: unknown, key: string, index: number): unknown {
+  if (Array.isArray(raw)) return raw[index];
+  if (raw && typeof raw === "object") {
+    const record = raw as Record<string, unknown>;
+    if (record[key] != null) return record[key];
+    if (record[index] != null) return record[index];
+  }
+  return undefined;
+}
+
 export function TravelGrid() {
   const { address, isConnected } = useAccount();
   const addresses = useChainAddresses();
@@ -103,11 +108,13 @@ export function TravelGrid() {
   const [selectedVehicleId, setSelectedVehicleId] = useState<number>(0);
   const [vehicles, setVehicles] = useState<ShopItem[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
-  const [timeLeft, setTimeLeft] = useState("");
   const [approved, setApproved] = useState(false);
+  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
+  const [lastArrivalCityId, setLastArrivalCityId] = useState<number | null>(null);
+  const arrivalCityIdRef = useRef<number | null>(null);
 
   // Get user profile (for current city)
-  const { data: profileRaw } = useReadContract({
+  const { data: profileRaw, refetch: refetchProfile } = useReadContract({
     address: addresses.userProfile,
     abi: TRAVEL_CONTRACT_ABI,
     functionName: "getUserProfile",
@@ -118,9 +125,9 @@ export function TravelGrid() {
     query: { enabled: !!authData && !!address },
   });
 
-  const profile = profileRaw as ProfileData | undefined;
-  const currentCityId = profile?.cityId ?? 0;
-  const currentCityRegion = getCityRegion(currentCityId);
+  const profileLoaded = profileRaw != null;
+  const currentCityId = profileLoaded ? Number(readField(profileRaw, "cityId", 2) ?? 0) : null;
+  const currentCityRegion = currentCityId == null ? null : getCityRegion(currentCityId);
 
   // Get user travel info
   const {
@@ -134,18 +141,19 @@ export function TravelGrid() {
       authData && address
         ? [address, authData.message, authData.signature]
         : undefined,
-    query: { enabled: !!authData && !!address, refetchInterval: 15_000 },
+    query: { enabled: !!authData && !!address, ...COOLDOWN_READ_QUERY },
   });
 
   const travelInfo: TravelInfo | null = travelInfoRaw
     ? {
-      travelType: Number((travelInfoRaw as { travelType: bigint }).travelType),
-      travelUntil: Number((travelInfoRaw as { travelUntil: bigint }).travelUntil),
-      itemId: Number((travelInfoRaw as { itemId: bigint }).itemId),
+      travelType: Number(readField(travelInfoRaw, "travelType", 0) ?? 0),
+      travelUntil: Number(readField(travelInfoRaw, "travelUntil", 1) ?? 0),
+      itemId: Number(readField(travelInfoRaw, "itemId", 2) ?? 0),
     }
     : null;
 
-  const isTraveling = travelInfo && travelInfo.travelUntil > Math.floor(Date.now() / 1000);
+  const travelKnown = !authData || travelInfo != null;
+  const onTravelCooldown = Boolean(travelInfo && travelInfo.travelUntil > nowSec);
 
   // Get cash balance
   const { data: cashBalanceRaw } = useReadContract({
@@ -163,20 +171,12 @@ export function TravelGrid() {
     ? Number(formatEther(cashBalanceRaw as bigint))
     : 0;
 
-  // Countdown timer
   useEffect(() => {
-    if (!travelInfo || !isTraveling) {
-      setTimeLeft("");
-      return;
-    }
-
-    const tick = () => {
-      setTimeLeft(formatTimeRemaining(travelInfo.travelUntil));
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [travelInfo, isTraveling]);
+    const id = window.setInterval(() => {
+      setNowSec(Math.floor(Date.now() / 1000));
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // Load vehicles from MafiaInventory
   const loadVehicles = useCallback(async () => {
@@ -227,6 +227,7 @@ export function TravelGrid() {
 
   // Check if destination requires plane (different continent)
   const needsPlane = (destCityId: number) => {
+    if (!currentCityRegion) return false;
     const destRegion = getCityRegion(destCityId);
     return destRegion !== currentCityRegion;
   };
@@ -247,8 +248,15 @@ export function TravelGrid() {
   const travelResetRef = useRef<(() => void) | null>(null);
   const travelTx = useContractTransaction({
     onSuccess: () => {
-      toast({ title: "Traveling!", description: "Your journey has begun." });
+      const cityId = arrivalCityIdRef.current;
+      if (cityId != null) setLastArrivalCityId(cityId);
+      const cityName = cityId != null ? getTravelCityName(cityId) : "your city";
+      toast({
+        title: "Arrived",
+        description: `You arrived in ${cityName}.`,
+      });
       refetchTravelInfo();
+      refetchProfile();
       setSelectedDestination(null);
       travelResetRef.current?.();
     },
@@ -294,6 +302,7 @@ export function TravelGrid() {
       return;
     }
 
+    arrivalCityIdRef.current = selectedDestination;
     resetTravel();
     try {
       await writeTravel({
@@ -371,31 +380,40 @@ export function TravelGrid() {
             <p className="text-xs text-muted-foreground">Current Location</p>
             <p className="font-semibold text-foreground flex items-center gap-1.5 justify-end">
               <MapPin className="h-4 w-4 text-primary" />
-              {profile ? TravelCities.flatMap((r) => r.cities).find((c) => c.cityId === currentCityId)?.name || `City #${currentCityId}` : "Loading..."}
+              {currentCityId == null
+                ? "Loading..."
+                : getTravelCityName(lastArrivalCityId ?? currentCityId)}
             </p>
             <p className="text-[10px] text-muted-foreground">{currentCityRegion}</p>
           </div>
         </div>
 
-        {/* Travel Cooldown */}
-        {isTraveling && (
+        {authData && !travelKnown && (
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+            <Timer className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Checking travel cooldown...</span>
+          </div>
+        )}
+
+        {/* Travel cooldown */}
+        {onTravelCooldown && travelInfo && (
           <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
             <Timer className="h-5 w-5 shrink-0 text-primary animate-pulse" />
-            <div className="flex flex-1 items-center justify-between">
+            <div className="flex flex-1 items-center justify-between gap-3">
               <div>
-                <span className="text-sm font-medium text-foreground">Currently Traveling</span>
+                <span className="text-sm font-medium text-foreground">Travel cooldown</span>
                 <p className="text-xs text-muted-foreground">
-                  Via {TRAVEL_TYPES[travelInfo?.travelType ?? 0]?.label}
+                  You arrived in {getTravelCityName(lastArrivalCityId ?? currentCityId ?? 0)}. You can travel again when this ends.
                 </p>
               </div>
               <span className="font-mono text-lg font-bold text-primary tabular-nums">
-                {timeLeft}
+                {formatTimeRemaining(travelInfo.travelUntil)}
               </span>
             </div>
           </div>
         )}
 
-        {!isTraveling && (
+        {travelKnown && !onTravelCooldown && (
           <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3">
             <CheckCircle2 className="h-5 w-5 shrink-0 text-green-400" />
             <span className="text-sm font-medium text-green-400">Ready to Travel</span>
@@ -414,7 +432,7 @@ export function TravelGrid() {
       </div>
 
       {/* Travel Options */}
-      {!isTraveling && (
+      {travelKnown && !onTravelCooldown && (
         <div className="rounded-xl border border-border bg-card p-5">
           <h3 className="text-sm font-semibold text-foreground mb-4">Select Travel Method</h3>
 
@@ -501,7 +519,7 @@ export function TravelGrid() {
             </label>
             <div className="grid gap-4">
               {TravelCities.map((region) => {
-                const isDifferentContinent = region.region !== currentCityRegion;
+                const isDifferentContinent = currentCityRegion != null && region.region !== currentCityRegion;
                 const isDisabled = isDifferentContinent && selectedTravelType !== 2;
 
                 return (
@@ -593,7 +611,7 @@ export function TravelGrid() {
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Travel Time</p>
+                  <p className="text-xs text-muted-foreground">Cooldown</p>
                   <p className="font-medium text-foreground">
                     {Math.floor(selectedTravelTypeData.travelTime / 60)} minutes
                   </p>

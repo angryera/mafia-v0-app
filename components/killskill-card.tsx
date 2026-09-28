@@ -1,7 +1,7 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { decodeEventLog, parseEther } from "viem";
@@ -29,9 +29,11 @@ type TrainType = (typeof TRAIN_TYPES)[number];
 export function KillSkillCard({
   trainType,
   cooldown,
+  onCommitted,
 }: {
   trainType: TrainType;
   cooldown?: { seconds: number; label: string } | null;
+  onCommitted?: () => void;
 }) {
   const { isConnected } = useAccount();
   const addresses = useChainAddresses();
@@ -99,6 +101,13 @@ export function KillSkillCard({
       args: [trainType.id],
     });
   };
+
+  const committedRef = useRef(false);
+  useEffect(() => {
+    if (!isTxConfirmed || committedRef.current) return;
+    committedRef.current = true;
+    onCommitted?.();
+  }, [isTxConfirmed, onCommitted]);
 
   const isApproveLoading = approveTx.isLoading;
   const isTrainLoading = trainTx.isLoading;

@@ -8,6 +8,7 @@ import {
   usePublicClient,
 } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import {
   USER_PROFILE_CONTRACT_ABI,
   TRAVEL_DESTINATIONS,
@@ -71,7 +72,6 @@ export function NarcsAction() {
   const [prices, setPrices] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [pricesLoading, setPricesLoading] = useState(false);
   const [narcsLimit, setNarcsLimit] = useState<number>(10);
-  const [nextNarcsTime, setNextNarcsTime] = useState<number>(0);
   const [buyAmounts, setBuyAmounts] = useState<Record<number, number>>({});
   const [sellAmounts, setSellAmounts] = useState<Record<number, number>>({});
   const [mode, setMode] = useState<"buy" | "sell">("buy");
@@ -193,7 +193,10 @@ export function NarcsAction() {
     abi: SMUGGLE_MARKET_ABI,
     functionName: "nextNarcsTime",
     args: address ? [address] : undefined,
-    query: { enabled: !!address && !!addresses.smuggleMarket },
+    query: {
+      enabled: !!address && !!addresses.smuggleMarket,
+      ...COOLDOWN_READ_QUERY,
+    },
   });
 
   useEffect(() => {
@@ -202,11 +205,9 @@ export function NarcsAction() {
     }
   }, [limitsData]);
 
-  useEffect(() => {
-    if (nextTimeData) {
-      setNextNarcsTime(Number(nextTimeData));
-    }
-  }, [nextTimeData]);
+  const cooldownSeconds = cooldownSecondsLeft(
+    useCooldownRemaining(nextTimeData === undefined ? undefined : Number(nextTimeData)),
+  );
 
   useEffect(() => {
     if (profile) {
@@ -395,10 +396,8 @@ export function NarcsAction() {
     0
   );
 
-  // Check if cooldown has passed
-  const now = Math.floor(Date.now() / 1000);
-  const canTransact = now >= nextNarcsTime;
-  const cooldownRemaining = Math.max(0, nextNarcsTime - now);
+  const canTransact = cooldownSeconds === 0;
+  const cooldownRemaining = cooldownSeconds ?? 0;
 
   // Format cooldown time
   const formatCooldown = (seconds: number): string => {
@@ -585,7 +584,7 @@ export function NarcsAction() {
               <Timer className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Next action:</span>
               <span className={cn("font-medium", canTransact ? "text-green-500" : "text-amber-500")}>
-                {formatCooldown(cooldownRemaining)}
+                {cooldownSeconds === null ? "..." : formatCooldown(cooldownRemaining)}
               </span>
             </div>
             <button

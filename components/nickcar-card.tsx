@@ -1,18 +1,27 @@
 "use client";
 
 import { useMemo, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useReadContract, useAccount, useSignMessage } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
-import { decodeEventLog, formatEther } from "viem";
+import { decodeEventLog } from "viem";
 import { toast } from "sonner";
 import {
   NICKCAR_CONTRACT_ABI,
   RANK_ABI,
   type NICKCAR_TYPES,
 } from "@/lib/contract";
+import { getCarByTypeId, getCarModelName } from "@/lib/constants/cars";
 import { getErrorMessage, getTravelCityName } from "@/lib/format";
-import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
-import { Loader2, Car, CheckCircle2, XCircle, MapPin, AlertTriangle, Crosshair } from "lucide-react";
+import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Loader2, Car, CheckCircle2, XCircle, MapPin, AlertTriangle, Crosshair, Gauge, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NickResult {
@@ -27,12 +36,166 @@ interface NickResult {
 
 type NickCarType = (typeof NICKCAR_TYPES)[number];
 
-export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarType; disabled?: boolean }) {
+function qualityLabel(lvl: number): { label: string; className: string } {
+  switch (lvl) {
+    case 1:
+      return { label: "Common", className: "text-muted-foreground bg-muted-foreground/10" };
+    case 2:
+      return { label: "Uncommon", className: "text-green-400 bg-green-400/10" };
+    case 3:
+      return { label: "Rare", className: "text-blue-400 bg-blue-400/10" };
+    case 4:
+      return { label: "Epic", className: "text-purple-400 bg-purple-400/10" };
+    case 5:
+      return { label: "Legendary", className: "text-primary bg-primary/10" };
+    default:
+      return { label: `Tier ${lvl}`, className: "text-muted-foreground bg-muted-foreground/10" };
+  }
+}
+
+function NickCarDetailDialog({
+  result,
+  open,
+  onOpenChange,
+}: {
+  result: NickResult;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const car = getCarByTypeId(result.carType);
+  const damage = result.damagePercent;
+  const condition = Math.max(0, 100 - damage);
+  const estimatedValue = car ? Math.round(car.basePrice * (1 - damage / 100)) : null;
+  const quality = car ? qualityLabel(car.qualityLvl) : null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-green-400" />
+            Car stolen
+          </DialogTitle>
+          <DialogDescription>
+            It is parked in {getTravelCityName(result.cityId)}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="overflow-hidden rounded-lg border border-border bg-background/40">
+          <div className="flex h-40 items-center justify-center bg-background/60 p-4">
+            {car?.image ? (
+              <img
+                src={car.image}
+                alt={car.carName}
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <Car className="h-12 w-12 text-muted-foreground/40" />
+            )}
+          </div>
+          <div className="space-y-3 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold text-foreground">
+                  {car ? car.brand : `Car type #${result.carType}`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {car ? getCarModelName(car) : "Details unavailable for this type"}
+                </p>
+              </div>
+              <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                #{result.inventoryItemId}
+              </span>
+            </div>
+
+            {quality && (
+              <span
+                className={cn(
+                  "inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                  quality.className,
+                )}
+              >
+                {quality.label}
+              </span>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 text-primary/70" />
+                <span className="font-medium text-foreground">{getTravelCityName(result.cityId)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Crosshair className="h-3.5 w-3.5 text-primary/70" />
+                <span className="font-medium text-primary">+{result.xpPoint} XP</span>
+              </div>
+              {car && (
+                <>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Gauge className="h-3.5 w-3.5 text-primary/70" />
+                    <span className="font-medium text-foreground">{car.speed} mph</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Users className="h-3.5 w-3.5 text-primary/70" />
+                    <span className="font-medium text-foreground">{car.seats} seats</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between text-[11px]">
+                <span className="text-muted-foreground">Condition</span>
+                <span
+                  className={cn(
+                    "font-mono font-semibold",
+                    condition >= 75 ? "text-green-400" : condition >= 40 ? "text-yellow-400" : "text-red-400",
+                  )}
+                >
+                  {condition}%
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className={cn(
+                    "h-full rounded-full",
+                    condition >= 75 ? "bg-green-500" : condition >= 40 ? "bg-yellow-500" : "bg-red-500",
+                  )}
+                  style={{ width: `${condition}%` }}
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">{damage}% damage</p>
+            </div>
+
+            {estimatedValue !== null && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Estimated value</span>
+                <span className="font-mono font-semibold text-foreground">
+                  ${estimatedValue.toLocaleString()}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function NickCarCard({
+  carCrime,
+  disabled = false,
+  onCommitted,
+}: {
+  carCrime: NickCarType;
+  disabled?: boolean;
+  onCommitted?: () => void;
+}) {
   const { address, isConnected } = useAccount();
-  const { chainConfig } = useChain();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
+  const router = useRouter();
   const [signing, setSigning] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const { signMessageAsync } = useSignMessage();
 
   const { data: rankRaw } = useReadContract({
@@ -112,16 +275,17 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
     if (!nickResult || toastShownRef.current === hash) return;
     toastShownRef.current = hash ?? null;
 
+    onCommitted?.();
+
     if (nickResult.jailed) {
       toast.error("You were jailed! No car this time.");
+      router.push("/jail");
     } else if (!nickResult.success) {
       toast.warning(`Failed but escaped. +${nickResult.xpPoint} XP`);
     } else {
-      toast.success(
-        `Stole a car! Item #${nickResult.inventoryItemId} in ${getTravelCityName(nickResult.cityId)} (${nickResult.damagePercent}% damage). +${nickResult.xpPoint} XP`,
-      );
+      setDetailOpen(true);
     }
-  }, [nickResult, hash]);
+  }, [nickResult, hash, router, onCommitted]);
 
   const handleExecute = async () => {
     reset();
@@ -150,7 +314,7 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
       className={cn(
         "group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card p-5 transition-all duration-300",
         disabled
-          ? "opacity-50 pointer-events-none"
+          ? "opacity-60"
           : "hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5",
         isSuccess && "border-green-400/30",
         error && "border-red-400/30"
@@ -247,36 +411,14 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
             )}
           </div>
 
-          {/* Car details on success */}
           {nickResult.success && (
-            <div className="flex flex-col gap-1 text-[11px]">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Item ID</span>
-                <span className="font-mono font-semibold text-foreground">#{nickResult.inventoryItemId}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground flex items-center gap-1">
-                  <MapPin className="h-3 w-3" /> Location
-                </span>
-                <span className="font-semibold text-foreground">{getTravelCityName(nickResult.cityId)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Damage</span>
-                <span className={cn(
-                  "font-mono font-semibold",
-                  nickResult.damagePercent === 0 ? "text-green-400" :
-                    nickResult.damagePercent <= 50 ? "text-yellow-400" : "text-red-400"
-                )}>
-                  {nickResult.damagePercent}%
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground flex items-center gap-1">
-                  <Crosshair className="h-3 w-3" /> XP Earned
-                </span>
-                <span className="font-mono font-semibold text-primary">+{nickResult.xpPoint}</span>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => setDetailOpen(true)}
+              className="text-xs font-semibold text-green-400 hover:underline"
+            >
+              View car details
+            </button>
           )}
 
           {/* XP on failure */}
@@ -347,6 +489,14 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
           </>
         )}
       </button>
+
+      {nickResult?.success && (
+        <NickCarDetailDialog
+          result={nickResult}
+          open={detailOpen}
+          onOpenChange={setDetailOpen}
+        />
+      )}
     </div>
   );
 }

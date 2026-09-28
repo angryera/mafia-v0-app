@@ -87,7 +87,10 @@ export function TravelInfo() {
         </div>
 
         <div className="rounded-lg bg-background/50 px-3 py-3">
-          <p className="text-xs text-muted-foreground mb-2">Travel Methods</p>
+          <p className="text-xs text-muted-foreground mb-2">Travel methods</p>
+          <p className="mb-2 text-[10px] text-muted-foreground">
+            Times are the cooldown after you arrive.
+          </p>
           <div className="flex flex-col gap-2">
             {TRAVEL_TYPES.map((type) => {
               const Icon = TRAVEL_ICONS[type.icon as keyof typeof TRAVEL_ICONS];

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { COOLDOWN_READ_QUERY, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { formatWalletAddress, getErrorMessage, getTravelCityName } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -123,15 +124,6 @@ type RawRace = Partial<Record<keyof Race, unknown>> & {
 // ── Constants ───────────────────────────────────────────────────
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const RACES_PER_PAGE = 9;
-const NEXT_RACE_TIME_ABI = [
-  {
-    type: "function",
-    name: "nextRaceTime",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-  },
-] as const;
 
 const RACE_FINISHED_EVENT_ABI = [
   {
@@ -1701,16 +1693,18 @@ export function RacingAction() {
   // Next race time per account
   const { data: nextRaceTimeRaw, refetch: refetchNextRaceTime } = useReadContract({
     address: addresses.raceLobby,
-    abi: NEXT_RACE_TIME_ABI,
+    abi: RACE_LOBBY_ABI,
     functionName: "nextRaceTime",
     args: address ? [address] : undefined,
     query: {
       enabled: !!address && addresses.raceLobby !== ZERO_ADDRESS,
-      refetchInterval: 30000,
+      ...COOLDOWN_READ_QUERY,
     },
   });
-  const nextRaceTime = (nextRaceTimeRaw as bigint | undefined) ?? BigInt(0);
-  const raceLocked = isRaceTimeLocked(nextRaceTime);
+  const raceKnown = nextRaceTimeRaw !== undefined;
+  const nextRaceTime = raceKnown ? (nextRaceTimeRaw as bigint) : BigInt("0xffffffff");
+  useCooldownRemaining(raceKnown ? Number(nextRaceTime) : undefined);
+  const raceLocked = !raceKnown || isRaceTimeLocked(nextRaceTime);
 
   // Filter races based on view mode
   const filteredRaces = useMemo(() => {
@@ -1906,7 +1900,7 @@ export function RacingAction() {
           </p>
           <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" />
-            Next race time: {getNextRaceTimeLabel(nextRaceTime)}
+            Next race time: {raceKnown ? getNextRaceTimeLabel(nextRaceTime) : "..."}
           </p>
         </div>
 

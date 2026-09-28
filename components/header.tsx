@@ -521,12 +521,15 @@ function SidebarSection({
               )}
             >
               {item.icon}
-              <span className="flex-1 text-left">{item.label}</span>
+              <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
               {cd ? (
-                <span className={cn(
-                  "font-mono text-[10px] tabular-nums",
-                  item.id === "jail" ? "text-red-500 font-semibold" : "text-amber-400/80",
-                )}>
+                <span
+                  title={cd.title}
+                  className={cn(
+                    "shrink-0 font-mono text-[10px] tabular-nums",
+                    item.id === "jail" ? "text-red-500 font-semibold" : "text-amber-400/80",
+                  )}
+                >
                   {cd.label}
                 </span>
               ) : null}
@@ -839,10 +842,13 @@ function MobileHeader({
                         {tab.icon}
                         <span className="text-center leading-tight">{tab.label}</span>
                         {cd ? (
-                          <span className={cn(
-                            "font-mono text-[9px] tabular-nums",
-                            tab.id === "jail" ? "text-red-500 font-semibold" : "text-amber-400",
-                          )}>
+                          <span
+                            title={cd.title}
+                            className={cn(
+                              "font-mono text-[9px] tabular-nums",
+                              tab.id === "jail" ? "text-red-500 font-semibold" : "text-amber-400",
+                            )}
+                          >
                             {cd.label}
                           </span>
                         ) : null}

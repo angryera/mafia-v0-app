@@ -3,6 +3,7 @@
 import { useAuth } from "@/components/auth-provider";
 import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import {
   BOOZE_TYPES,
   INGAME_CURRENCY_ABI,
@@ -71,7 +72,6 @@ export function BoozeAction() {
   const [prices, setPrices] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [pricesLoading, setPricesLoading] = useState(false);
   const [boozeLimit, setBoozeLimit] = useState<number>(10);
-  const [nextBoozeTime, setNextBoozeTime] = useState<number>(0);
   const [buyAmounts, setBuyAmounts] = useState<Record<number, number>>({});
   const [sellAmounts, setSellAmounts] = useState<Record<number, number>>({});
   const [mode, setMode] = useState<"buy" | "sell">("buy");
@@ -193,7 +193,10 @@ export function BoozeAction() {
     abi: SMUGGLE_MARKET_ABI,
     functionName: "nextBoozeTime",
     args: address ? [address] : undefined,
-    query: { enabled: !!address && !!addresses.smuggleMarket },
+    query: {
+      enabled: !!address && !!addresses.smuggleMarket,
+      ...COOLDOWN_READ_QUERY,
+    },
   });
 
   useEffect(() => {
@@ -202,11 +205,9 @@ export function BoozeAction() {
     }
   }, [limitsData]);
 
-  useEffect(() => {
-    if (nextTimeData) {
-      setNextBoozeTime(Number(nextTimeData));
-    }
-  }, [nextTimeData]);
+  const cooldownSeconds = cooldownSecondsLeft(
+    useCooldownRemaining(nextTimeData === undefined ? undefined : Number(nextTimeData)),
+  );
 
   useEffect(() => {
     if (profile) {
@@ -394,10 +395,8 @@ export function BoozeAction() {
     0
   );
 
-  // Check if cooldown has passed
-  const now = Math.floor(Date.now() / 1000);
-  const canTransact = now >= nextBoozeTime;
-  const cooldownRemaining = Math.max(0, nextBoozeTime - now);
+  const canTransact = cooldownSeconds === 0;
+  const cooldownRemaining = cooldownSeconds ?? 0;
 
   // Format cooldown time
   const formatCooldown = (seconds: number): string => {
@@ -584,7 +583,7 @@ export function BoozeAction() {
               <Timer className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Next action:</span>
               <span className={cn("font-medium", canTransact ? "text-green-500" : "text-amber-500")}>
-                {formatCooldown(cooldownRemaining)}
+                {cooldownSeconds === null ? "..." : formatCooldown(cooldownRemaining)}
               </span>
             </div>
             <button

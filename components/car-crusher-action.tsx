@@ -7,7 +7,7 @@ import {
 } from "wagmi";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
-import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, formatCooldownClock, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { getErrorMessage } from "@/lib/format";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { useAuth } from "@/components/auth-provider";
@@ -173,14 +173,14 @@ export function CarCrusherAction() {
     query: { enabled: isConnected },
   });
 
-  const { data: nextCrushTimeRaw } = useReadContract({
+  const { data: nextCrushTimeRaw, refetch: refetchCooldown } = useReadContract({
     address: addresses.carCrusher,
     abi: CAR_CRUSHER_ABI,
     functionName: "nextCrushTime",
     args: address ? [address] : undefined,
     query: {
       enabled: isConnected && !!address,
-      refetchInterval: 15_000,
+      ...COOLDOWN_READ_QUERY,
     },
   });
 
@@ -214,14 +214,14 @@ export function CarCrusherAction() {
     ? bulletsPerCar - cityCrusherInfo.bulletFeePerCar
     : bulletsPerCar;
 
-  const cooldownRemaining = useCooldownRemaining(
-    nextCrushTimeRaw === undefined ? undefined : Number(nextCrushTimeRaw),
+  const cooldownSeconds = cooldownSecondsLeft(
+    useCooldownRemaining(nextCrushTimeRaw === undefined ? undefined : Number(nextCrushTimeRaw)),
   );
+  const cooldownReady = cooldownSeconds === 0;
 
-  const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
-  const cooldownReady = cooldownSeconds <= 0;
-  const cooldownMinutes = Math.floor(cooldownSeconds / 60);
-  const cooldownSecs = cooldownSeconds % 60;
+  useEffect(() => {
+    if (crushSuccess) void refetchCooldown();
+  }, [crushSuccess, refetchCooldown]);
 
   // Fetch cars
   const fetchCars = useCallback(async () => {
@@ -431,11 +431,13 @@ export function CarCrusherAction() {
           <Timer className={cn("h-4 w-4 shrink-0", cooldownReady ? "text-green-400" : "text-primary")} />
           <div>
             <p className="text-xs text-muted-foreground">Cooldown</p>
-            {cooldownReady ? (
+            {cooldownSeconds === null ? (
+              <p className="mt-0.5 font-mono text-sm text-muted-foreground">...</p>
+            ) : cooldownReady ? (
               <p className="mt-0.5 font-mono text-sm font-semibold text-green-400">Ready</p>
             ) : (
               <p className="mt-0.5 font-mono text-sm font-semibold text-primary tabular-nums">
-                {cooldownMinutes}:{cooldownSecs.toString().padStart(2, "0")}
+                {formatCooldownClock(cooldownSeconds)}
               </p>
             )}
           </div>
@@ -804,7 +806,9 @@ export function CarCrusherAction() {
               ) : !cooldownReady ? (
                 <>
                   <Timer className="h-4 w-4" />
-                  Cooldown: {cooldownMinutes}:{cooldownSecs.toString().padStart(2, "0")}
+                  {cooldownSeconds === null
+                    ? "Checking cooldown..."
+                    : `Cooldown: ${formatCooldownClock(cooldownSeconds)}`}
                 </>
               ) : (
                 <>

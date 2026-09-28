@@ -8,6 +8,7 @@ import {
   useReadContract,
 } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, formatCooldownClock, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import {
   SAFEHOUSE_ABI,
   SAFEHOUSE_COST_PER_HOUR,
@@ -65,6 +66,16 @@ function CountdownUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
+function readSafehouseField(raw: unknown, key: string, index: number): number {
+  if (Array.isArray(raw)) return Number(raw[index] ?? 0);
+  if (raw && typeof raw === "object") {
+    const record = raw as Record<string, unknown>;
+    const value = record[key] ?? record[index];
+    return value == null ? 0 : Number(value);
+  }
+  return 0;
+}
+
 export function SafehouseAction() {
   const { address, isConnected } = useAccount();
   const addresses = useChainAddresses();
@@ -87,13 +98,17 @@ export function SafehouseAction() {
       authData && address
         ? [address, authData.message, authData.signature]
         : undefined,
-    query: { enabled: !!authData && !!address, refetchInterval: 15000 },
+    query: { enabled: !!authData && !!address, ...COOLDOWN_READ_QUERY },
   });
 
-  const safeUntilTs =
-    userInfoRaw !== undefined
-      ? Number((userInfoRaw as { safeUntil: bigint }).safeUntil)
-      : 0;
+  const infoKnown = userInfoRaw !== undefined;
+  const safeUntilTs = infoKnown ? readSafehouseField(userInfoRaw, "safeUntil", 0) : 0;
+  const nextSafehouseTs = infoKnown ? readSafehouseField(userInfoRaw, "nextSafehouseTime", 2) : undefined;
+  const reentrySeconds = cooldownSecondsLeft(
+    useCooldownRemaining(authData && address ? nextSafehouseTs : undefined),
+  );
+  const onReentryCooldown = reentrySeconds !== null && reentrySeconds > 0;
+  const reentryPending = Boolean(authData && address) && reentrySeconds === null;
   const isInSafehouse = safeUntilTs > Math.floor(Date.now() / 1000);
 
   useEffect(() => {
@@ -254,6 +269,24 @@ export function SafehouseAction() {
           <Home className="inline h-3.5 w-3.5" />
         </span>
       </div>
+
+      {onReentryCooldown && (
+        <div className="mb-5 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <Timer className="h-5 w-5 shrink-0 text-primary" />
+          <div className="flex flex-1 items-center justify-between">
+            <span className="text-sm text-muted-foreground">Next entry</span>
+            <span className="font-mono text-sm font-semibold text-primary tabular-nums">
+              {formatCooldownClock(reentrySeconds ?? 0)}
+            </span>
+          </div>
+        </div>
+      )}
+      {reentryPending && (
+        <div className="mb-5 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <Timer className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Checking safehouse cooldown...</span>
+        </div>
+      )}
 
       {/* ===== Active Safehouse Banner ===== */}
       {isInSafehouse && safehouseCountdown && safehouseTimeLeft !== null && safehouseTimeLeft > 0 && (
@@ -615,6 +648,8 @@ export function SafehouseAction() {
             !isConnected ||
             enterLoading ||
             !hasEnoughCash ||
+            onReentryCooldown ||
+            reentryPending ||
             hours < SAFEHOUSE_MIN_HOURS ||
             hours > SAFEHOUSE_MAX_HOURS
           }

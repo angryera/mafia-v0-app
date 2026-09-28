@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useReadContract, useReadContracts, useAccount } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { COOLDOWN_READ_QUERY } from "@/hooks/use-cooldown-remaining";
 import { formatEther, parseEther } from "viem";
 import {
   RANK_STAKE_ABI,
@@ -77,7 +78,7 @@ export function RankActivationAction() {
     abi: RANK_STAKE_ABI,
     functionName: "getUserStakingInfo",
     args: address ? [address] : undefined,
-    query: { enabled: isConnected && !!address, refetchInterval: 15000 },
+    query: { enabled: isConnected && !!address, ...COOLDOWN_READ_QUERY },
   });
 
   const { data: reductionRaw, refetch: refetchReduction } = useReadContract({
@@ -115,7 +116,7 @@ export function RankActivationAction() {
     address: addresses.rankStake,
     abi: RANK_STAKE_ABI,
     functionName: "unstakeCooldown",
-    query: { enabled: true },
+    query: { enabled: true, ...COOLDOWN_READ_QUERY },
   });
 
   const { data: rankLevelRaw } = useReadContract({
@@ -222,7 +223,12 @@ export function RankActivationAction() {
   }, []);
 
   const canUnstakeAt = lastUnstakeTime + unstakeCooldown;
-  const unstakeCooldownRemaining = canUnstakeAt > now ? canUnstakeAt - now : 0;
+  const unstakeStatusKnown = stakingInfoRaw !== undefined && unstakeCooldownRaw !== undefined;
+  const unstakeCooldownRemaining = !unstakeStatusKnown
+    ? null
+    : canUnstakeAt > now
+      ? canUnstakeAt - now
+      : 0;
 
   // ── Write contract hooks ──────────────────
   const resetStakeRef = useRef<() => void>(() => {});
@@ -443,7 +449,12 @@ export function RankActivationAction() {
               again.
             </p>
 
-            {unstakeCooldownRemaining > 0 ? (
+            {unstakeCooldownRemaining === null ? (
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-background/50 p-3">
+                <Timer className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Checking cooldown...</span>
+              </div>
+            ) : unstakeCooldownRemaining > 0 ? (
               <div className="flex items-center gap-2 rounded-lg border border-border bg-background/50 p-3">
                 <Timer className="h-4 w-4 text-amber-400" />
                 <span className="text-xs text-muted-foreground">
@@ -800,7 +811,12 @@ export function RankActivationAction() {
               again.
             </p>
 
-            {unstakeCooldownRemaining > 0 ? (
+            {unstakeCooldownRemaining === null ? (
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-background/50 p-3">
+                <Timer className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground">Checking cooldown...</span>
+              </div>
+            ) : unstakeCooldownRemaining > 0 ? (
               <div className="flex items-center gap-2 rounded-lg border border-border bg-background/50 p-3">
                 <Timer className="h-4 w-4 text-amber-400" />
                 <span className="text-xs text-muted-foreground">

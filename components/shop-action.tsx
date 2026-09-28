@@ -9,7 +9,7 @@ import {
   usePublicClient,
 } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
-import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, formatCooldownClock, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { getErrorMessage } from "@/lib/format";
 import {
@@ -532,26 +532,26 @@ export function ShopAction() {
   const checkoutLoading = checkoutSigning || buyTx.isLoading;
 
   // ---------- Cooldown: nextBuyTime ----------
-  const { data: nextBuyTimeRaw } = useReadContract({
+  const { data: nextBuyTimeRaw, refetch: refetchCooldown } = useReadContract({
     address: addresses.shop,
     abi: SHOP_CONTRACT_ABI,
     functionName: "nextBuyTime",
     args: address ? [address] : undefined,
     query: {
       enabled: isConnected && !!address,
-      refetchInterval: 15_000,
+      ...COOLDOWN_READ_QUERY,
     },
   });
 
-  const cooldownRemaining = useCooldownRemaining(
-    nextBuyTimeRaw === undefined ? undefined : Number(nextBuyTimeRaw),
+  const cooldownSeconds = cooldownSecondsLeft(
+    useCooldownRemaining(nextBuyTimeRaw === undefined ? undefined : Number(nextBuyTimeRaw)),
   );
+  const cooldownReady = cooldownSeconds === 0;
+  const onCooldown = isConnected && cooldownSeconds !== 0;
 
-  const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
-  const cooldownMinutes = Math.floor(cooldownSeconds / 60);
-  const cooldownSecs = cooldownSeconds % 60;
-  const cooldownReady = cooldownSeconds <= 0;
-  const onCooldown = isConnected && !cooldownReady;
+  useEffect(() => {
+    if (buySuccess) void refetchCooldown();
+  }, [buySuccess, refetchCooldown]);
 
   // ---------- Auth states ----------
   if (!isConnected) {
@@ -752,13 +752,15 @@ export function ShopAction() {
               <span className="text-sm text-muted-foreground">
                 Next Purchase
               </span>
-              {cooldownReady ? (
+              {cooldownSeconds === null ? (
+                <span className="font-mono text-sm text-muted-foreground">...</span>
+              ) : cooldownReady ? (
                 <span className="font-mono text-sm font-semibold text-green-400">
                   Now
                 </span>
               ) : (
                 <span className="font-mono text-sm font-semibold text-primary tabular-nums">
-                  {cooldownMinutes}:{cooldownSecs.toString().padStart(2, "0")}
+                  {formatCooldownClock(cooldownSeconds)}
                 </span>
               )}
             </div>
@@ -921,7 +923,9 @@ export function ShopAction() {
             ) : onCooldown ? (
               <>
                 <Timer className="h-4 w-4" />
-                Cooldown: {cooldownMinutes}:{cooldownSecs.toString().padStart(2, "0")}
+                {cooldownSeconds === null
+                  ? "Checking cooldown..."
+                  : `Cooldown: ${formatCooldownClock(cooldownSeconds)}`}
               </>
             ) : (
               <>

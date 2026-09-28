@@ -9,6 +9,7 @@ import {
 } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { COOLDOWN_READ_QUERY } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { getErrorMessage } from "@/lib/format";
 import {
@@ -623,7 +624,7 @@ export function EquipmentAction() {
         authData && address
           ? [address, selectedCityId, authData.message, authData.signature]
           : undefined,
-      query: { enabled: !!authData && !!address && isConnected },
+      query: { enabled: !!authData && !!address && isConnected, ...COOLDOWN_READ_QUERY },
     }
   );
 
@@ -800,9 +801,10 @@ export function EquipmentAction() {
 
   // Calculate cooldown - can only equip after 3 hours from last equip
   // Note: equippedAt comes from the contract as BigInt, so we convert to Number
-  const lastEquippedAt = equipmentInfo?.equippedAt ? Number(equipmentInfo.equippedAt) : 0;
+  const equipLoaded = !authData || equipmentInfoRaw !== undefined;
+  const lastEquippedAt = equipLoaded && equipmentInfo?.equippedAt ? Number(equipmentInfo.equippedAt) : 0;
   const nextEquipTime = lastEquippedAt + EQUIP_COOLDOWN_SECONDS;
-  const canEquipNow = currentTime >= nextEquipTime;
+  const canEquipNow = equipLoaded && currentTime >= nextEquipTime;
   const cooldownRemaining = canEquipNow ? 0 : nextEquipTime - currentTime;
 
   // Format cooldown time
@@ -1124,6 +1126,11 @@ export function EquipmentAction() {
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Equipping...
+                  </>
+                ) : !equipLoaded ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Checking cooldown...
                   </>
                 ) : !canEquipNow ? (
                   <>

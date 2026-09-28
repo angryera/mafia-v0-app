@@ -3,7 +3,7 @@
 import { useReadContract, useAccount } from "wagmi";
 import { CONTRACT_ABI, CRIME_TYPES } from "@/lib/contract";
 import { useChainAddresses } from "@/components/chain-provider";
-import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, formatCooldownClock, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { CrimeCard } from "./crime-card";
 import { Timer } from "lucide-react";
 
@@ -11,14 +11,14 @@ function useCrimeCooldown() {
   const { address, isConnected } = useAccount();
   const addresses = useChainAddresses();
 
-  const { data: nextCrimeTimestamp } = useReadContract({
+  const { data: nextCrimeTimestamp, refetch } = useReadContract({
     address: addresses.crime,
     abi: CONTRACT_ABI,
     functionName: "nextCrimeTime",
     args: address ? [address] : undefined,
     query: {
       enabled: isConnected && !!address,
-      refetchInterval: 15_000,
+      ...COOLDOWN_READ_QUERY,
     },
   });
 
@@ -26,17 +26,15 @@ function useCrimeCooldown() {
     nextCrimeTimestamp === undefined ? undefined : Number(nextCrimeTimestamp),
   );
 
-  const totalSeconds = Math.ceil(remaining / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  const isReady = totalSeconds <= 0;
-  const onCooldown = isConnected && !isReady;
+  const totalSeconds = cooldownSecondsLeft(remaining);
+  const isReady = totalSeconds === 0;
+  const onCooldown = isConnected && totalSeconds !== 0;
 
-  return { isConnected, totalSeconds, minutes, seconds, isReady, onCooldown };
+  return { isConnected, totalSeconds, isReady, onCooldown, refetchCooldown: refetch };
 }
 
 export function CrimeGrid() {
-  const { isConnected, minutes, seconds, isReady, onCooldown } =
+  const { isConnected, totalSeconds, isReady, onCooldown, refetchCooldown } =
     useCrimeCooldown();
 
   return (
@@ -65,13 +63,15 @@ export function CrimeGrid() {
           />
           <div className="flex flex-1 items-center justify-between">
             <span className="text-sm text-muted-foreground">Next Crime</span>
-            {isReady ? (
+            {totalSeconds === null ? (
+              <span className="font-mono text-sm text-muted-foreground">...</span>
+            ) : isReady ? (
               <span className="font-mono text-sm font-semibold text-green-400">
                 Now
               </span>
             ) : (
               <span className="font-mono text-sm font-semibold text-primary tabular-nums">
-                {minutes}:{seconds.toString().padStart(2, "0")}
+                {formatCooldownClock(totalSeconds)}
               </span>
             )}
           </div>
@@ -80,7 +80,12 @@ export function CrimeGrid() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         {CRIME_TYPES.map((crime) => (
-          <CrimeCard key={crime.id} crime={crime} disabled={onCooldown} />
+          <CrimeCard
+            key={crime.id}
+            crime={crime}
+            disabled={onCooldown}
+            onCommitted={() => { void refetchCooldown(); }}
+          />
         ))}
       </div>
     </div>

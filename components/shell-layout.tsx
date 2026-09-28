@@ -8,6 +8,7 @@ import { useDeadAccountMinimalLayout } from "@/hooks/use-dead-account-minimal-la
 import { usePlayerDeadState } from "@/hooks/use-player-dead-state";
 import { shouldShowDeadAccountFullscreen } from "@/lib/deadAccount";
 import { TopBar, Sidebar } from "@/components/header";
+import { JailRedirect } from "@/components/jail-redirect";
 import { getTabFromPath } from "@/lib/navigation";
 import { useCooldowns } from "@/hooks/use-cooldowns";
 
@@ -43,6 +44,7 @@ export function ShellLayout({ children }: ShellLayoutProps) {
 
   return (
     <div className="flex h-screen flex-col bg-background">
+      <JailRedirect />
       <TopBar activeTab={activeTab} cooldowns={cooldowns} />
 
       <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(240,185,11,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(240,185,11,0.015)_1px,transparent_1px)] bg-[size:64px_64px]" />

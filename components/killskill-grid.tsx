@@ -1,40 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { Swords } from "lucide-react";
 import { useAccount, useReadContract } from "wagmi";
 import { TRAIN_TYPES, KILLSKILL_CONTRACT_ABI } from "@/lib/contract";
 import { KillSkillCard } from "@/components/killskill-card";
 import { useChainAddresses } from "@/components/chain-provider";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, formatCooldownClock, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 
 export function KillSkillGrid() {
   const { isConnected, address } = useAccount();
   const addresses = useChainAddresses();
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  const { data: nextTrainTimeRaw } = useReadContract({
+  const { data: nextTrainTimeRaw, refetch: refetchCooldown } = useReadContract({
     address: addresses.killskill,
     abi: KILLSKILL_CONTRACT_ABI,
     functionName: "nextTrainTime",
     args: address ? [address] : undefined,
-    query: { enabled: isConnected && !!address, refetchInterval: 15_000 },
+    query: { enabled: isConnected && !!address, ...COOLDOWN_READ_QUERY },
   });
 
-  const nextTrainTime =
-    nextTrainTimeRaw !== undefined ? Number(nextTrainTimeRaw) : 0;
-  const cooldownSeconds = Math.max(0, nextTrainTime - now);
-
-  const cooldown = useMemo(() => {
-    if (!isConnected || cooldownSeconds <= 0) return null;
-    const m = Math.floor(cooldownSeconds / 60);
-    const s = cooldownSeconds % 60;
-    return { seconds: cooldownSeconds, label: `${m}:${String(s).padStart(2, "0")}` };
-  }, [cooldownSeconds, isConnected]);
+  const cooldownSeconds = cooldownSecondsLeft(
+    useCooldownRemaining(nextTrainTimeRaw === undefined ? undefined : Number(nextTrainTimeRaw)),
+  );
+  const cooldown =
+    isConnected && cooldownSeconds !== null && cooldownSeconds > 0
+      ? { seconds: cooldownSeconds, label: formatCooldownClock(cooldownSeconds) }
+      : isConnected && cooldownSeconds === null
+        ? { seconds: 1, label: "..." }
+        : null;
 
   return (
     <div>
@@ -69,7 +61,12 @@ export function KillSkillGrid() {
 
       <div className="flex flex-col gap-4">
         {TRAIN_TYPES.map((t) => (
-          <KillSkillCard key={t.id} trainType={t} cooldown={cooldown} />
+          <KillSkillCard
+            key={t.id}
+            trainType={t}
+            cooldown={cooldown}
+            onCommitted={() => { void refetchCooldown(); }}
+          />
         ))}
       </div>
     </div>

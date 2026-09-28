@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, formatCooldownClock, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useAccount, useReadContract } from "wagmi";
 import { useChainAddresses } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
@@ -51,9 +52,11 @@ export function OrganizedCrimeInfo() {
     abi: OC_LOBBY_ABI,
     functionName: "nextLobbyTime",
     args: address ? [address] : undefined,
-    query: { enabled: !!address && isConnected },
+    query: { enabled: !!address && isConnected, ...COOLDOWN_READ_QUERY },
   });
-  const nextLobbyTime = nextLobbyTimeRaw !== undefined ? Number(nextLobbyTimeRaw) : 0;
+  const lobbyCooldownSeconds = cooldownSecondsLeft(
+    useCooldownRemaining(nextLobbyTimeRaw === undefined ? undefined : Number(nextLobbyTimeRaw)),
+  );
 
 
 
@@ -69,19 +72,8 @@ export function OrganizedCrimeInfo() {
     ? Number(formatEther(healthBalanceRaw as bigint))
     : null;
 
-  const now = Math.floor(Date.now() / 1000);
-  const isOnCooldown = nextLobbyTime > now;
-  const cooldownRemaining = isOnCooldown ? nextLobbyTime - now : 0;
+  const isOnCooldown = lobbyCooldownSeconds !== null && lobbyCooldownSeconds > 0;
   const hasEnoughHealth = healthBalance !== null && healthBalance >= OC_MIN_HEALTH;
-
-  const formatCooldown = (seconds: number): string => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
-  };
 
   if (!isConnected) {
     return (
@@ -134,7 +126,11 @@ export function OrganizedCrimeInfo() {
               <p className={`text-sm font-medium ${
                 isOnCooldown ? "text-red-500" : "text-green-500"
               }`}>
-                {isOnCooldown ? formatCooldown(cooldownRemaining) : "Ready"}
+                {lobbyCooldownSeconds === null
+                  ? "..."
+                  : isOnCooldown
+                    ? formatCooldownClock(lobbyCooldownSeconds)
+                    : "Ready"}
               </p>
             </div>
           </div>
@@ -173,7 +169,7 @@ export function OrganizedCrimeInfo() {
               )}
               {isOnCooldown && (
                 <p className="text-sm text-amber-200">
-                  You must wait {formatCooldown(cooldownRemaining)} before creating or joining a lobby.
+                  You must wait {formatCooldownClock(lobbyCooldownSeconds ?? 0)} before creating or joining a lobby.
                 </p>
               )}
             </div>

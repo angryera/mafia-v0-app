@@ -20,7 +20,15 @@ const RISK_COLORS = {
 
 type CrimeType = (typeof CRIME_TYPES)[number];
 
-export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disabled?: boolean }) {
+export function CrimeCard({
+  crime,
+  disabled = false,
+  onCommitted,
+}: {
+  crime: CrimeType;
+  disabled?: boolean;
+  onCommitted?: () => void;
+}) {
   const { address, isConnected } = useAccount();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
@@ -95,6 +103,8 @@ export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disab
     if (!crimeResult || !hash || toastShownRef.current === hash) return;
     toastShownRef.current = hash;
 
+    onCommitted?.();
+
     if (crimeResult.jailed) {
       toast.error("You were jailed");
     } else if (!crimeResult.success) {
@@ -102,7 +112,7 @@ export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disab
     } else {
       toast.success(`Success - You earned ${crimeResult.cashAmount.toLocaleString()} cash`);
     }
-  }, [crimeResult, hash]);
+  }, [crimeResult, hash, onCommitted]);
 
   const handleExecute = async () => {
     reset();

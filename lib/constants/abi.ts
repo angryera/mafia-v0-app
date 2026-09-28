@@ -184,6 +184,17 @@ export const TRAVEL_CONTRACT_ABI: Abi = [
         stateMutability: "view",
     },
     {
+        type: "function",
+        name: "userTravelInfo",
+        inputs: [{ name: "account", type: "address", internalType: "address" }],
+        outputs: [
+            { name: "travelType", type: "uint8", internalType: "uint8" },
+            { name: "travelUntil", type: "uint256", internalType: "uint256" },
+            { name: "itemId", type: "uint256", internalType: "uint256" },
+        ],
+        stateMutability: "view",
+    },
+    {
         type: "event",
         name: "ItemGenerated",
         inputs: [
@@ -1473,6 +1484,17 @@ export const RACE_LOBBY_ABI: Abi = [
         ],
         outputs: [
             { name: "", type: "bool", internalType: "bool" },
+        ],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "nextRaceTime",
+        inputs: [
+            { name: "account", type: "address", internalType: "address" },
+        ],
+        outputs: [
+            { name: "", type: "uint256", internalType: "uint256" },
         ],
         stateMutability: "view",
     },
