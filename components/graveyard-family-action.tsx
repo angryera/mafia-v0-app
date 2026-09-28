@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -136,31 +137,16 @@ function collectDeadMembers(families: FamilyPayload[]): GraveyardMember[] {
 
 export function GraveyardFamilyAction() {
   const { chainConfig } = useChain();
-  const [scriptLoaded, setScriptLoaded] = useState(
-    () => typeof window !== "undefined" && !!window.MafiaFamily,
-  );
+  const familyScript = useMafiaUtilsScript("MafiaFamily");
+  const scriptLoaded = familyScript === "ready";
   const [members, setMembers] = useState<GraveyardMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fetchError, setError] = useState<string | null>(null);
+  const error =
+    familyScript === "error" ? "Failed to load family data script" : fetchError;
   const [loadProgress, setLoadProgress] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-
-  useEffect(() => {
-    if (scriptLoaded) return;
-    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => setScriptLoaded(true));
-      if (window.MafiaFamily) setScriptLoaded(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setScriptLoaded(true);
-    script.onerror = () => setError("Failed to load family data script");
-    document.body.appendChild(script);
-  }, [scriptLoaded]);
 
   const loadDeadMembers = useCallback(async () => {
     if (!window.MafiaFamily) {

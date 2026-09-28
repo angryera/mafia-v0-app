@@ -10,6 +10,7 @@ import {
   usePublicClient,
 } from "wagmi";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
   JACKPOT_ABI,
   INGAME_CURRENCY_ABI,
@@ -35,7 +36,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { useChain } from "@/components/chain-provider";
 import { ItemCategory } from "@/lib/contract";
-import Script from "next/script";
 import { Package } from "lucide-react";
 
 // ── Shop item names ─────────────────────────────────────────────
@@ -108,7 +108,7 @@ export function JackpotAction() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
 
   // ── Shop items inventory state ─────────────────────────────────
-  const [scriptReady, setScriptReady] = useState(false);
+  const scriptReady = useMafiaUtilsScript("MafiaInventory") === "ready";
   const [shopItems, setShopItems] = useState<InventoryItem[]>([]);
   const [shopItemsLoading, setShopItemsLoading] = useState(false);
   const [selectedShopItemId, setSelectedShopItemId] = useState<number | null>(null);
@@ -441,15 +441,6 @@ export function JackpotAction() {
   // ═══════════════════════════════════════════════════════════════
   return (
     <div>
-      {/* External scripts for inventory */}
-      <Script
-        src="/js/mafia-utils.js"
-        strategy="afterInteractive"
-        onReady={() => {
-          setScriptReady(Boolean(window.MafiaInventory));
-        }}
-      />
-
       {/* Header */}
       <div className="mb-5 flex items-end justify-between">
         <div>

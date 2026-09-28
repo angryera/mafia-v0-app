@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -55,30 +56,15 @@ export function PlayersAction() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState<string>("");
-  const [error, setError] = useState<string | null>(null);
+  const profileScript = useMafiaUtilsScript("MafiaProfile");
+  const scriptLoaded = profileScript === "ready";
+  const [fetchError, setError] = useState<string | null>(null);
+  const error =
+    profileScript === "error" ? "Failed to load MafiaProfile script" : fetchError;
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
-
-  // Load the MafiaProfile script
-  useEffect(() => {
-    if (typeof window !== "undefined" && !window.MafiaProfile) {
-      const script = document.createElement("script");
-      script.src = "/js/mafia-utils.js";
-      script.async = true;
-      script.onload = () => {
-        setScriptLoaded(true);
-      };
-      script.onerror = () => {
-        setError("Failed to load MafiaProfile script");
-      };
-      document.body.appendChild(script);
-    } else if (window.MafiaProfile) {
-      setScriptLoaded(true);
-    }
-  }, []);
 
   // Fetch players from contract
   const fetchPlayers = useCallback(async () => {

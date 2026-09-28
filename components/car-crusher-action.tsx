@@ -8,6 +8,7 @@ import {
 } from "wagmi";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { useAuth } from "@/components/auth-provider";
 import {
   INGAME_CURRENCY_ABI,
@@ -118,9 +119,12 @@ export function CarCrusherAction() {
   // State
   const [allCars, setAllCars] = useState<CarItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const inventoryScript = useMafiaUtilsScript("MafiaInventory");
+  const scriptLoaded = inventoryScript === "ready";
+  const [fetchError, setError] = useState<string | null>(null);
+  const error =
+    inventoryScript === "error" ? "Failed to load inventory script" : fetchError;
   const [progress, setProgress] = useState<string>("");
-  const [scriptLoaded, setScriptLoaded] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // Approve cash
@@ -219,23 +223,6 @@ export function CarCrusherAction() {
   const cooldownReady = cooldownSeconds <= 0;
   const cooldownMinutes = Math.floor(cooldownSeconds / 60);
   const cooldownSecs = cooldownSeconds % 60;
-
-  // Load script
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaInventory) {
-      setScriptLoaded(true);
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setScriptLoaded(true);
-    script.onerror = () => setError("Failed to load inventory script");
-    document.head.appendChild(script);
-    return () => {
-      document.head.removeChild(script);
-    };
-  }, []);
 
   // Fetch cars
   const fetchCars = useCallback(async () => {

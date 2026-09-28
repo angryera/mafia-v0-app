@@ -11,6 +11,7 @@ import {
   usePublicClient,
 } from "wagmi";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
   BULLET_FACTORY_ABI,
   USER_PROFILE_CONTRACT_ABI,
@@ -60,7 +61,7 @@ export function BulletFactoryAction() {
   const explorer = useChainExplorer();
   const { authData, isSigning: authSigning, signError, requestSignature } = useAuth();
   const { signMessageAsync } = useSignMessage();
-  const [inventoryReady, setInventoryReady] = useState(false);
+  const inventoryReady = useMafiaUtilsScript("MafiaInventory") === "ready";
   const [bulletBusinessItems, setBulletBusinessItems] = useState<BusinessInventoryItem[]>([]);
 
   // ---------- Read user profile to get cityId ----------
@@ -240,23 +241,6 @@ export function BulletFactoryAction() {
   const cooldownSecs = cooldownSeconds % 60;
   const cooldownReady = cooldownSeconds <= 0;
   const onCooldown = isConnected && !cooldownReady;
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaInventory) {
-      setInventoryReady(true);
-      return;
-    }
-    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => setInventoryReady(true));
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setInventoryReady(true);
-    document.head.appendChild(script);
-  }, []);
 
   const fetchBulletBusinessItems = useCallback(async () => {
     if (!inventoryReady || cityId === undefined || !addresses.inventory) {

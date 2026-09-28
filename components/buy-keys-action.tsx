@@ -2,12 +2,8 @@
 
 import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useMemo } from "react";
-import {
-  useWaitForTransactionReceipt,
-  useReadContract,
-  useAccount,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useReadContract, useAccount } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { formatUnits, parseUnits } from "viem";
 import {
   BUY_KEYS_CONTRACT_ABI,
@@ -167,41 +163,19 @@ export function BuyKeysAction() {
     }
   }, [hasEnoughAllowance, selectedTokenId]);
 
-  // Approve ERC20
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: isApprovePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: isApproveConfirming, isSuccess: isApproveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-
-  useEffect(() => {
-    if (isApproveSuccess) {
+  const approve = useContractTransaction({
+    onSuccess: () => {
       refetchAllowance();
       setStep("buy");
-    }
-  }, [isApproveSuccess, refetchAllowance]);
+    },
+  });
 
-  // Buy crates
-  const {
-    writeContract: writeBuy,
-    data: buyHash,
-    isPending: isBuyPending,
-    error: buyError,
-    reset: resetBuy,
-  } = useChainWriteContract();
-
-  const { isLoading: isBuyConfirming, isSuccess: isBuySuccess } =
-    useWaitForTransactionReceipt({ hash: buyHash });
+  const buy = useContractTransaction();
 
   const handleApprove = () => {
     if (!selectedToken || paymentAmountWei === BigInt(0)) return;
-    resetApprove();
-    writeApprove({
+    approve.reset();
+    approve.write({
       address: selectedToken.tokenAddress,
       abi: ERC20_ABI,
       functionName: "approve",
@@ -211,10 +185,10 @@ export function BuyKeysAction() {
 
   const handleBuy = () => {
     if (!selectedToken || amount < 1) return;
-    resetBuy();
+    buy.reset();
 
     if (isNativeToken) {
-      writeBuy({
+      buy.write({
         address: addresses.buyKeys,
         abi: BUY_KEYS_CONTRACT_ABI,
         functionName: "buyCrates",
@@ -222,7 +196,7 @@ export function BuyKeysAction() {
         value: nativeValue,
       } as any);
     } else {
-      writeBuy({
+      buy.write({
         address: addresses.buyKeys,
         abi: BUY_KEYS_CONTRACT_ABI,
         functionName: "buyCrates",
@@ -231,8 +205,8 @@ export function BuyKeysAction() {
     }
   };
 
-  const isApproveLoading = isApprovePending || isApproveConfirming;
-  const isBuyLoading = isBuyPending || isBuyConfirming;
+  const isApproveLoading = approve.isLoading;
+  const isBuyLoading = buy.isLoading;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -298,7 +272,7 @@ export function BuyKeysAction() {
                     : "bg-secondary text-muted-foreground"
                 )}
               >
-                {isBuySuccess ? (
+                {buy.isSuccess ? (
                   <CheckCircle2 className="h-4 w-4" />
                 ) : (
                   "2"
@@ -362,8 +336,8 @@ export function BuyKeysAction() {
                       onClick={() => {
                         setSelectedTokenId(token.tokenId);
                         setTokenMenuOpen(false);
-                        resetApprove();
-                        resetBuy();
+                        approve.reset();
+                        buy.reset();
                       }}
                       className={cn(
                         "flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition-colors hover:bg-secondary/50 first:rounded-t-lg last:rounded-b-lg",
@@ -512,54 +486,54 @@ export function BuyKeysAction() {
           </div>
 
           {/* Approve status */}
-          {isApproveSuccess && approveHash && (
+          {approve.isSuccess && approve.hash && (
             <div className="flex items-center gap-2 rounded-lg bg-green-400/10 px-3 py-2">
               <ShieldCheck className="h-3.5 w-3.5 text-green-400 shrink-0" />
               <span className="shrink-0 text-[10px] text-green-400 mr-1">
                 Approved:
               </span>
               <a
-                href={`${explorer}/tx/${approveHash}`}
+                href={`${explorer}/tx/${approve.hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-mono text-[10px] text-green-400 underline decoration-green-400/30 hover:decoration-green-400"
               >
-                {approveHash.slice(0, 10)}...{approveHash.slice(-8)}
+                {approve.hash.slice(0, 10)}...{approve.hash.slice(-8)}
               </a>
             </div>
           )}
-          {approveError && (
+          {approve.error && (
             <div className="flex items-start gap-2 rounded-lg bg-red-400/10 px-3 py-2">
               <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
               <p className="text-[10px] text-red-400 line-clamp-2">
-                {approveError.message.includes("User rejected")
+                {approve.error.message.includes("User rejected")
                   ? "Approval rejected by user"
-                  : getErrorMessage(approveError)}
+                  : getErrorMessage(approve.error)}
               </p>
             </div>
           )}
 
           {/* Buy status */}
-          {isBuySuccess && buyHash && (
+          {buy.isSuccess && buy.hash && (
             <div className="flex items-center gap-2 rounded-lg bg-green-400/10 px-3 py-2">
               <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0" />
               <a
-                href={`${explorer}/tx/${buyHash}`}
+                href={`${explorer}/tx/${buy.hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-mono text-[10px] text-green-400 underline decoration-green-400/30 hover:decoration-green-400"
               >
-                {buyHash.slice(0, 10)}...{buyHash.slice(-8)}
+                {buy.hash.slice(0, 10)}...{buy.hash.slice(-8)}
               </a>
             </div>
           )}
-          {buyError && (
+          {buy.error && (
             <div className="flex items-start gap-2 rounded-lg bg-red-400/10 px-3 py-2">
               <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
               <p className="text-[10px] text-red-400 line-clamp-2">
-                {buyError.message.includes("User rejected")
+                {buy.error.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : getErrorMessage(buyError)}
+                  : getErrorMessage(buy.error)}
               </p>
             </div>
           )}
@@ -584,7 +558,7 @@ export function BuyKeysAction() {
               {isApproveLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {isApprovePending
+                  {approve.isPending
                     ? "Confirm in wallet..."
                     : "Confirming approval..."}
                 </>
@@ -611,7 +585,7 @@ export function BuyKeysAction() {
               {isBuyLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {isBuyPending
+                  {buy.isPending
                     ? "Confirm in wallet..."
                     : "Confirming purchase..."}
                 </>

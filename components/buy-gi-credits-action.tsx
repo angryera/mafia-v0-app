@@ -2,12 +2,8 @@
 
 import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useMemo } from "react";
-import {
-  useWaitForTransactionReceipt,
-  useReadContract,
-  useAccount,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useReadContract, useAccount } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { formatUnits, parseUnits } from "viem";
 import {
   GI_CREDITS_ABI,
@@ -158,33 +154,11 @@ export function BuyGiCreditsAction() {
     }
   }, [isNativeToken, needsApproval]);
 
-  // Approve tx
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
+  const approve = useContractTransaction({
+    onSuccess: () => setStep("buy"),
+  });
 
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-
-  // Buy tx
-  const {
-    writeContract: writeBuy,
-    data: buyHash,
-    isPending: buyPending,
-    error: buyError,
-    reset: resetBuy,
-  } = useChainWriteContract();
-
-  const { isLoading: buyConfirming, isSuccess: buySuccess } =
-    useWaitForTransactionReceipt({ hash: buyHash });
-
-  useEffect(() => {
-    if (approveSuccess) setStep("buy");
-  }, [approveSuccess]);
+  const buy = useContractTransaction();
 
   const handleApprove = () => {
     if (!selectedToken || !totalTokenCost) return;
@@ -192,7 +166,7 @@ export function BuyGiCreditsAction() {
       (totalTokenCost * 1.01).toFixed(selectedToken.decimal),
       selectedToken.decimal
     );
-    writeApprove({
+    approve.write({
       address: selectedToken.tokenAddress,
       abi: ERC20_ABI,
       functionName: "approve",
@@ -212,7 +186,7 @@ export function BuyGiCreditsAction() {
         (totalTokenCost * 1.001).toFixed(18),
         18
       );
-      writeBuy({
+      buy.write({
         address: addresses.giCredits,
         abi: GI_CREDITS_ABI,
         functionName: "buyCredit",
@@ -220,7 +194,7 @@ export function BuyGiCreditsAction() {
         value: sendAmount,
       } as any);
     } else {
-      writeBuy({
+      buy.write({
         address: addresses.giCredits,
         abi: GI_CREDITS_ABI,
         functionName: "buyCredit",
@@ -230,16 +204,16 @@ export function BuyGiCreditsAction() {
   };
 
   const handleReset = () => {
-    resetApprove();
-    resetBuy();
+    approve.reset();
+    buy.reset();
     setStep(needsApproval && !isNativeToken ? "approve" : "buy");
     setAmount(1);
   };
 
-  const isPending = approvePending || buyPending;
-  const isConfirming = approveConfirming || buyConfirming;
-  const error = approveError || buyError;
-  const txHash = buyHash || approveHash;
+  const isPending = approve.isPending || buy.isPending;
+  const isConfirming = approve.isConfirming || buy.isConfirming;
+  const error = approve.error || buy.error;
+  const txHash = buy.hash || approve.hash;
 
   return (
     <div className="space-y-6">
@@ -258,7 +232,7 @@ export function BuyGiCreditsAction() {
         </div>
       </div>
 
-      {buySuccess ? (
+      {buy.isSuccess ? (
         <div className="space-y-4">
           <div className="flex flex-col items-center gap-3 rounded-lg bg-green-400/10 p-6 text-center">
             <CheckCircle2 className="h-10 w-10 text-green-400" />
@@ -270,9 +244,9 @@ export function BuyGiCreditsAction() {
                 You bought {amount} GI Credit{amount !== 1 ? "s" : ""}
               </p>
             </div>
-            {buyHash && (
+            {buy.hash && (
               <a
-                href={`${explorer}/tx/${buyHash}`}
+                href={`${explorer}/tx/${buy.hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-primary hover:underline"
@@ -336,8 +310,8 @@ export function BuyGiCreditsAction() {
                         onClick={() => {
                           setSelectedTokenId(token.tokenId);
                           setTokenMenuOpen(false);
-                          resetApprove();
-                          resetBuy();
+                          approve.reset();
+                          buy.reset();
                         }}
                         className={cn(
                           "flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary/50",
@@ -455,12 +429,12 @@ export function BuyGiCreditsAction() {
                   "flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
                   step === "approve"
                     ? "bg-primary text-primary-foreground"
-                    : approveSuccess
+                    : approve.isSuccess
                       ? "bg-green-400 text-background"
                       : "bg-secondary text-muted-foreground"
                 )}
               >
-                {approveSuccess ? (
+                {approve.isSuccess ? (
                   <CheckCircle2 className="h-3.5 w-3.5" />
                 ) : (
                   "1"
@@ -529,10 +503,10 @@ export function BuyGiCreditsAction() {
               }
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-500 py-3 text-sm font-bold text-background transition-colors hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {approvePending || approveConfirming ? (
+              {approve.isPending || approve.isConfirming ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {approvePending ? "Confirm in wallet..." : "Approving..."}
+                  {approve.isPending ? "Confirm in wallet..." : "Approving..."}
                 </>
               ) : (
                 <>
@@ -552,10 +526,10 @@ export function BuyGiCreditsAction() {
               }
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-yellow-500 py-3 text-sm font-bold text-background transition-colors hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {buyPending || buyConfirming ? (
+              {buy.isPending || buy.isConfirming ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {buyPending ? "Confirm in wallet..." : "Purchasing..."}
+                  {buy.isPending ? "Confirm in wallet..." : "Purchasing..."}
                 </>
               ) : (
                 <>
@@ -567,7 +541,7 @@ export function BuyGiCreditsAction() {
           )}
 
           {/* Tx link */}
-          {txHash && !buySuccess && (
+          {txHash && !buy.isSuccess && (
             <div className="text-center">
               <a
                 href={`${explorer}/tx/${txHash}`}

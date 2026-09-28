@@ -10,6 +10,7 @@ import React, {
 import { Loader2, MapPin } from "lucide-react";
 import { useAccount } from "wagmi";
 import { formatEllipsisAddress } from "@/lib/format";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { cn } from "@/lib/utils";
 import { useChain } from "@/components/chain-provider";
 import {
@@ -184,27 +185,9 @@ function applySlotsToGrid(
 }
 
 function useMafiaMapScript() {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window.MafiaMapApi || window.MafiaMap)) {
-      setReady(true);
-      return;
-    }
-    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => setReady(true));
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setReady(true);
-    script.onerror = () => console.warn("Mafia utils script failed to load");
-    document.head.appendChild(script);
-  }, []);
-
-  return ready;
+  const mapApiStatus = useMafiaUtilsScript("MafiaMapApi");
+  const mapStatus = useMafiaUtilsScript("MafiaMap");
+  return mapApiStatus === "ready" || mapStatus === "ready";
 }
 
 // ────────────────────────────────────────────────────────────────

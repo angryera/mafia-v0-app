@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,31 +36,16 @@ export type { Family } from "@/features/families/types";
 export function FamilyTable() {
   const router = useRouter();
   const { chainConfig } = useChain();
+  const familyScript = useMafiaUtilsScript("MafiaFamily");
+  const scriptLoaded = familyScript === "ready";
   const [families, setFamilies] = useState<Family[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState<string>("");
-  const [error, setError] = useState<string | null>(null);
+  const [fetchError, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlyActive, setShowOnlyActive] = useState(true);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
-
-  // Load the MafiaFamily script
-  useEffect(() => {
-    if (typeof window !== "undefined" && !window.MafiaFamily) {
-      const script = document.createElement("script");
-      script.src = "/js/mafia-utils.js";
-      script.async = true;
-      script.onload = () => {
-        setScriptLoaded(true);
-      };
-      script.onerror = () => {
-        setError("Failed to load MafiaFamily script");
-      };
-      document.body.appendChild(script);
-    } else if (window.MafiaFamily) {
-      setScriptLoaded(true);
-    }
-  }, []);
+  const error =
+    familyScript === "error" ? "Failed to load MafiaFamily script" : fetchError;
 
   // Fetch families from contract
   const fetchFamilies = useCallback(async () => {

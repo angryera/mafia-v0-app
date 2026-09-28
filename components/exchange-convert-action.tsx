@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { useAuth } from "@/components/auth-provider";
 import {
   EXCHANGE_ADDRESSES,
@@ -85,43 +86,22 @@ const RARITY_NAMES: Record<number, string> = {
 
 // ── Script loader ───────────────────────────────────────────────
 function useInventoryScript() {
-  const [ready, setReady] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const inventoryStatus = useMafiaUtilsScript("MafiaInventory");
+  const mapApiStatus = useMafiaUtilsScript("MafiaMapApi");
+  const mapStatus = useMafiaUtilsScript("MafiaMap");
+  const mapGlobal =
+    mapApiStatus === "ready" || mapStatus === "ready"
+      ? window.MafiaMapApi ?? window.MafiaMap
+      : undefined;
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mapApi = window.MafiaMapApi ?? window.MafiaMap;
-
-    if (window.MafiaInventory) {
-      setReady(true);
-      setMapReady(Boolean(mapApi?.getSlots || mapApi?.getLandSlotsByOwner));
-      return;
-    }
-
-    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => {
-        setReady(Boolean(window.MafiaInventory));
-        const loadedMapApi = window.MafiaMapApi ?? window.MafiaMap;
-        setMapReady(Boolean(loadedMapApi?.getSlots || loadedMapApi?.getLandSlotsByOwner));
-      });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => {
-      setReady(Boolean(window.MafiaInventory));
-      const loadedMapApi = window.MafiaMapApi ?? window.MafiaMap;
-      setMapReady(Boolean(loadedMapApi?.getSlots || loadedMapApi?.getLandSlotsByOwner));
-    };
-    script.onerror = () => setError("Failed to load mafia-utils script");
-    document.head.appendChild(script);
-  }, []);
-
-  return { ready, mapReady, error };
+  return {
+    ready: inventoryStatus === "ready",
+    mapReady: Boolean(mapGlobal?.getSlots || mapGlobal?.getLandSlotsByOwner),
+    error:
+      inventoryStatus === "error" && mapApiStatus === "error" && mapStatus === "error"
+        ? "Failed to load mafia-utils script"
+        : null,
+  };
 }
 
 // ── Helper functions ────────────────────────────────────────────

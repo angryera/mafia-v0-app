@@ -11,6 +11,7 @@ import {
   usePublicClient,
 } from "wagmi";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { BANK_TRANSFER_ABI, TRAVEL_DESTINATIONS, USER_PROFILE_CONTRACT_ABI } from "@/lib/contract";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
@@ -54,7 +55,7 @@ export function BankAction() {
   const [signing, setSigning] = useState(false);
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
-  const [inventoryReady, setInventoryReady] = useState(false);
+  const inventoryReady = useMafiaUtilsScript("MafiaInventory") === "ready";
   const [bankBusinessItems, setBankBusinessItems] = useState<BusinessInventoryItem[]>([]);
   const [manageFeeOpen, setManageFeeOpen] = useState(false);
   const [ownerFeeInput, setOwnerFeeInput] = useState("");
@@ -167,23 +168,6 @@ export function BankAction() {
   const cooldownSecs = cooldownSeconds % 60;
   const cooldownReady = cooldownSeconds <= 0;
   const onCooldown = isConnected && !cooldownReady;
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaInventory) {
-      setInventoryReady(true);
-      return;
-    }
-    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => setInventoryReady(true));
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setInventoryReady(true);
-    document.head.appendChild(script);
-  }, []);
 
   const fetchBankBusinessItems = useCallback(async () => {
     if (!inventoryReady || !addresses.inventory || cityId === undefined) {

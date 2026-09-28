@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -107,31 +108,11 @@ export function KillInitiationAction() {
   }, [publicClient, address, authData, addresses.userProfile]);
 
   // ── Weapon equipped in current city ───────────────────────────────────────
-  const [inventoryScriptReady, setInventoryScriptReady] = useState(
-    () => typeof window !== "undefined" && !!window.MafiaInventory,
-  );
+  const inventoryScriptReady = useMafiaUtilsScript("MafiaInventory") === "ready";
   const [weaponChecking, setWeaponChecking] = useState(false);
   const [equippedWeapon, setEquippedWeapon] = useState<EquippedWeaponInfo | null>(
     null,
   );
-
-  useEffect(() => {
-    if (inventoryScriptReady) return;
-    if (typeof window !== "undefined" && window.MafiaInventory) {
-      setInventoryScriptReady(true);
-      return;
-    }
-    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => setInventoryScriptReady(true));
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setInventoryScriptReady(true);
-    document.head.appendChild(script);
-  }, [inventoryScriptReady]);
 
   const loadEquippedWeapon = useCallback(async (): Promise<EquippedWeaponInfo | null> => {
     if (

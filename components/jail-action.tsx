@@ -8,6 +8,7 @@ import {
 } from "wagmi";
 import { formatEther, parseEther } from "viem";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { formatWalletAddress as formatAddress, getErrorMessage } from "@/lib/format";
 import {
   JAIL_CONTRACT_ABI,
@@ -115,12 +116,15 @@ export function JailAction() {
   const [players, setPlayers] = useState<JailedPlayer[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState<string>("");
-  const [error, setError] = useState<string | null>(null);
+  const profileScript = useMafiaUtilsScript("MafiaProfile");
+  const scriptLoaded = profileScript === "ready";
+  const [fetchError, setError] = useState<string | null>(null);
+  const error =
+    profileScript === "error" ? "Failed to load MafiaProfile script" : fetchError;
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
 
   // Action dialog state
   const [selectedPlayer, setSelectedPlayer] = useState<JailedPlayer | null>(
@@ -160,24 +164,6 @@ export function JailAction() {
       ? Number(formatEther(allowanceRaw as bigint))
       : 0;
   const isApproved = localApproved || allowance > 1000;
-
-  // Load the MafiaProfile script
-  useEffect(() => {
-    if (typeof window !== "undefined" && !window.MafiaProfile) {
-      const script = document.createElement("script");
-      script.src = "/js/mafia-utils.js";
-      script.async = true;
-      script.onload = () => {
-        setScriptLoaded(true);
-      };
-      script.onerror = () => {
-        setError("Failed to load MafiaProfile script");
-      };
-      document.body.appendChild(script);
-    } else if (window.MafiaProfile) {
-      setScriptLoaded(true);
-    }
-  }, []);
 
   // Fetch players from contract
   const fetchPlayers = useCallback(async () => {
