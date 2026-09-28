@@ -1,5 +1,6 @@
 import { getAddress } from "viem";
-import { ChainId } from "../contract";
+
+export type ChainId = "bnb" | "pulse";
 
 export type ChainConfig = {
     id: ChainId;

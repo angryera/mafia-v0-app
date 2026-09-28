@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
 import { cn } from "@/lib/utils";
+import { formatWalletAddress as formatAddress } from "@/lib/format";
 import "@/types/mafia-globals";
 
 // Data structures from the prompt
@@ -127,11 +128,6 @@ function StatusIndicators({ isJailed, isDead }: { isJailed: boolean; isDead: boo
       {isDead && <Skull className="h-3 w-3 text-red-500" />}
     </span>
   );
-}
-
-// Format address helper
-function formatAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 // Member row component

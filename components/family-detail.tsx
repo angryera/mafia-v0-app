@@ -43,6 +43,7 @@ import {
   INGAME_CURRENCY_APPROVE_AMOUNT,
 } from "@/lib/contract";
 import { cn } from "@/lib/utils";
+import { formatWalletAddress as formatAddress } from "@/lib/format";
 import "@/types/mafia-globals";
 import {
   ArrowDownToLine,
@@ -417,11 +418,6 @@ function StatusIndicators({ isJailed, isDead }: { isJailed: boolean; isDead: boo
       {isDead && <Skull className="h-3 w-3 text-red-500" aria-label="Dead" />}
     </span>
   );
-}
-
-// Format address helper
-function formatAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function isLeaderAssigned(leader: { name: string; address: string }): boolean {

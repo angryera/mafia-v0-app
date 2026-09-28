@@ -38,6 +38,7 @@ import {
   TRAVEL_DESTINATIONS
 } from "@/lib/contract";
 import { cn } from "@/lib/utils";
+import { formatWalletAddress as formatAddress } from "@/lib/format";
 import {
   AlertCircle,
   ArrowUpDown,
@@ -158,10 +159,6 @@ function getStatusColor(status: number): string {
     default:
       return "bg-muted text-muted-foreground";
   }
-}
-
-function formatAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function formatTimeAgo(timestamp: number): string {

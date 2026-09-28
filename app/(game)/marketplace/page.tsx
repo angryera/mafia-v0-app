@@ -9,10 +9,7 @@ export const metadata = {
 
 export default function MarketplacePage() {
   return (
-    <PageWrapper
-      title="Marketplace"
-      description="Browse and trade inventory items with other players"
-    >
+    <PageWrapper>
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <MarketplaceAction />

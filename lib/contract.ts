@@ -53,7 +53,7 @@ import {
   USER_PROFILE_CONTRACT_ABI,
   XP_MARKET_ABI
 } from "./constants/abi";
-import { CHAIN_CONFIGS, ChainConfig, CONTRACT_ADDRESSES, DEPOSIT_ADDRESSES, EXCHANGE_ADDRESSES, MAFIA_PAIR_ADDRESSES } from "./constants/address";
+import { CHAIN_CONFIGS, CONTRACT_ADDRESSES, DEPOSIT_ADDRESSES, EXCHANGE_ADDRESSES, MAFIA_PAIR_ADDRESSES, type ChainConfig, type ChainId } from "./constants/address";
 import {
   BODYGUARD_CATEGORIES,
   BODYGUARD_INFO,
@@ -117,9 +117,6 @@ import {
 import { getBodyguardTrainingCost, getCityRegion, getCrateCategory, getCrateItemLabel, getShopItemSlotType, parseBulletBotPlusInfo, parseHelperBotInfo, parseOcRewardAmount } from "./constants/helper";
 import { BulletBotPlusInfo, HelperBotInfo, TrainingSlotType } from "./constants/type";
 
-// ========== Chain Configuration ==========
-export type ChainId = "bnb" | "pulse";
-
 export {
   BODYGUARD_CATEGORIES, BODYGUARD_INFO, BOOZE_TYPES, BUILDING_STATS, CASH_VALUES, City,
   CitySimple, CONVERT_CATEGORY_NAMES, CRATE_ITEM_CATEGORIES, CREDIT_USD_VALUES, CRIME_TYPES, DETECTIVE_HIRING_TIME,
@@ -164,7 +161,7 @@ export {
 
 export {
   CHAIN_CONFIGS,
-  CONTRACT_ADDRESSES, DEPOSIT_ADDRESSES, EXCHANGE_ADDRESSES, MAFIA_PAIR_ADDRESSES, type ChainConfig
+  CONTRACT_ADDRESSES, DEPOSIT_ADDRESSES, EXCHANGE_ADDRESSES, MAFIA_PAIR_ADDRESSES, type ChainConfig, type ChainId
 };
 
 export {

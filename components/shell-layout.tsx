@@ -7,7 +7,8 @@ import { DeadAccountFullscreenGate } from "@/components/dead-account-fullscreen-
 import { useDeadAccountMinimalLayout } from "@/hooks/use-dead-account-minimal-layout";
 import { usePlayerDeadState } from "@/hooks/use-player-dead-state";
 import { shouldShowDeadAccountFullscreen } from "@/lib/deadAccount";
-import { TopBar, Sidebar, getTabFromPath } from "@/components/header";
+import { TopBar, Sidebar } from "@/components/header";
+import { getTabFromPath } from "@/lib/navigation";
 
 interface ShellLayoutProps {
   children: React.ReactNode;

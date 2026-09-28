@@ -1,8 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { getTabFromPath } from "@/components/header";
-import type { Tab } from "@/components/header";
+import { getTabFromPath, type Tab } from "@/lib/navigation";
 import { useChain } from "@/components/chain-provider";
 import { useDeadAccountMinimalLayout } from "@/hooks/use-dead-account-minimal-layout";
 

@@ -4,10 +4,7 @@ import { OrganizedCrimeAction } from "@/components/organized-crime-action";
 
 export default function OrganizedCrimePage() {
   return (
-    <PageWrapper
-      title="Organized Crime"
-      description="Form a crew of 5 and pull off high-stakes operations for big rewards."
-    >
+    <PageWrapper>
       <div className="space-y-6">
         <OrganizedCrimeInfo />
         <OrganizedCrimeAction />

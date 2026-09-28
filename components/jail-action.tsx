@@ -8,6 +8,7 @@ import {
 } from "wagmi";
 import { formatEther, parseEther } from "viem";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { formatWalletAddress as formatAddress } from "@/lib/format";
 import {
   JAIL_CONTRACT_ABI,
   INGAME_CURRENCY_ABI,
@@ -258,11 +259,6 @@ export function JailAction() {
     } catch (err) {
       console.error("Failed to copy:", err);
     }
-  };
-
-  // Format address for display
-  const formatAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   // ---------- Approve cash spending ----------

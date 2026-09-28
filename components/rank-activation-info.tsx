@@ -73,7 +73,7 @@ export function RankActivationInfo() {
         <h3 className="mb-3 text-sm font-semibold text-foreground">
           Rank Stake Contract
         </h3>
-        <CopyableAddress address={addresses.rankStake} />
+        <CopyableAddress address={addresses.rankStake} label="Rank Stake" />
       </div>
 
       {/* Current rank */}

@@ -40,6 +40,7 @@ import {
 import { useChain } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import { cn } from "@/lib/utils";
+import { formatWalletAddress as formatAddress } from "@/lib/format";
 import "@/types/mafia-globals";
 import { useAccount } from "wagmi";
 
@@ -224,11 +225,6 @@ export function ReferralAction() {
     } catch (err) {
       console.error("Failed to copy:", err);
     }
-  };
-
-  // Format address for display
-  const formatAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   // Get gender label

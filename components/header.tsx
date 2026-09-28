@@ -88,98 +88,9 @@ import {
   Skull,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-// ────────────────────────────────────────────────────────────────
-// Tab type (exported for page.tsx)
-// ────────────────────────────────────────────────────────────────
-export type Tab =
-  | "crime"
-  | "organized-crime"
-  | "travel"
-  | "nickcar"
-  | "killskill"
-  | "jail"
-  | "helperbots"
-  | "buy-helper-credits"
-  | "buy-keys"
-  | "buy-perk-boxes"
-  | "buy-premium"
-  | "buy-gi-credits"
-  | "my-profile"
-  | "worth"
-  | "cash"
-  | "biz-shop"
-  | "biz-hospital"
-  | "biz-bulletfactory"
-  | "biz-detective-agency"
-  | "biz-car-crusher"
-  | "biz-bank"
-  | "biz-roulette"
-  | "biz-slotmachine"
-  | "biz-jackpot"
-  | "biz-lottery-hall"
-  | "biz-safehouse"
-  | "biz-booze"
-  | "biz-narcs"
-  | "city-map"
-  | "garage"
-  | "open-crate"
-  | "open-perkbox"
-  | "mystery-box"
-  | "rank-activation"
-  | "bodyguard-training"
-  | "equipment"
-  | "players"
-  | "families"
-  | "info"
-  | "exchange-convert"
-  | "exchange-bullet"
-  | "exchange-liquidity"
-  | "exchange-otc"
-  | "referral"
-  | "weekly-missions"
-  | "story-mode"
-  | "xp-market"
-  | "marketplace"
-  | "racing"
-  | "create-profile"
-  | "marketing-dao"
-  | "backfire-settings"
-  | "graveyard"
-  | "kill-history"
-  | "kill-initiation"
-  | "kill-outcome"
-  | "kill-attempt"
-  | "rebirth"
-  | "unstake-mafia";
+import { getTabUrl, type Tab } from "@/lib/navigation";
 
 type NavItem = { id: Tab; label: string; icon: React.ReactNode };
-
-// Map tab IDs to URL paths
-export function getTabUrl(tab: Tab): string {
-  if (tab === "crime") return "/";
-  return `/${tab}`;
-}
-
-// Map URL paths to tab IDs
-export function getTabFromPath(pathname: string): Tab {
-  if (pathname === "/" || pathname === "") return "crime";
-  const path = pathname.startsWith("/") ? pathname.slice(1) : pathname;
-  // Get the first segment of the path (before any / for nested routes)
-  const firstSegment = path.split("/")[0];
-  // Check if it's a valid tab
-  const validTabs: Tab[] = [
-    "crime", "organized-crime", "travel", "nickcar", "killskill", "jail", "helperbots",
-    "buy-helper-credits", "buy-keys", "buy-perk-boxes", "buy-premium", "buy-gi-credits",
-    "my-profile", "worth", "cash", "biz-shop", "biz-hospital", "biz-bulletfactory",
-    "biz-detective-agency", "biz-car-crusher", "biz-bank", "biz-roulette",
-    "biz-slotmachine", "biz-jackpot", "biz-lottery-hall", "biz-safehouse", "biz-booze", "biz-narcs",
-    "city-map", "garage", "open-crate", "open-perkbox", "mystery-box", "rank-activation",
-    "bodyguard-training", "equipment", "players", "families", "info", "exchange-convert", "exchange-bullet", "exchange-liquidity", "exchange-otc", "referral",
-    "weekly-missions", "story-mode", "xp-market", "marketplace", "racing", "create-profile", "marketing-dao", "backfire-settings", "graveyard", "kill-history", "kill-initiation", "kill-outcome", "kill-attempt", "rebirth", "unstake-mafia"
-  ];
-  return validTabs.includes(firstSegment as Tab) ? (firstSegment as Tab) : "crime";
-}
 
 // ────────────────────────────────────────────────────────────────
 // Sidebar sections
