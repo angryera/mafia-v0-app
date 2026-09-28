@@ -1,16 +1,15 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  useWaitForTransactionReceipt,
   useReadContract,
   useAccount,
   useSignMessage,
-  usePublicClient,
 } from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { BANK_TRANSFER_ABI, TRAVEL_DESTINATIONS, USER_PROFILE_CONTRACT_ABI } from "@/lib/contract";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
@@ -51,7 +50,6 @@ export function BankAction() {
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
   const { authData, requestSignature, isSigning: authSigning, signError } = useAuth();
-  const publicClient = usePublicClient();
   const [signing, setSigning] = useState(false);
   const [toAddress, setToAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -61,26 +59,39 @@ export function BankAction() {
   const [ownerFeeInput, setOwnerFeeInput] = useState("");
   const { signMessageAsync } = useSignMessage();
 
-  const {
-    writeContract,
-    data: hash,
-    isPending,
-    error,
-    reset,
-  } = useChainWriteContract();
-
-  const { isLoading: isConfirming, isSuccess } =
-    useWaitForTransactionReceipt({ hash });
-
-  const {
-    writeContractAsync: writeSetCityOwnerFee,
-    data: ownerFeeHash,
-    isPending: ownerFeePending,
-  } = useChainWriteContract();
-  const { isLoading: ownerFeeConfirming } = useWaitForTransactionReceipt({
-    hash: ownerFeeHash,
+  const transferTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success(`Transfer of ${Number(amount).toLocaleString()} cash sent successfully`);
+    },
   });
-  const ownerFeeSaving = ownerFeePending || ownerFeeConfirming;
+  const writeContract = transferTx.write;
+  const hash = transferTx.hash;
+  const isPending = transferTx.isPending;
+  const error = transferTx.error;
+  const reset = transferTx.reset;
+  const isConfirming = transferTx.isConfirming;
+  const isSuccess = transferTx.isSuccess;
+
+  const ownerFeeTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("City transfer fee updated.");
+      setManageFeeOpen(false);
+      void refetchCityOwnerFee();
+    },
+    onWriteError: (writeError) => {
+      const msg = getErrorMessage(writeError);
+      if (!msg.includes("User rejected")) {
+        toast.error(msg || "Failed to update transfer fee");
+      }
+    },
+    onReceiptError: (receiptError) => {
+      const msg = getErrorMessage(receiptError);
+      if (!msg.includes("User rejected")) {
+        toast.error(msg || "Failed to update transfer fee");
+      }
+    },
+  });
+  const ownerFeeSaving = ownerFeeTx.isLoading;
 
   const { data: profileRaw } = useReadContract({
     address: addresses.userProfile,
@@ -146,22 +157,11 @@ export function BankAction() {
     },
   });
 
-  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
-
-  useEffect(() => {
-    if (lastTransferTimeRaw === undefined) return;
-    const lastTime = Number(lastTransferTimeRaw);
-    const cooldownEnd = (lastTime + 15 * 60) * 1000; // +15 min in ms
-
-    const tick = () => {
-      const diff = cooldownEnd - Date.now();
-      setCooldownRemaining(diff > 0 ? diff : 0);
-    };
-
-    tick();
-    const id = setInterval(tick, 1_000);
-    return () => clearInterval(id);
-  }, [lastTransferTimeRaw]);
+  const cooldownRemaining = useCooldownRemaining(
+    lastTransferTimeRaw === undefined
+      ? undefined
+      : Number(lastTransferTimeRaw) + 15 * 60,
+  );
 
   const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
   const cooldownMinutes = Math.floor(cooldownSeconds / 60);
@@ -197,30 +197,21 @@ export function BankAction() {
     amount.length > 0 && Number(amount) > 0 && !Number.isNaN(Number(amount));
 
   const handleSaveOwnerFee = async () => {
-    if (cityId === undefined || !address || !publicClient) return;
+    if (cityId === undefined || !address) return;
     const parsed = Number(ownerFeeInput);
     if (!Number.isFinite(parsed) || parsed < 0 || parsed > 92) {
       toast.error("Owner fee must be between 0 and 92 (base fee is 8%).");
       return;
     }
     try {
-      const txHash = await writeSetCityOwnerFee({
+      await ownerFeeTx.writeAsync({
         address: addresses.ingameCurrency,
         abi: BANK_TRANSFER_ABI,
         functionName: "setCityOwnerFee",
         args: [cityId, BigInt(Math.floor(parsed))],
       });
-      if (txHash) {
-        await publicClient.waitForTransactionReceipt({ hash: txHash });
-      }
-      toast.success("City transfer fee updated.");
-      setManageFeeOpen(false);
-      void refetchCityOwnerFee();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to update transfer fee";
-      if (!msg.includes("User rejected")) {
-        toast.error(msg);
-      }
+    } catch {
+      // The write-error callback toasts the rejection or contract error.
     }
   };
 
@@ -249,18 +240,7 @@ export function BankAction() {
     }
   };
 
-  const toastFired = useRef(false);
-  useEffect(() => {
-    if (isSuccess && hash && !toastFired.current) {
-      toastFired.current = true;
-      toast.success(`Transfer of ${Number(amount).toLocaleString()} cash sent successfully`);
-    }
-    if (!hash) {
-      toastFired.current = false;
-    }
-  }, [isSuccess, hash, amount]);
-
-  const isLoading = signing || isPending || isConfirming;
+  const isLoading = signing || transferTx.isLoading;
 
   return (
     <div>

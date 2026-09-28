@@ -42,6 +42,8 @@ must be read from and written to those contracts through Wagmi/Viem.
   - `use-contract-transaction.ts`: one write (`write` or awaited `writeAsync`) plus its receipt.
     `onSuccess`, `onWriteError`, and `onReceiptError` each run once per hash or error.
     Prefer it over hand-wiring `useChainWriteContract` and `useWaitForTransactionReceipt`.
+  - `use-cooldown-remaining.ts`: milliseconds left until a unix-second deadline.
+    Page countdowns use this. `useCooldowns` stays the navigation-badge aggregate.
   - `use-mafia-utils-script.ts`: readiness of a `window.Mafia*` global from
     `/js/mafia-utils.js`. Do not inject the script manually.
 - `lib/navigation.ts`: framework-independent route identifiers and path parsing.

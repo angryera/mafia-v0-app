@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useReadContract, useAccount } from "wagmi";
 import { CONTRACT_ABI, CRIME_TYPES } from "@/lib/contract";
 import { useChainAddresses } from "@/components/chain-provider";
+import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { CrimeCard } from "./crime-card";
 import { Timer } from "lucide-react";
 
@@ -22,22 +22,9 @@ function useCrimeCooldown() {
     },
   });
 
-  const [remaining, setRemaining] = useState<number>(0);
-
-  useEffect(() => {
-    if (nextCrimeTimestamp === undefined) return;
-
-    const target = Number(nextCrimeTimestamp) * 1000;
-
-    const tick = () => {
-      const diff = target - Date.now();
-      setRemaining(diff > 0 ? diff : 0);
-    };
-
-    tick();
-    const id = setInterval(tick, 1_000);
-    return () => clearInterval(id);
-  }, [nextCrimeTimestamp]);
+  const remaining = useCooldownRemaining(
+    nextCrimeTimestamp === undefined ? undefined : Number(nextCrimeTimestamp),
+  );
 
   const totalSeconds = Math.ceil(remaining / 1000);
   const minutes = Math.floor(totalSeconds / 60);

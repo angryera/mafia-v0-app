@@ -1,14 +1,13 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
-  useWaitForTransactionReceipt,
   useAccount,
   useReadContract,
 } from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   SAFEHOUSE_ABI,
   SAFEHOUSE_COST_PER_HOUR,
@@ -139,16 +138,18 @@ export function SafehouseAction() {
   const hasEnoughCash = cashBalance !== null && cashBalance >= totalCost;
 
   // ---------- Step 1: Approve cash spending ----------
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approve = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Cash spending approved for Safehouse contract");
+    },
+  });
+  const writeApprove = approve.write;
+  const approveHash = approve.hash;
+  const approvePending = approve.isPending;
+  const approveError = approve.error;
+  const resetApprove = approve.reset;
+  const approveSuccess = approve.isSuccess;
+  const approveLoading = approve.isLoading;
 
   const handleApprove = () => {
     resetApprove();
@@ -160,30 +161,21 @@ export function SafehouseAction() {
     });
   };
 
-  const approveLoading = approvePending || approveConfirming;
-
-  const approveToastFired = useRef(false);
-  useEffect(() => {
-    if (approveSuccess && approveHash && !approveToastFired.current) {
-      approveToastFired.current = true;
-      toast.success("Cash spending approved for Safehouse contract");
-    }
-    if (!approveHash) {
-      approveToastFired.current = false;
-    }
-  }, [approveSuccess, approveHash]);
-
-  // ---------- Step 2: Enter safehouse ----------
-  const {
-    writeContract: writeEnter,
-    data: enterHash,
-    isPending: enterPending,
-    error: enterError,
-    reset: resetEnter,
-  } = useChainWriteContract();
-
-  const { isLoading: enterConfirming, isSuccess: enterSuccess } =
-    useWaitForTransactionReceipt({ hash: enterHash });
+  const enter = useContractTransaction({
+    onSuccess: () => {
+      toast.success(
+        `Entered safehouse for ${hours} hour${hours > 1 ? "s" : ""} (${totalCost.toLocaleString()} cash)`,
+      );
+      refetchSafehouse();
+    },
+  });
+  const writeEnter = enter.write;
+  const enterHash = enter.hash;
+  const enterPending = enter.isPending;
+  const enterError = enter.error;
+  const resetEnter = enter.reset;
+  const enterSuccess = enter.isSuccess;
+  const enterLoading = enter.isLoading;
 
   const handleEnterSafehouse = () => {
     resetEnter();
@@ -194,22 +186,6 @@ export function SafehouseAction() {
       args: [BigInt(hours)],
     });
   };
-
-  const enterLoading = enterPending || enterConfirming;
-
-  const enterToastFired = useRef(false);
-  useEffect(() => {
-    if (enterSuccess && enterHash && !enterToastFired.current) {
-      enterToastFired.current = true;
-      toast.success(
-        `Entered safehouse for ${hours} hour${hours > 1 ? "s" : ""} (${totalCost.toLocaleString()} cash)`
-      );
-      refetchSafehouse();
-    }
-    if (!enterHash) {
-      enterToastFired.current = false;
-    }
-  }, [enterSuccess, enterHash, hours, totalCost, refetchSafehouse]);
 
   // ---------- Auth states ----------
   if (!isConnected) {

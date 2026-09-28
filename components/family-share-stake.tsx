@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { ERC20_ABI, FAMILY_SHARE_STAKE_ABI } from "@/lib/contract";
 import { cn } from "@/lib/utils";
 import {
@@ -46,7 +46,6 @@ import {
   useAccount,
   usePublicClient,
   useReadContract,
-  useWaitForTransactionReceipt,
 } from "wagmi";
 
 const STAKE_REFETCH_MS = 15_000;
@@ -317,86 +316,72 @@ export function FamilyShareStake({
     fetchFamilyStakes,
   ]);
 
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-
-  const {
-    writeContract: writeStake,
-    data: stakeHash,
-    isPending: stakePending,
-    error: stakeError,
-    reset: resetStake,
-  } = useChainWriteContract();
-  const { isLoading: stakeConfirming, isSuccess: stakeSuccess } =
-    useWaitForTransactionReceipt({ hash: stakeHash });
-
-  const {
-    writeContract: writeWithdraw,
-    data: withdrawHash,
-    isPending: withdrawPending,
-    error: withdrawError,
-    reset: resetWithdraw,
-  } = useChainWriteContract();
-  const { isLoading: withdrawConfirming, isSuccess: withdrawSuccess } =
-    useWaitForTransactionReceipt({ hash: withdrawHash });
-
-  const stakeLoading = approvePending || approveConfirming || stakePending || stakeConfirming;
-  const withdrawLoading = withdrawPending || withdrawConfirming;
-
-  useEffect(() => {
-    if (approveError) stakeAfterApproveRef.current = null;
-  }, [approveError]);
-
-  useEffect(() => {
-    if (!approveSuccess || !approveHash) return;
-    const wei = stakeAfterApproveRef.current;
-    if (wei === null) return;
-    stakeAfterApproveRef.current = null;
-    resetStake();
-    writeStake({
-      address: shareStake,
-      abi: FAMILY_SHARE_STAKE_ABI,
-      functionName: "stake",
-      args: [BigInt(familyId), wei],
-    });
-  }, [
-    approveSuccess,
-    approveHash,
-    writeStake,
-    shareStake,
-    familyId,
-    resetStake,
-  ]);
-
-  useEffect(() => {
-    if (!stakeSuccess || !stakeHash) return;
-    toast.success("Staked MAFIA to family share");
-    setStakeInput("");
-    setStakeDialogOpen(false);
-    void refetchAll();
-  }, [stakeSuccess, stakeHash, refetchAll]);
-
-  useEffect(() => {
-    if (!withdrawSuccess || !withdrawHash) return;
-    toast.success("Withdrew family share stake");
-    setWithdrawingId(null);
-    void refetchAll();
-  }, [withdrawSuccess, withdrawHash, refetchAll]);
-
-  useEffect(() => {
-    if (withdrawError) {
-      toast.error(getErrorMessage(withdrawError) || "Withdraw failed");
+  const stakeWriteRef = useRef<ReturnType<typeof useContractTransaction>["write"] | null>(null);
+  const stakeResetRef = useRef<() => void>(() => {});
+  const withdrawResetRef = useRef<() => void>(() => {});
+  const approve = useContractTransaction({
+    onSuccess: () => {
+      const wei = stakeAfterApproveRef.current;
+      if (wei === null) return;
+      stakeAfterApproveRef.current = null;
+      stakeResetRef.current();
+      stakeWriteRef.current?.({
+        address: shareStake,
+        abi: FAMILY_SHARE_STAKE_ABI,
+        functionName: "stake",
+        args: [BigInt(familyId), wei],
+      });
+    },
+    onWriteError: () => {
+      stakeAfterApproveRef.current = null;
+    },
+  });
+  const stake = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Staked MAFIA to family share");
+      setStakeInput("");
+      setStakeDialogOpen(false);
+      void refetchAll();
+    },
+  });
+  const withdraw = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Withdrew family share stake");
       setWithdrawingId(null);
-      resetWithdraw();
-    }
-  }, [withdrawError, resetWithdraw]);
+      void refetchAll();
+    },
+    onWriteError: (error) => {
+      toast.error(getErrorMessage(error) || "Withdraw failed");
+      setWithdrawingId(null);
+      withdrawResetRef.current();
+    },
+  });
+  stakeWriteRef.current = stake.write;
+  stakeResetRef.current = stake.reset;
+  withdrawResetRef.current = withdraw.reset;
+  const writeApprove = approve.write;
+  const approvePending = approve.isPending;
+  const approveConfirming = approve.isConfirming;
+  const approveError = approve.error;
+  const resetApprove = approve.reset;
+  const approveSuccess = approve.isSuccess;
+  const approveHash = approve.hash;
+  const writeStake = stake.write;
+  const stakePending = stake.isPending;
+  const stakeConfirming = stake.isConfirming;
+  const stakeError = stake.error;
+  const resetStake = stake.reset;
+  const stakeSuccess = stake.isSuccess;
+  const stakeHash = stake.hash;
+  const writeWithdraw = withdraw.write;
+  const withdrawPending = withdraw.isPending;
+  const withdrawConfirming = withdraw.isConfirming;
+  const withdrawError = withdraw.error;
+  const resetWithdraw = withdraw.reset;
+  const withdrawSuccess = withdraw.isSuccess;
+  const withdrawHash = withdraw.hash;
+  const stakeLoading = approve.isLoading || stake.isLoading;
+  const withdrawLoading = withdraw.isLoading;
 
   const handleStake = () => {
     if (!configured || !isConnected) return;

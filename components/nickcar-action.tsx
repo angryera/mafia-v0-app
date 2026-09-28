@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useReadContract, useAccount } from "wagmi";
 import { NICKCAR_CONTRACT_ABI, NICKCAR_TYPES } from "@/lib/contract";
 import { useChainAddresses } from "@/components/chain-provider";
+import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { NickCarCard } from "./nickcar-card";
 import { Timer } from "lucide-react";
 
@@ -22,22 +22,9 @@ function useNickCooldown() {
     },
   });
 
-  const [remaining, setRemaining] = useState<number>(0);
-
-  useEffect(() => {
-    if (nextNickTimestamp === undefined) return;
-
-    const target = Number(nextNickTimestamp) * 1000;
-
-    const tick = () => {
-      const diff = target - Date.now();
-      setRemaining(diff > 0 ? diff : 0);
-    };
-
-    tick();
-    const id = setInterval(tick, 1_000);
-    return () => clearInterval(id);
-  }, [nextNickTimestamp]);
+  const remaining = useCooldownRemaining(
+    nextNickTimestamp === undefined ? undefined : Number(nextNickTimestamp),
+  );
 
   const totalSeconds = Math.ceil(remaining / 1000);
   const minutes = Math.floor(totalSeconds / 60);

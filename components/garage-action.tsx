@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useAccount, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount } from "wagmi";
 import { useChain, useChainExplorer } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { getErrorMessage, getTravelCityName } from "@/lib/format";
 import {
@@ -143,22 +143,44 @@ function GarageActionDialog({
   const explorer = useChainExplorer();
   const { toast } = useToast();
 
-  // Main action write
-  const { writeContract, data: hash, isPending, reset } = useChainWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
+  const actionTx = useContractTransaction({
+    onSuccess: () => {
+      const messages: Record<GarageActionType, string> = {
+        ship: `Car #${item.itemId} shipped to ${getTravelCityName(Number(destinationCity))}`,
+        transfer: `Car #${item.itemId} transferred successfully`,
+        sell: `Car #${item.itemId} sold successfully`,
+        repair: `Car #${item.itemId} repaired successfully`,
+      };
+      toast({
+        title: "Transaction Confirmed",
+        description: messages[action],
+      });
+      onOpenChange(false);
+      onSuccess();
+    },
   });
+  const writeContract = actionTx.write;
+  const hash = actionTx.hash;
+  const isPending = actionTx.isPending;
+  const isConfirming = actionTx.isConfirming;
+  const isSuccess = actionTx.isSuccess;
+  const reset = actionTx.reset;
 
-  // Approve cash spend (for ship & repair)
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approve = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Cash Spend Approved",
+        description: action === "repair" ? "You can now repair your car." : "You can now ship your car.",
+      });
+    },
+  });
+  const writeApprove = approve.write;
+  const approveHash = approve.hash;
+  const approvePending = approve.isPending;
+  const approveError = approve.error;
+  const resetApprove = approve.reset;
+  const approveConfirming = approve.isConfirming;
+  const approveSuccess = approve.isSuccess;
 
   const [destinationCity, setDestinationCity] = useState<string>("");
   const [transferAddress, setTransferAddress] = useState("");
@@ -172,34 +194,6 @@ function GarageActionDialog({
       resetApprove();
     }
   }, [open, reset, resetApprove]);
-
-  // Handle success
-  useEffect(() => {
-    if (isSuccess && hash) {
-      const messages: Record<GarageActionType, string> = {
-        ship: `Car #${item.itemId} shipped to ${getTravelCityName(Number(destinationCity))}`,
-        transfer: `Car #${item.itemId} transferred successfully`,
-        sell: `Car #${item.itemId} sold successfully`,
-        repair: `Car #${item.itemId} repaired successfully`,
-      };
-      toast({
-        title: "Transaction Confirmed",
-        description: messages[action],
-      });
-      onOpenChange(false);
-      onSuccess();
-    }
-  }, [isSuccess, hash, action, item.itemId, destinationCity, toast, onOpenChange, onSuccess]);
-
-  // Toast on approve success
-  useEffect(() => {
-    if (approveSuccess && approveHash) {
-      toast({
-        title: "Cash Spend Approved",
-        description: action === "repair" ? "You can now repair your car." : "You can now ship your car.",
-      });
-    }
-  }, [approveSuccess, approveHash, toast]);
 
   const dmg = Number(item.damagePercent) || 0;
   const estimatedValue = Math.round(item.car.basePrice * (1 - dmg / 100));

@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useAccount,
   usePublicClient,
   useReadContract,
-  useWaitForTransactionReceipt,
 } from "wagmi";
 import { formatUnits, parseUnits } from "viem";
 import { toast } from "sonner";
@@ -34,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { ERC20_ABI, RANK_NAMES, REBIRTH_ABI, SWAP_ROUTER_ABI } from "@/lib/contract";
 import {
   REBIRTH_OPTIONS,
@@ -379,44 +378,36 @@ export function RebirthAction() {
     }
   }, [isNativeToken, needsApproval]);
 
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-
-  const {
-    writeContract: writeRebirth,
-    data: rebirthHash,
-    isPending: rebirthPending,
-    error: rebirthError,
-    reset: resetRebirth,
-  } = useChainWriteContract();
-
-  const { isLoading: rebirthConfirming, isSuccess: rebirthSuccess } =
-    useWaitForTransactionReceipt({ hash: rebirthHash });
-
-  useEffect(() => {
-    if (approveSuccess) {
+  const approveResetRef = useRef<() => void>(() => {});
+  const rebirthResetRef = useRef<() => void>(() => {});
+  const approve = useContractTransaction({
+    onSuccess: () => {
       refetchAllowance();
       setStep("rebirth");
       toast.success("Token approved!");
-    }
-  }, [approveSuccess, refetchAllowance]);
-
-  useEffect(() => {
-    if (rebirthSuccess) {
+    },
+  });
+  const rebirthTx = useContractTransaction({
+    onSuccess: () => {
       toast.success("Rebirth complete — welcome back!");
-      resetRebirth();
-      resetApprove();
+      rebirthResetRef.current();
+      approveResetRef.current();
       router.push("/");
-    }
-  }, [rebirthSuccess, router, resetRebirth, resetApprove]);
+    },
+  });
+  approveResetRef.current = approve.reset;
+  rebirthResetRef.current = rebirthTx.reset;
+  const writeApprove = approve.write;
+  const approvePending = approve.isPending;
+  const approveConfirming = approve.isConfirming;
+  const approveError = approve.error;
+  const resetApprove = approve.reset;
+  const writeRebirth = rebirthTx.write;
+  const rebirthHash = rebirthTx.hash;
+  const rebirthPending = rebirthTx.isPending;
+  const rebirthConfirming = rebirthTx.isConfirming;
+  const rebirthError = rebirthTx.error;
+  const resetRebirth = rebirthTx.reset;
 
   const showStatusLoading =
     isConnected && !!address && (statusLoading || playerStatus === null);

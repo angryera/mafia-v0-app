@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useToast } from "@/hooks/use-toast";
 import {
   HEALTH_ABI,
@@ -55,9 +55,9 @@ import {
   Users
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPublicClient, formatEther, http, maxUint256, parseEther } from "viem";
-import { useAccount, useReadContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 
 // ── Types ───────────────────────────────────────────────────────
 interface Member {
@@ -184,19 +184,53 @@ function CreateLobbyDialog({
   const [minRank, setMinRank] = useState("0");
   const [needsApproval, setNeedsApproval] = useState(false);
 
-  // Write hooks
-  const { writeContract, data: hash, isPending, reset } = useChainWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
-
-  // Approval hooks
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: isApprovePending,
-    reset: resetApprove,
-  } = useChainWriteContract();
-  const { isLoading: isApproveConfirming, isSuccess: isApproveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const createResetRef = useRef<() => void>(() => {});
+  const approveResetRef = useRef<() => void>(() => {});
+  const createHashRef = useRef<string | undefined>(undefined);
+  const createLobby = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Lobby Created",
+        description: (
+          <a
+            href={`${explorer}/tx/${createHashRef.current}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 underline"
+          >
+            View transaction <ExternalLink className="h-3 w-3" />
+          </a>
+        ),
+      });
+      createResetRef.current();
+      onOpenChange(false);
+      onSuccess();
+    },
+  });
+  const approve = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Approval Successful",
+        description: "You can now create the lobby.",
+      });
+      refetchAllowance();
+      approveResetRef.current();
+    },
+  });
+  createResetRef.current = createLobby.reset;
+  approveResetRef.current = approve.reset;
+  createHashRef.current = createLobby.hash;
+  const writeContract = createLobby.write;
+  const hash = createLobby.hash;
+  const isPending = createLobby.isPending;
+  const isConfirming = createLobby.isConfirming;
+  const isSuccess = createLobby.isSuccess;
+  const reset = createLobby.reset;
+  const writeApprove = approve.write;
+  const isApprovePending = approve.isPending;
+  const resetApprove = approve.reset;
+  const isApproveConfirming = approve.isConfirming;
+  const isApproveSuccess = approve.isSuccess;
 
   // Check allowance
   const { data: allowanceRaw, refetch: refetchAllowance } = useReadContract({
@@ -214,40 +248,6 @@ function CreateLobbyDialog({
       setNeedsApproval(allowance < amount);
     }
   }, [allowanceRaw, cashAmount]);
-
-  // Handle approval success
-  useEffect(() => {
-    if (isApproveSuccess) {
-      toast({
-        title: "Approval Successful",
-        description: "You can now create the lobby.",
-      });
-      refetchAllowance();
-      resetApprove();
-    }
-  }, [isApproveSuccess, toast, refetchAllowance, resetApprove]);
-
-  // Handle create success
-  useEffect(() => {
-    if (isSuccess) {
-      toast({
-        title: "Lobby Created",
-        description: (
-          <a
-            href={`${explorer}/tx/${hash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 underline"
-          >
-            View transaction <ExternalLink className="h-3 w-3" />
-          </a>
-        ),
-      });
-      reset();
-      onOpenChange(false);
-      onSuccess();
-    }
-  }, [isSuccess, hash, explorer, toast, reset, onOpenChange, onSuccess]);
 
   const handleApprove = () => {
     if (!address || !addresses.ocJoin) return;

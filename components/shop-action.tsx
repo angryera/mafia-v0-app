@@ -10,6 +10,7 @@ import {
   usePublicClient,
 } from "wagmi";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { getErrorMessage } from "@/lib/format";
 import {
@@ -542,19 +543,9 @@ export function ShopAction() {
     },
   });
 
-  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
-
-  useEffect(() => {
-    if (nextBuyTimeRaw === undefined) return;
-    const cooldownEnd = Number(nextBuyTimeRaw) * 1000;
-    const tick = () => {
-      const diff = cooldownEnd - Date.now();
-      setCooldownRemaining(diff > 0 ? diff : 0);
-    };
-    tick();
-    const id = setInterval(tick, 1_000);
-    return () => clearInterval(id);
-  }, [nextBuyTimeRaw]);
+  const cooldownRemaining = useCooldownRemaining(
+    nextBuyTimeRaw === undefined ? undefined : Number(nextBuyTimeRaw),
+  );
 
   const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
   const cooldownMinutes = Math.floor(cooldownSeconds / 60);

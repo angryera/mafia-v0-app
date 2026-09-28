@@ -1,16 +1,16 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  useWaitForTransactionReceipt,
   useAccount,
   useReadContract,
   useSignMessage,
   usePublicClient,
 } from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
   HOSPITAL_CONTRACT_ABI,
@@ -138,16 +138,18 @@ export function HospitalAction() {
       : undefined;
 
   // ---------- reproduceBlood ----------
-  const {
-    writeContract: writeBlood,
-    data: bloodHash,
-    isPending: bloodPending,
-    error: bloodError,
-    reset: resetBlood,
-  } = useChainWriteContract();
-
-  const { isLoading: bloodConfirming, isSuccess: bloodSuccess } =
-    useWaitForTransactionReceipt({ hash: bloodHash });
+  const bloodTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Blood reproduced successfully");
+    },
+  });
+  const writeBlood = bloodTx.write;
+  const bloodHash = bloodTx.hash;
+  const bloodPending = bloodTx.isPending;
+  const bloodError = bloodTx.error;
+  const resetBlood = bloodTx.reset;
+  const bloodConfirming = bloodTx.isConfirming;
+  const bloodSuccess = bloodTx.isSuccess;
 
   const handleReproduceBlood = () => {
     if (cityId === undefined) return;
@@ -160,22 +162,25 @@ export function HospitalAction() {
     });
   };
 
-  const bloodLoading = bloodPending || bloodConfirming;
+  const bloodLoading = bloodTx.isLoading;
 
   // ---------- buyHealth ----------
   const [healthAmount, setHealthAmount] = useState("");
   const [healthSigning, setHealthSigning] = useState(false);
 
-  const {
-    writeContractAsync: writeHealth,
-    data: healthHash,
-    isPending: healthPending,
-    error: healthError,
-    reset: resetHealth,
-  } = useChainWriteContract();
-
-  const { isLoading: healthConfirming, isSuccess: healthSuccess } =
-    useWaitForTransactionReceipt({ hash: healthHash });
+  const healthTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success(`Success - You purchased ${Number(healthAmount).toLocaleString()} health`);
+      fetchHospitalInfo();
+    },
+  });
+  const writeHealth = healthTx.writeAsync;
+  const healthHash = healthTx.hash;
+  const healthPending = healthTx.isPending;
+  const healthError = healthTx.error;
+  const resetHealth = healthTx.reset;
+  const healthConfirming = healthTx.isConfirming;
+  const healthSuccess = healthTx.isSuccess;
 
   const isValidAmount =
     healthAmount.length > 0 &&
@@ -206,7 +211,7 @@ export function HospitalAction() {
     }
   };
 
-  const healthLoading = healthSigning || healthPending || healthConfirming;
+  const healthLoading = healthSigning || healthTx.isLoading;
 
   // ---------- Cooldown: nextBuyTime ----------
   const { data: nextBuyTimeRaw } = useReadContract({
@@ -220,21 +225,9 @@ export function HospitalAction() {
     },
   });
 
-  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
-
-  useEffect(() => {
-    if (nextBuyTimeRaw === undefined) return;
-    const cooldownEnd = Number(nextBuyTimeRaw) * 1000;
-
-    const tick = () => {
-      const diff = cooldownEnd - Date.now();
-      setCooldownRemaining(diff > 0 ? diff : 0);
-    };
-
-    tick();
-    const id = setInterval(tick, 1_000);
-    return () => clearInterval(id);
-  }, [nextBuyTimeRaw]);
+  const cooldownRemaining = useCooldownRemaining(
+    nextBuyTimeRaw === undefined ? undefined : Number(nextBuyTimeRaw),
+  );
 
   const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
   const cooldownMinutes = Math.floor(cooldownSeconds / 60);
@@ -264,30 +257,6 @@ export function HospitalAction() {
   useEffect(() => {
     void fetchHospitalBusinessItems();
   }, [fetchHospitalBusinessItems]);
-
-  // ---------- Toast notifications ----------
-  const healthToastFired = useRef(false);
-  useEffect(() => {
-    if (healthSuccess && healthHash && !healthToastFired.current) {
-      healthToastFired.current = true;
-      toast.success(`Success - You purchased ${Number(healthAmount).toLocaleString()} health`);
-      fetchHospitalInfo();
-    }
-    if (!healthHash) {
-      healthToastFired.current = false;
-    }
-  }, [healthSuccess, healthHash, healthAmount]);
-
-  const bloodToastFired = useRef(false);
-  useEffect(() => {
-    if (bloodSuccess && bloodHash && !bloodToastFired.current) {
-      bloodToastFired.current = true;
-      toast.success("Blood reproduced successfully");
-    }
-    if (!bloodHash) {
-      bloodToastFired.current = false;
-    }
-  }, [bloodSuccess, bloodHash]);
 
   // ---------- Auth states ----------
   if (!isConnected) {

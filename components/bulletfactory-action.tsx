@@ -1,16 +1,16 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  useWaitForTransactionReceipt,
   useAccount,
   useReadContract,
   useSignMessage,
   usePublicClient,
 } from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
   BULLET_FACTORY_ABI,
@@ -138,16 +138,18 @@ export function BulletFactoryAction() {
       : undefined;
 
   // ---------- reproduceBullets ----------
-  const {
-    writeContract: writeReproduce,
-    data: reproduceHash,
-    isPending: reproducePending,
-    error: reproduceError,
-    reset: resetReproduce,
-  } = useChainWriteContract();
-
-  const { isLoading: reproduceConfirming, isSuccess: reproduceSuccess } =
-    useWaitForTransactionReceipt({ hash: reproduceHash });
+  const reproduceTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Bullets reproduced successfully");
+    },
+  });
+  const writeReproduce = reproduceTx.write;
+  const reproduceHash = reproduceTx.hash;
+  const reproducePending = reproduceTx.isPending;
+  const reproduceError = reproduceTx.error;
+  const resetReproduce = reproduceTx.reset;
+  const reproduceConfirming = reproduceTx.isConfirming;
+  const reproduceSuccess = reproduceTx.isSuccess;
 
   const handleReproduceBullets = () => {
     if (cityId === undefined) return;
@@ -160,22 +162,25 @@ export function BulletFactoryAction() {
     });
   };
 
-  const reproduceLoading = reproducePending || reproduceConfirming;
+  const reproduceLoading = reproduceTx.isLoading;
 
   // ---------- buyBullets ----------
   const [bulletAmount, setBulletAmount] = useState("");
   const [bulletSigning, setBulletSigning] = useState(false);
 
-  const {
-    writeContractAsync: writeBullets,
-    data: bulletHash,
-    isPending: bulletPending,
-    error: bulletError,
-    reset: resetBullets,
-  } = useChainWriteContract();
-
-  const { isLoading: bulletConfirming, isSuccess: bulletSuccess } =
-    useWaitForTransactionReceipt({ hash: bulletHash });
+  const bulletTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success(`Success - You purchased ${Number(bulletAmount).toLocaleString()} bullets`);
+      fetchMarketInfo();
+    },
+  });
+  const writeBullets = bulletTx.writeAsync;
+  const bulletHash = bulletTx.hash;
+  const bulletPending = bulletTx.isPending;
+  const bulletError = bulletTx.error;
+  const resetBullets = bulletTx.reset;
+  const bulletConfirming = bulletTx.isConfirming;
+  const bulletSuccess = bulletTx.isSuccess;
 
   const isValidAmount =
     bulletAmount.length > 0 &&
@@ -206,7 +211,7 @@ export function BulletFactoryAction() {
     }
   };
 
-  const bulletLoading = bulletSigning || bulletPending || bulletConfirming;
+  const bulletLoading = bulletSigning || bulletTx.isLoading;
 
   // ---------- Cooldown: nextBuyTime ----------
   const { data: nextBuyTimeRaw } = useReadContract({
@@ -220,21 +225,9 @@ export function BulletFactoryAction() {
     },
   });
 
-  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
-
-  useEffect(() => {
-    if (nextBuyTimeRaw === undefined) return;
-    const cooldownEnd = Number(nextBuyTimeRaw) * 1000;
-
-    const tick = () => {
-      const diff = cooldownEnd - Date.now();
-      setCooldownRemaining(diff > 0 ? diff : 0);
-    };
-
-    tick();
-    const id = setInterval(tick, 1_000);
-    return () => clearInterval(id);
-  }, [nextBuyTimeRaw]);
+  const cooldownRemaining = useCooldownRemaining(
+    nextBuyTimeRaw === undefined ? undefined : Number(nextBuyTimeRaw),
+  );
 
   const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
   const cooldownMinutes = Math.floor(cooldownSeconds / 60);
@@ -264,30 +257,6 @@ export function BulletFactoryAction() {
   useEffect(() => {
     void fetchBulletBusinessItems();
   }, [fetchBulletBusinessItems]);
-
-  // ---------- Toast notifications ----------
-  const bulletToastFired = useRef(false);
-  useEffect(() => {
-    if (bulletSuccess && bulletHash && !bulletToastFired.current) {
-      bulletToastFired.current = true;
-      toast.success(`Success - You purchased ${Number(bulletAmount).toLocaleString()} bullets`);
-      fetchMarketInfo();
-    }
-    if (!bulletHash) {
-      bulletToastFired.current = false;
-    }
-  }, [bulletSuccess, bulletHash, bulletAmount]);
-
-  const reproduceToastFired = useRef(false);
-  useEffect(() => {
-    if (reproduceSuccess && reproduceHash && !reproduceToastFired.current) {
-      reproduceToastFired.current = true;
-      toast.success("Bullets reproduced successfully");
-    }
-    if (!reproduceHash) {
-      reproduceToastFired.current = false;
-    }
-  }, [reproduceSuccess, reproduceHash]);
 
   // ---------- Auth states ----------
   if (!isConnected) {

@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   useAccount,
-  useWaitForTransactionReceipt,
   useReadContract,
 } from "wagmi";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
+import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
+import { getErrorMessage } from "@/lib/format";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -128,26 +129,34 @@ export function CarCrusherAction() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // Approve cash
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Cash spend approved. You can now crush cars.");
+    },
+  });
+  const writeApprove = approveTx.write;
+  const approveHash = approveTx.hash;
+  const approvePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
+  const approveConfirming = approveTx.isConfirming;
+  const approveSuccess = approveTx.isSuccess;
 
   // Crush
-  const {
-    writeContract,
-    data: crushHash,
-    isPending: crushPending,
-    error: crushError,
-    reset: resetCrush,
-  } = useChainWriteContract();
-  const { isLoading: crushConfirming, isSuccess: crushSuccess } =
-    useWaitForTransactionReceipt({ hash: crushHash });
+  const crushTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success(
+        `Crushed ${selectedIds.size} car${selectedIds.size > 1 ? "s" : ""} into ~${(selectedIds.size * netBulletsPerCar).toLocaleString()} net bullets`,
+      );
+    },
+  });
+  const writeContract = crushTx.write;
+  const crushHash = crushTx.hash;
+  const crushPending = crushTx.isPending;
+  const crushError = crushTx.error;
+  const resetCrush = crushTx.reset;
+  const crushConfirming = crushTx.isConfirming;
+  const crushSuccess = crushTx.isSuccess;
 
   // Read on-chain data
   const { data: bulletsPerCarRaw } = useReadContract({
@@ -205,19 +214,9 @@ export function CarCrusherAction() {
     ? bulletsPerCar - cityCrusherInfo.bulletFeePerCar
     : bulletsPerCar;
 
-  // Cooldown
-  const [cooldownRemaining, setCooldownRemaining] = useState(0);
-  useEffect(() => {
-    if (nextCrushTimeRaw === undefined) return;
-    const nextTime = Number(nextCrushTimeRaw) * 1000;
-    const tick = () => {
-      const diff = nextTime - Date.now();
-      setCooldownRemaining(diff > 0 ? diff : 0);
-    };
-    tick();
-    const id = setInterval(tick, 1_000);
-    return () => clearInterval(id);
-  }, [nextCrushTimeRaw]);
+  const cooldownRemaining = useCooldownRemaining(
+    nextCrushTimeRaw === undefined ? undefined : Number(nextCrushTimeRaw),
+  );
 
   const cooldownSeconds = Math.ceil(cooldownRemaining / 1000);
   const cooldownReady = cooldownSeconds <= 0;
@@ -318,29 +317,8 @@ export function CarCrusherAction() {
     });
   }
 
-  // Success toast
-  const toastFired = useRef(false);
-  useEffect(() => {
-    if (crushSuccess && crushHash && !toastFired.current) {
-      toastFired.current = true;
-      toast.success(
-        `Crushed ${selectedIds.size} car${selectedIds.size > 1 ? "s" : ""} into ~${(selectedIds.size * netBulletsPerCar).toLocaleString()} net bullets`,
-      );
-    }
-    if (!crushHash) {
-      toastFired.current = false;
-    }
-  }, [crushSuccess, crushHash, selectedIds.size, netBulletsPerCar]);
-
-  // Approve success toast
-  useEffect(() => {
-    if (approveSuccess && approveHash) {
-      toast.success("Cash spend approved. You can now crush cars.");
-    }
-  }, [approveSuccess, approveHash]);
-
-  const approveLoading = approvePending || approveConfirming;
-  const crushLoading = crushPending || crushConfirming;
+  const approveLoading = approveTx.isLoading;
+  const crushLoading = crushTx.isLoading;
   const isWorking = approveLoading || crushLoading;
   const selectedCount = selectedIds.size;
   const estimatedBullets = selectedCount * netBulletsPerCar;
@@ -708,7 +686,7 @@ export function CarCrusherAction() {
                     <p className="mt-1 text-[10px] text-red-400">
                       {(approveError as Error).message?.includes("User rejected")
                         ? "Transaction rejected by user"
-                        : (approveError as Error).message?.split("\n")[0]}
+                        : getErrorMessage(approveError)}
                     </p>
                   )}
 
@@ -802,7 +780,7 @@ export function CarCrusherAction() {
                 <p className="line-clamp-2 text-[10px] text-red-400">
                   {(crushError as Error).message?.includes("User rejected")
                     ? "Transaction rejected by user"
-                    : (crushError as Error).message?.split("\n")[0]}
+                    : getErrorMessage(crushError)}
                 </p>
               </div>
             )}
