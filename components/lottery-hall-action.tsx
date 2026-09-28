@@ -23,6 +23,8 @@ import {
 } from "viem";
 import { INGAME_CURRENCY_ABI, LOTTERY_HALL_ABI } from "@/lib/contract";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { getErrorMessage } from "@/lib/format";
 import {
   useChain,
   useChainAddresses,
@@ -263,7 +265,7 @@ export function LotteryHallAction() {
   const [historyNextStartIndex, setHistoryNextStartIndex] = useState<bigint | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [nameByAddr, setNameByAddr] = useState<Record<string, string>>({});
-  const [profileScriptLoaded, setProfileScriptLoaded] = useState(false);
+  const profileScriptLoaded = useMafiaUtilsScript("MafiaProfile") === "ready";
   const [profileNamesLoading, setProfileNamesLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"current" | "history">("current");
 
@@ -272,20 +274,6 @@ export function LotteryHallAction() {
   useEffect(() => {
     const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!window.MafiaProfile) {
-      const script = document.createElement("script");
-      script.src = "/js/mafia-utils.js";
-      script.async = true;
-      script.onload = () => setProfileScriptLoaded(Boolean(window.MafiaProfile));
-      script.onerror = () => setProfileScriptLoaded(false);
-      document.body.appendChild(script);
-    } else {
-      setProfileScriptLoaded(true);
-    }
   }, []);
 
   const { data: currentRoundIdRaw, refetch: refetchRoundId } = useReadContract({
@@ -1156,7 +1144,7 @@ export function LotteryHallAction() {
               <p className="mt-2 text-[10px] text-red-400">
                 {enterError.message.includes("User rejected")
                   ? "Transaction rejected"
-                  : enterError.message.split("\n")[0]}
+                  : getErrorMessage(enterError)}
               </p>
             )}
           </div>

@@ -12,6 +12,7 @@ import {
   isMafiaStakingPositive,
 } from "@/lib/city-map-staking-format";
 import { slotHasOwner, type ParsedSlotInfo } from "@/lib/city-map-types";
+import { formatEllipsisAddress } from "@/lib/format";
 import {
   estimateGameCashYieldWeiLive,
   formatWeiWholeUnits,
@@ -101,11 +102,6 @@ export type CityMapCellPreview = {
 };
 
 type TypeMeta = { fill: string; label: string };
-
-function shortAddress(addr: string): string {
-  if (!addr || addr.length < 12) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
 
 function explorerAddressUrl(explorerBase: string, addr: string): string {
   const base = explorerBase.replace(/\/$/, "");
@@ -1224,7 +1220,7 @@ export function CityMapSlotDetail({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 font-mono text-primary hover:underline"
                 >
-                  {shortAddress(s.owner)}
+                  {formatEllipsisAddress(s.owner)}
                   <ExternalLink
                     className="h-3 w-3 shrink-0 opacity-80"
                     aria-hidden

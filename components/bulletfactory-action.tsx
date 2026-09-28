@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -537,7 +538,7 @@ export function BulletFactoryAction() {
               <p className="line-clamp-2 text-[10px] text-red-400">
                 {reproduceError.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : reproduceError.message.split("\n")[0]}
+                  : getErrorMessage(reproduceError)}
               </p>
             </div>
           )}
@@ -687,7 +688,7 @@ export function BulletFactoryAction() {
               <p className="line-clamp-2 text-[10px] text-red-400">
                 {bulletError.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : bulletError.message.split("\n")[0]}
+                  : getErrorMessage(bulletError)}
               </p>
             </div>
           )}

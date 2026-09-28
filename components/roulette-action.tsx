@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -614,7 +615,7 @@ export function RouletteAction() {
               <p className="line-clamp-2 text-[10px] text-red-400">
                 {approveError.message.includes("User rejected")
                   ? "Approval rejected by user"
-                  : approveError.message.split("\n")[0]}
+                  : getErrorMessage(approveError)}
               </p>
             </div>
           )}

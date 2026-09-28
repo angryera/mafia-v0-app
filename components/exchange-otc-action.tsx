@@ -24,6 +24,7 @@ import {
 
 import { useChain } from "@/components/chain-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
   EXCHANGE_ADDRESSES,
   EXCHANGE_CONTRACT_ABI,
@@ -87,58 +88,6 @@ type OwnedSlotWithSubtype = OwnedSlotEntry & {
   slotSubType?: number;
 };
 
-// ── Script loader ───────────────────────────────────────────────
-function useOTCScripts() {
-  const [exchangeReady, setExchangeReady] = useState(false);
-  const [inventoryReady, setInventoryReady] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mapApi = window.MafiaMapApi ?? window.MafiaMap;
-
-    const load = (src: string, onReady: () => void, optional = false) => {
-      const w = window as Window;
-      // Already attached by some other module.
-      if (src.includes("mafia-utils") && w.MafiaExchange && w.MafiaInventory) return onReady();
-
-      const existing = document.querySelector(`script[src="${src}"]`);
-      if (existing) {
-        existing.addEventListener("load", onReady);
-        return;
-      }
-      const s = document.createElement("script");
-      s.src = src;
-      s.async = true;
-      s.onload = onReady;
-      s.onerror = () => {
-        if (!optional) setError(`Failed to load ${src}`);
-      };
-      document.head.appendChild(s);
-    };
-
-    load(
-      "/js/mafia-utils.js",
-      () => {
-        setExchangeReady(Boolean(window.MafiaExchange));
-        setInventoryReady(Boolean(window.MafiaInventory));
-        setMapReady(
-          Boolean(
-            (window.MafiaMapApi ?? window.MafiaMap)?.getSlots ||
-            (window.MafiaMapApi ?? window.MafiaMap)?.getLandSlotsByOwner,
-          ),
-        );
-      },
-      false,
-    );
-
-    if (mapApi?.getLandSlotsByOwner || mapApi?.getSlots) setMapReady(true);
-  }, []);
-
-  return { exchangeReady, inventoryReady, mapReady, error };
-}
-
 // ── Main component ──────────────────────────────────────────────
 export function ExchangeOTCAction() {
   const { activeChain, chainConfig } = useChain();
@@ -150,7 +99,19 @@ export function ExchangeOTCAction() {
   const publicClient = usePublicClient();
   const { address, isConnected } = useAccount();
 
-  const { exchangeReady, inventoryReady, mapReady, error: scriptError } = useOTCScripts();
+  const exchangeStatus = useMafiaUtilsScript("MafiaExchange");
+  const inventoryStatus = useMafiaUtilsScript("MafiaInventory");
+  const mapApiStatus = useMafiaUtilsScript("MafiaMapApi");
+  const mapStatus = useMafiaUtilsScript("MafiaMap");
+  const exchangeReady = exchangeStatus === "ready";
+  const inventoryReady = inventoryStatus === "ready";
+  const mapReady = mapApiStatus === "ready" || mapStatus === "ready";
+  const scriptStatuses = [exchangeStatus, inventoryStatus, mapApiStatus, mapStatus];
+  const scriptError = scriptStatuses.some((status) => status === "loading")
+    ? null
+    : scriptStatuses.every((status) => status === "error")
+      ? "Failed to load /js/mafia-utils.js"
+      : null;
 
   // ── State ──────────────────────────────────────────────────────
   const [totalOffers, setTotalOffers] = useState<number | null>(null);

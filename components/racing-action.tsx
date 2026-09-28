@@ -22,11 +22,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { formatWalletAddress, getErrorMessage, getTravelCityName } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import {
   INGAME_CURRENCY_ABI,
   RACE_LOBBY_ABI,
-  TRAVEL_DESTINATIONS,
   USER_PROFILE_CONTRACT_ABI
 } from "@/lib/contract";
 import { cn } from "@/lib/utils";
@@ -123,36 +124,6 @@ type RawRace = Partial<Record<keyof Race, unknown>> & {
   opponentCarDamagePercent?: unknown;
 };
 
-// ── Script loader ───────────────────────────────────────────────
-function useInventoryScript() {
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaInventory) {
-      setReady(true);
-      return;
-    }
-
-    const existing = document.querySelector(
-      'script[src="/js/mafia-utils.js"]',
-    );
-    if (existing) {
-      existing.addEventListener("load", () => setReady(true));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setReady(true);
-    script.onerror = () => setError("Failed to load inventory script");
-    document.head.appendChild(script);
-  }, []);
-
-  return { ready, error };
-}
-
 // ── Constants ───────────────────────────────────────────────────
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const RACES_PER_PAGE = 9;
@@ -188,13 +159,6 @@ const RACE_FINISHED_EVENT_ABI = [
 ] as const;
 
 // ── Helpers ─────────────────────────────────────────────────────
-function getCityName(cityId: number): string {
-  if (cityId >= 0 && cityId < TRAVEL_DESTINATIONS.length) {
-    return TRAVEL_DESTINATIONS[cityId].label;
-  }
-  return `City #${cityId}`;
-}
-
 function getStatusLabel(status: number): { label: string; color: string } {
   switch (status) {
     case RaceStatus.Pending:
@@ -303,7 +267,7 @@ function formatHealthLost(value: bigint): string {
 
 function formatAddress(address: string): string {
   if (!address || address === ZERO_ADDRESS) return "-";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  return formatWalletAddress(address);
 }
 
 function formatTime(timestamp: bigint): string {
@@ -379,7 +343,7 @@ function getActionAvailability(
       return {
         canJoin: false,
         canCancel: isCreator,
-        reason: `You are in ${getCityName(currentCityId)}. Travel to ${getCityName(race.cityId)} to join.`,
+        reason: `You are in ${getTravelCityName(currentCityId)}. Travel to ${getTravelCityName(race.cityId)} to join.`,
       };
     }
     return {
@@ -433,7 +397,7 @@ function RaceCard({
               Race #{Number(race.id)}
             </p>
             <p className="text-xs text-muted-foreground">
-              {getCityName(race.cityId)}
+              {getTravelCityName(race.cityId)}
             </p>
           </div>
         </div>
@@ -808,7 +772,7 @@ function CreateRaceDialog({
         <DialogHeader>
           <DialogTitle>Create Race Lobby</DialogTitle>
           <DialogDescription>
-            Create a race lobby in {getCityName(cityId)}. Select your car and set the prize.
+            Create a race lobby in {getTravelCityName(cityId)}. Select your car and set the prize.
           </DialogDescription>
         </DialogHeader>
 
@@ -840,7 +804,7 @@ function CreateRaceDialog({
           <div className="rounded-lg border border-border bg-background/50 p-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">City</span>
-              <span className="text-sm font-medium">{getCityName(cityId)}</span>
+              <span className="text-sm font-medium">{getTravelCityName(cityId)}</span>
             </div>
           </div>
 
@@ -859,7 +823,7 @@ function CreateRaceDialog({
             ) : carsInCity.length === 0 ? (
               <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
                 <p className="text-sm text-yellow-400">
-                  No eligible race cars in {getCityName(cityId)}. Ship a car to this city first.
+                  No eligible race cars in {getTravelCityName(cityId)}. Ship a car to this city first.
                 </p>
               </div>
             ) : (
@@ -1012,7 +976,7 @@ function CreateRaceDialog({
               <p className="text-sm text-red-400">
                 {(error || approveError)?.message.includes("User rejected")
                   ? "Transaction rejected"
-                  : (error || approveError)?.message.split("\n")[0]}
+                  : getErrorMessage((error || approveError))}
               </p>
             </div>
           )}
@@ -1225,7 +1189,7 @@ function JoinRaceDialog({
         <DialogHeader>
           <DialogTitle>Join Race #{Number(race.id)}</DialogTitle>
           <DialogDescription>
-            Join this race in {getCityName(race.cityId)}. Select your car to compete.
+            Join this race in {getTravelCityName(race.cityId)}. Select your car to compete.
           </DialogDescription>
         </DialogHeader>
 
@@ -1241,7 +1205,7 @@ function JoinRaceDialog({
           {isDifferentCity && (
             <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
               <p className="text-sm text-yellow-400">
-                You are in {getCityName(currentCityId)}. Travel to {getCityName(race.cityId)} to join this race.
+                You are in {getTravelCityName(currentCityId)}. Travel to {getTravelCityName(race.cityId)} to join this race.
               </p>
             </div>
           )}
@@ -1270,7 +1234,7 @@ function JoinRaceDialog({
             {carsInCity.length === 0 ? (
               <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3">
                 <p className="text-sm text-yellow-400">
-                  No cars available in {getCityName(race.cityId)}. Ship a car to this city first.
+                  No cars available in {getTravelCityName(race.cityId)}. Ship a car to this city first.
                 </p>
               </div>
             ) : (
@@ -1362,7 +1326,7 @@ function JoinRaceDialog({
               <p className="text-sm text-red-400">
                 {error.message.includes("User rejected")
                   ? "Transaction rejected"
-                  : error.message.split("\n")[0]}
+                  : getErrorMessage(error)}
               </p>
             </div>
           )}
@@ -1472,7 +1436,7 @@ function CancelRaceDialog({
             <p className="text-sm text-red-400">
               {error.message.includes("User rejected")
                 ? "Transaction rejected"
-                : error.message.split("\n")[0]}
+                : getErrorMessage(error)}
             </p>
           </div>
         )}
@@ -1546,7 +1510,7 @@ function RaceDetailsDialog({
           {/* City */}
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">City</span>
-            <span className="text-sm font-medium">{getCityName(race.cityId)}</span>
+            <span className="text-sm font-medium">{getTravelCityName(race.cityId)}</span>
           </div>
 
           {/* Participants */}
@@ -1664,7 +1628,10 @@ export function RacingAction() {
   const addresses = useChainAddresses();
   const { authData, isSigning, signError, requestSignature } = useAuth();
   const { toast } = useToast();
-  const { ready: scriptReady, error: scriptError } = useInventoryScript();
+  const inventoryScript = useMafiaUtilsScript("MafiaInventory");
+  const scriptReady = inventoryScript === "ready";
+  const scriptError =
+    inventoryScript === "error" ? "Failed to load inventory script" : null;
 
   // View state
   const [showHistory, setShowHistory] = useState(false);
@@ -1700,7 +1667,7 @@ export function RacingAction() {
 
   const profile = profileRaw as ProfileData | undefined;
   const cityId = profile?.cityId ?? 0;
-  const cityName = getCityName(cityId);
+  const cityName = getTravelCityName(cityId);
 
   // Get races from SDK race lobbies
   const fetchRaces = useCallback(async () => {

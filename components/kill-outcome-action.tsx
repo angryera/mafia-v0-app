@@ -26,6 +26,7 @@ import {
   Store,
   Heart,
 } from "lucide-react";
+import { formatWalletAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useKillOutcome } from "@/components/kill-outcome-provider";
 import {
@@ -54,10 +55,6 @@ const REVEAL_MS = {
 
 const STORY_SPINNER_MS = 2000;
 const RESULT_SPINNER_MS = 1500;
-
-function shortAddress(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
 
 function Divider() {
   return <div className="my-6 h-px bg-[rgba(255,255,255,0.08)]" />;
@@ -114,7 +111,7 @@ function PlayerCard({
         {name}
       </Link>
       <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-        {shortAddress(address)}
+        {formatWalletAddress(address)}
       </p>
     </div>
   );

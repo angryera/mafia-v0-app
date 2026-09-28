@@ -9,6 +9,7 @@ import { Loader2, Skull } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useChain } from "@/components/chain-provider";
+import { formatWalletAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   KILL_RESULT_COLORS,
@@ -16,10 +17,6 @@ import {
   type DeadAccountKillerInfo,
 } from "@/lib/deadAccount";
 import { fetchDeadAccountKillerInfo } from "@/lib/deadAccountKiller";
-
-function shortAddress(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
 
 function KillerLink({
   killerName,
@@ -33,7 +30,7 @@ function KillerLink({
     killerName && !looksLikeAddress
       ? killerName
       : killerAddress
-        ? shortAddress(killerAddress)
+        ? formatWalletAddress(killerAddress)
         : killerName;
 
   if (killerName && !looksLikeAddress) {

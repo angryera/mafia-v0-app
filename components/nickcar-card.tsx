@@ -13,19 +13,12 @@ import { toast } from "sonner";
 import {
   NICKCAR_CONTRACT_ABI,
   RANK_ABI,
-  TRAVEL_DESTINATIONS,
   type NICKCAR_TYPES,
 } from "@/lib/contract";
+import { getErrorMessage, getTravelCityName } from "@/lib/format";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { Loader2, Car, CheckCircle2, XCircle, MapPin, AlertTriangle, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-function getCityName(cityId: number): string {
-  if (cityId >= 0 && cityId < TRAVEL_DESTINATIONS.length) {
-    return TRAVEL_DESTINATIONS[cityId].label;
-  }
-  return `City #${cityId}`;
-}
 
 interface NickResult {
   success: boolean;
@@ -131,7 +124,7 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
       toast.warning(`Failed but escaped. +${nickResult.xpPoint} XP`);
     } else {
       toast.success(
-        `Stole a car! Item #${nickResult.inventoryItemId} in ${getCityName(nickResult.cityId)} (${nickResult.damagePercent}% damage). +${nickResult.xpPoint} XP`,
+        `Stole a car! Item #${nickResult.inventoryItemId} in ${getTravelCityName(nickResult.cityId)} (${nickResult.damagePercent}% damage). +${nickResult.xpPoint} XP`,
       );
     }
   }, [nickResult, hash]);
@@ -271,7 +264,7 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
                 <span className="text-muted-foreground flex items-center gap-1">
                   <MapPin className="h-3 w-3" /> Location
                 </span>
-                <span className="font-semibold text-foreground">{getCityName(nickResult.cityId)}</span>
+                <span className="font-semibold text-foreground">{getTravelCityName(nickResult.cityId)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Damage</span>
@@ -332,7 +325,7 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
           <p className="line-clamp-2 text-[10px] text-red-400">
             {error.message.includes("User rejected")
               ? "Transaction rejected by user"
-              : error.message.split("\n")[0]}
+              : getErrorMessage(error)}
           </p>
         </div>
       )}

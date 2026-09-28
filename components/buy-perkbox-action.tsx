@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useMemo } from "react";
 import {
   useWaitForTransactionReceipt,
@@ -327,7 +328,7 @@ export function BuyPerkboxAction() {
             <div className="flex items-start gap-2 rounded-lg bg-red-400/10 px-4 py-3">
               <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
               <p className="text-xs text-red-400">
-                Failed to load payment tokens: {swapError.message.split("\n")[0]}
+                Failed to load payment tokens: {getErrorMessage(swapError)}
               </p>
             </div>
           )}
@@ -533,7 +534,7 @@ export function BuyPerkboxAction() {
               <p className="text-[10px] text-red-400 line-clamp-2">
                 {approveError.message.includes("User rejected")
                   ? "Approval rejected by user"
-                  : approveError.message.split("\n")[0]}
+                  : getErrorMessage(approveError)}
               </p>
             </div>
           )}
@@ -558,7 +559,7 @@ export function BuyPerkboxAction() {
               <p className="text-[10px] text-red-400 line-clamp-2">
                 {buyError.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : buyError.message.split("\n")[0]}
+                  : getErrorMessage(buyError)}
               </p>
             </div>
           )}

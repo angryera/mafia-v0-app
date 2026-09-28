@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useCallback } from "react";
 import {
   useReadContract,
@@ -621,7 +622,7 @@ export function TravelGrid() {
               <p className="text-xs text-red-400">
                 {approveError.message.includes("User rejected")
                   ? "Approval rejected by user"
-                  : approveError.message.split("\n")[0]}
+                  : getErrorMessage(approveError)}
               </p>
             </div>
           )}
@@ -632,7 +633,7 @@ export function TravelGrid() {
               <p className="text-xs text-red-400">
                 {travelError.message.includes("User rejected")
                   ? "Travel rejected by user"
-                  : travelError.message.split("\n")[0]}
+                  : getErrorMessage(travelError)}
               </p>
             </div>
           )}

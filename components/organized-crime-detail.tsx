@@ -24,6 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { formatWalletAddress, getTravelCityName } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import {
   BULLET_ABI,
@@ -41,7 +43,6 @@ import {
   RANK_NAMES,
   MARKETPLACE_ITEM_NAMES,
   SHOP_ITEM_STATS,
-  TRAVEL_DESTINATIONS,
   USER_PROFILE_CONTRACT_ABI
 } from "@/lib/contract";
 import { cn } from "@/lib/utils";
@@ -193,13 +194,6 @@ function parseCrimeLobby(data: unknown): CrimeLobby {
   };
 }
 
-function getCityName(cityId: number): string {
-  if (cityId >= 0 && cityId < TRAVEL_DESTINATIONS.length) {
-    return TRAVEL_DESTINATIONS[cityId].label;
-  }
-  return `City #${cityId}`;
-}
-
 function getRankName(rankIndex: number): string {
   return RANK_NAMES[rankIndex] || `Rank ${rankIndex}`;
 }
@@ -221,7 +215,7 @@ function getStatusColor(status: number): string {
 
 function formatAddress(address: string): string {
   if (address === ZERO_ADDRESS) return "Empty";
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  return formatWalletAddress(address);
 }
 
 function formatTimeAgo(timestamp: number): string {
@@ -315,35 +309,7 @@ function getInventoryItemDisplayLabel(item: InventoryItem): string {
   return `Item #${item.itemId} (Cat ${item.categoryId}, Type ${item.typeId})`;
 }
 
-// ── Inventory Script Loader ─────────────────────────────────────
-function useInventoryScript() {
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).MafiaInventory) {
-      setReady(true);
-      return;
-    }
-
-    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => setReady(true));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setReady(true);
-    script.onerror = () => setError("Failed to load inventory script");
-    document.head.appendChild(script);
-  }, []);
-
-  return { ready, error };
-}
-
-// ── Join Role Dialog ─────────────���──────────────────────────────
+// ── Join Role Dialog ────────────────────────────────────────────
 function JoinRoleDialog({
   open,
   onOpenChange,
@@ -365,7 +331,7 @@ function JoinRoleDialog({
   const explorer = useChainExplorer();
   const { authData } = useAuth();
   const { toast } = useToast();
-  const { ready: inventoryReady } = useInventoryScript();
+  const inventoryReady = useMafiaUtilsScript("MafiaInventory") === "ready";
 
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -658,7 +624,7 @@ function JoinRoleDialog({
               {/* Role-specific UI */}
               {roleIndex === 1 && (
                 <div className="space-y-2">
-                  <Label>Select Car (5+ seats, in {getCityName(lobbyCity)})</Label>
+                  <Label>Select Car (5+ seats, in {getTravelCityName(lobbyCity)})</Label>
                   <Select value={selectedItemId} onValueChange={setSelectedItemId}>
                     <SelectTrigger>
                       <SelectValue placeholder="Choose a car" />
@@ -996,7 +962,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
   const explorer = useChainExplorer();
   const { authData } = useAuth();
   const { toast } = useToast();
-  const { ready: inventoryReady } = useInventoryScript();
+  const inventoryReady = useMafiaUtilsScript("MafiaInventory") === "ready";
 
   const [joinDialogOpen, setJoinDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<number>(1);
@@ -1330,7 +1296,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
             <div className="mt-1 flex items-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
                 <MapPin className="h-4 w-4" />
-                {getCityName(lobby.city)}
+                {getTravelCityName(lobby.city)}
               </span>
               <span className="flex items-center gap-1">
                 <Shield className="h-4 w-4" />
@@ -1410,7 +1376,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
               )}
               {userCity !== undefined && userCity !== lobby.city && (
                 <p className="text-sm text-amber-200">
-                  You need to be in {getCityName(lobby.city)} to join this lobby.
+                  You need to be in {getTravelCityName(lobby.city)} to join this lobby.
                 </p>
               )}
               {userRank < lobby.minRank && (

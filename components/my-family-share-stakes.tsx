@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useChainAddresses } from "@/components/chain-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -227,7 +228,7 @@ export function MyFamilyShareStakesButton({
 
   useEffect(() => {
     if (withdrawError) {
-      toast.error(withdrawError.message.split("\n")[0] || "Withdraw failed");
+      toast.error(getErrorMessage(withdrawError) || "Withdraw failed");
       setWithdrawingId(null);
       resetWithdraw();
     }

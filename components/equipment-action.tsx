@@ -13,6 +13,7 @@ import {
 } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
   EQUIPMENT_ABI,
   EQUIPMENT_SLOTS,
@@ -98,36 +99,6 @@ interface EquipmentInfoData {
 
 // 3 hours in seconds
 const EQUIP_COOLDOWN_SECONDS = 3 * 60 * 60;
-
-// ── Script loader ───────────────────────────────────────────────
-function useInventoryScript() {
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaInventory) {
-      setReady(true);
-      return;
-    }
-
-    const existing = document.querySelector(
-      'script[src="/js/mafia-utils.js"]'
-    );
-    if (existing) {
-      existing.addEventListener("load", () => setReady(true));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setReady(true);
-    script.onerror = () => setError("Failed to load inventory script");
-    document.head.appendChild(script);
-  }, []);
-
-  return { ready, error };
-}
 
 // ── Helpers ─────────────────────────────────────────────────────
 function getBodyguardStats(categoryId: number, typeId: number) {
@@ -601,7 +572,10 @@ export function EquipmentAction() {
   const explorer = useChainExplorer();
   const { authData } = useAuth();
   const { toast } = useToast();
-  const { ready: scriptReady, error: scriptError } = useInventoryScript();
+  const inventoryScript = useMafiaUtilsScript("MafiaInventory");
+  const scriptReady = inventoryScript === "ready";
+  const scriptError =
+    inventoryScript === "error" ? "Failed to load inventory script" : null;
 
   // State
   const [selectedCityId, setSelectedCityId] = useState(0);

@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useChainAddresses } from "@/components/chain-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -391,7 +392,7 @@ export function FamilyShareStake({
 
   useEffect(() => {
     if (withdrawError) {
-      toast.error(withdrawError.message.split("\n")[0] || "Withdraw failed");
+      toast.error(getErrorMessage(withdrawError) || "Withdraw failed");
       setWithdrawingId(null);
       resetWithdraw();
     }
@@ -720,7 +721,7 @@ export function FamilyShareStake({
           )}
           {(stakeError || approveError) && (
             <p className="text-xs text-red-400">
-              {(stakeError ?? approveError)?.message.split("\n")[0]}
+              {getErrorMessage((stakeError ?? approveError))}
             </p>
           )}
           <DialogFooter className="gap-2 sm:gap-0">

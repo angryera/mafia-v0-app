@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useMemo } from "react";
 import {
   useWaitForTransactionReceipt,
@@ -300,7 +301,7 @@ export function BuyGiCreditsAction() {
             <div className="flex items-start gap-2 rounded-lg bg-red-400/10 px-4 py-3">
               <XCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
               <p className="text-xs text-red-400">
-                Failed to load payment tokens: {swapError.message.split("\n")[0]}
+                Failed to load payment tokens: {getErrorMessage(swapError)}
               </p>
             </div>
           )}

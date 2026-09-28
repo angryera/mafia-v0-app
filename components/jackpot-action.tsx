@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import {
@@ -601,7 +602,7 @@ export function JackpotAction() {
                 <p className="mt-1 text-[10px] text-red-400">
                   {approveError.message.includes("User rejected")
                     ? "Transaction rejected by user"
-                    : approveError.message.split("\n")[0]}
+                    : getErrorMessage(approveError)}
                 </p>
               )}
 
@@ -907,7 +908,7 @@ export function JackpotAction() {
                   <p className="text-[10px] text-red-400">
                     {enterError.message.includes("User rejected")
                       ? "Transaction rejected by user"
-                      : enterError.message.split("\n")[0]}
+                      : getErrorMessage(enterError)}
                   </p>
                 )}
               </div>

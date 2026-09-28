@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useToast } from "@/hooks/use-toast";
@@ -2232,7 +2233,7 @@ function CreateListingModal({
               <p className="text-sm text-red-400">
                 {error?.message.includes("User rejected")
                   ? "Transaction rejected"
-                  : error?.message.split("\n")[0]}
+                  : getErrorMessage(error)}
               </p>
             </div>
           )}

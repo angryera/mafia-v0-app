@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { Loader2, MapPin } from "lucide-react";
 import { useAccount } from "wagmi";
+import { formatEllipsisAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useChain } from "@/components/chain-provider";
 import {
@@ -131,11 +132,6 @@ function slotTypeToCellType(slotType: number): CellType {
   }
 }
 
-function shortAddress(addr: string): string {
-  if (!addr || addr.length < 12) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
 function generateEmptyGrid(): CellData[] {
   const cells: CellData[] = [];
   for (let y = 0; y < GRID_ROWS; y++) {
@@ -180,7 +176,7 @@ function applySlotsToGrid(
       y: slot.y,
       type: displayType,
       name: displayType === "empty" && cellType === "user" ? undefined : label,
-      owner: owned ? shortAddress(slot.owner) : undefined,
+      owner: owned ? formatEllipsisAddress(slot.owner) : undefined,
       slot,
     };
   }

@@ -21,8 +21,8 @@ import {
   DETECTIVE_AGENCY_ABI,
   SAFEHOUSE_ABI,
   USER_PROFILE_CONTRACT_ABI,
-  TRAVEL_DESTINATIONS,
 } from "@/lib/contract";
+import { getTravelCityName } from "@/lib/format";
 import "@/types/mafia-globals";
 
 // Minimal shape of the viem/wagmi public client we rely on (readContract only).
@@ -37,9 +37,8 @@ type ReadClient = {
 
 // ── City helper ──────────────────────────────────────────────────────────────
 export function getCityName(cityId: number | null | undefined): string {
-  if (cityId === null || cityId === undefined) return "another city";
-  if (cityId < TRAVEL_DESTINATIONS.length) return TRAVEL_DESTINATIONS[cityId].label;
-  return `City #${cityId}`;
+  if (cityId == null) return "another city";
+  return getTravelCityName(cityId);
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { formatUnits, parseEther, zeroAddress } from "viem";
+import { formatWeiDisplay } from "@/lib/format";
 import { RANK_NAMES } from "@/lib/constants/const";
 
 export const BANK_REFETCH_MS = 10_000;
@@ -158,17 +159,12 @@ export function bankLogsHasOlderPage(total: bigint, pageIndex: number): boolean 
   return BigInt(pageIndex + 1) * BigInt(BANK_LOG_PAGE_SIZE) < total;
 }
 
-function formatWeiAmount(wei: bigint | undefined, maximumFractionDigits: number): string {
-  if (wei === undefined) return "—";
-  return Number(formatUnits(wei, 18)).toLocaleString(undefined, { maximumFractionDigits });
-}
-
 export function formatCashAmount(wei: bigint | undefined): string {
-  return formatWeiAmount(wei, 2);
+  return formatWeiDisplay(wei, 2);
 }
 
 export function formatNativeAmount(wei: bigint | undefined): string {
-  return formatWeiAmount(wei, 6);
+  return formatWeiDisplay(wei, 6);
 }
 
 export function formatLogTimestamp(timestamp: bigint): string {

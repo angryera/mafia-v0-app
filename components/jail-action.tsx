@@ -8,7 +8,7 @@ import {
 } from "wagmi";
 import { formatEther, parseEther } from "viem";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
-import { formatWalletAddress as formatAddress } from "@/lib/format";
+import { formatWalletAddress as formatAddress, getErrorMessage } from "@/lib/format";
 import {
   JAIL_CONTRACT_ABI,
   INGAME_CURRENCY_ABI,
@@ -821,7 +821,7 @@ export function JailAction() {
                       if (!err) return "";
                       return err.message.includes("User rejected")
                         ? "Transaction rejected by user"
-                        : err.message.split("\n")[0];
+                        : getErrorMessage(err);
                     })()}
                   </p>
                 </div>

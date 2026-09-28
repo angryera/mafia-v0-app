@@ -19,6 +19,7 @@ import {
   Eye,
   Swords,
 } from "lucide-react";
+import { formatWalletAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useChain, useChainAddresses } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
@@ -42,10 +43,6 @@ import {
   type EquippedWeaponInfo,
 } from "@/lib/equipmentContract";
 import { useKillOutcome } from "@/components/kill-outcome-provider";
-
-function shortAddress(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
 
 export function KillInitiationAction() {
   const router = useRouter();
@@ -517,8 +514,8 @@ export function KillInitiationAction() {
         targetAddress,
         bulletAmount,
         attackerAddress: address,
-        attackerName: playerCity?.username || shortAddress(address),
-        victimName: targetName || shortAddress(targetAddress),
+        attackerName: playerCity?.username || formatWalletAddress(address),
+        victimName: targetName || formatWalletAddress(targetAddress),
         cityName: playerCity?.cityName ?? "Unknown city",
       });
 
@@ -547,7 +544,7 @@ export function KillInitiationAction() {
   const victimHelper = (() => {
     if (victim.trim().length === 0) return null;
     if (isSelfTarget) return "You cannot target yourself.";
-    if (targetAddress) return `Target: ${shortAddress(targetAddress)}`;
+    if (targetAddress) return `Target: ${formatWalletAddress(targetAddress)}`;
     return "Please select a valid profile name.";
   })();
 
@@ -682,7 +679,7 @@ export function KillInitiationAction() {
                           {p.name}
                         </p>
                         <p className="truncate font-mono text-[10px] text-muted-foreground">
-                          {shortAddress(p.address)}
+                          {formatWalletAddress(p.address)}
                         </p>
                       </div>
                     </button>

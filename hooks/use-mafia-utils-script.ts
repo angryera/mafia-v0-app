@@ -24,22 +24,44 @@ let scriptLoadState: ScriptLoadState = "pending";
 let scriptWatched = false;
 const listeners = new Set<() => void>();
 
+function injectScript(): HTMLScriptElement {
+  const script = document.createElement("script");
+  script.src = MAFIA_UTILS_SRC;
+  script.async = true;
+  document.body.appendChild(script);
+  return script;
+}
+
 function setScriptLoadState(state: ScriptLoadState) {
   scriptLoadState = state;
   listeners.forEach((listener) => listener());
 }
 
+const MAFIA_GLOBALS: readonly MafiaUtilsGlobal[] = [
+  "MafiaInventory",
+  "MafiaMapApi",
+  "MafiaMap",
+  "MafiaFamily",
+  "MafiaProfile",
+  "MafiaDeposit",
+  "MafiaWorth",
+  "MafiaRaceLobby",
+  "MafiaExchange",
+];
+
 function watchScript() {
   if (scriptWatched) return;
   scriptWatched = true;
 
-  let script = document.querySelector<HTMLScriptElement>(`script[src="${MAFIA_UTILS_SRC}"]`);
-  if (!script) {
-    script = document.createElement("script");
-    script.src = MAFIA_UTILS_SRC;
-    script.async = true;
-    document.body.appendChild(script);
+  // The layout script usually finished before React subscribed, so its load
+  // event is already gone. Treat any exposed global as proof that it ran.
+  if (MAFIA_GLOBALS.some((name) => window[name])) {
+    scriptLoadState = "settled";
+    return;
   }
+
+  const script = document.querySelector<HTMLScriptElement>(`script[src="${MAFIA_UTILS_SRC}"]`)
+    ?? injectScript();
   script.addEventListener("load", () => setScriptLoadState("settled"), { once: true });
   script.addEventListener("error", () => setScriptLoadState("failed"), { once: true });
 }

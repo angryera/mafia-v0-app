@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
@@ -838,7 +839,7 @@ export function ExchangeConvertAction() {
           <p className="text-sm text-red-400">
             {convertError.message.includes("User rejected")
               ? "Transaction rejected by user"
-              : convertError.message.split("\n")[0]}
+              : getErrorMessage(convertError)}
           </p>
         </div>
       )}

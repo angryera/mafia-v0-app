@@ -8,6 +8,7 @@ import {
 } from "wagmi";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
   BODYGUARD_TRAINING_ABI,
   BODYGUARD_INFO,
@@ -49,36 +50,6 @@ interface BodyguardItem {
   typeId: number;
   owner: string;
   cityId: number;
-}
-
-// ── Script loader ───────────────────────────────────────────────
-function useInventoryScript() {
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaInventory) {
-      setReady(true);
-      return;
-    }
-
-    const existing = document.querySelector(
-      'script[src="/js/mafia-utils.js"]'
-    );
-    if (existing) {
-      existing.addEventListener("load", () => setReady(true));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setReady(true);
-    script.onerror = () => setError("Failed to load inventory script");
-    document.head.appendChild(script);
-  }, []);
-
-  return { ready, error };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -757,7 +728,10 @@ export function BodyguardTrainingAction() {
   const { address, isConnected } = useAccount();
   const { chainConfig } = useChain();
   const addresses = useChainAddresses();
-  const { ready: scriptReady, error: scriptError } = useInventoryScript();
+  const inventoryScript = useMafiaUtilsScript("MafiaInventory");
+  const scriptReady = inventoryScript === "ready";
+  const scriptError =
+    inventoryScript === "error" ? "Failed to load inventory script" : null;
 
   const [bodyguards, setBodyguards] = useState<BodyguardItem[]>([]);
   const [loading, setLoading] = useState(false);

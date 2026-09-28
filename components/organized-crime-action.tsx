@@ -38,7 +38,7 @@ import {
   TRAVEL_DESTINATIONS
 } from "@/lib/contract";
 import { cn } from "@/lib/utils";
-import { formatWalletAddress as formatAddress } from "@/lib/format";
+import { formatWalletAddress as formatAddress, getTravelCityName } from "@/lib/format";
 import {
   AlertCircle,
   ArrowUpDown,
@@ -133,13 +133,6 @@ function parseCrimeLobby(data: unknown): CrimeLobby {
       };
     }),
   };
-}
-
-function getCityName(cityId: number): string {
-  if (cityId >= 0 && cityId < TRAVEL_DESTINATIONS.length) {
-    return TRAVEL_DESTINATIONS[cityId].label;
-  }
-  return `City #${cityId}`;
 }
 
 function getRankName(rankIndex: number): string {
@@ -437,7 +430,7 @@ function LobbyCard({
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">{getCityName(lobby.city)}</span>
+              <span className="text-sm text-muted-foreground">{getTravelCityName(lobby.city)}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Users className="h-3.5 w-3.5 text-muted-foreground" />

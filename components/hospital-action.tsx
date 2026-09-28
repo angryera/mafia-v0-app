@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -535,7 +536,7 @@ export function HospitalAction() {
               <p className="line-clamp-2 text-[10px] text-red-400">
                 {bloodError.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : bloodError.message.split("\n")[0]}
+                  : getErrorMessage(bloodError)}
               </p>
             </div>
           )}
@@ -673,7 +674,7 @@ export function HospitalAction() {
               <p className="line-clamp-2 text-[10px] text-red-400">
                 {healthError.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : healthError.message.split("\n")[0]}
+                  : getErrorMessage(healthError)}
               </p>
             </div>
           )}

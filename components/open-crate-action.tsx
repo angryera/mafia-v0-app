@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   useWaitForTransactionReceipt,
@@ -538,7 +539,7 @@ export function OpenCrateAction() {
               <p className="text-[10px] text-red-400 line-clamp-2">
                 {requestError.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : requestError.message.split("\n")[0]}
+                  : getErrorMessage(requestError)}
               </p>
             </div>
           )}
@@ -550,7 +551,7 @@ export function OpenCrateAction() {
               <p className="text-[10px] text-red-400 line-clamp-2">
                 {finishError.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : finishError.message.split("\n")[0]}
+                  : getErrorMessage(finishError)}
               </p>
             </div>
           )}

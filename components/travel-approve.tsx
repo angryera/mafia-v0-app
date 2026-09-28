@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import {
   useWaitForTransactionReceipt,
   useAccount,
@@ -108,7 +109,7 @@ export function TravelApprove() {
               <p className="mt-1 text-[10px] text-red-400/70 line-clamp-1">
                 {error.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : error.message.split("\n")[0]}
+                  : getErrorMessage(error)}
               </p>
             )}
             <p className="mt-1 font-mono text-[10px] text-muted-foreground">

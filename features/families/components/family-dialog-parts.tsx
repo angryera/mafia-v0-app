@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import type { ReactNode } from "react";
 
 export function TransactionErrorText({ error }: { error: Error | null | undefined }) {
   if (!error) return null;
-  return <p className="text-xs text-red-400">{error.message.split("\n")[0]}</p>;
+  return <p className="text-xs text-red-400">{getErrorMessage(error)}</p>;
 }
 
 export function PermissionNotice({ children }: { children: ReactNode }) {

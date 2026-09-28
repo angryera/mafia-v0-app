@@ -7,6 +7,8 @@ import {
   useWaitForTransactionReceipt,
 } from "wagmi";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { getErrorMessage } from "@/lib/format";
 import {
   HELPER_BOT_BULLET_PRICE,
   HELPERBOT_CONTRACT_ABI,
@@ -277,30 +279,13 @@ export function HelperBotDetail({
   const [botInfo, setBotInfo] = useState<HelperBotInfo | null>(null);
   const [bulletBotPlusInfo, setBulletBotPlusInfo] = useState<BulletBotPlusInfo | null>(null);
   const [bulletBotCostLoadError, setBulletBotCostLoadError] = useState<string | null>(null);
-  const [inventoryReady, setInventoryReady] = useState(false);
+  const inventoryReady = useMafiaUtilsScript("MafiaInventory") === "ready";
   const [availablePerkItems, setAvailablePerkItems] = useState<PerkInventoryItem[]>([]);
   const [selectedPerkIds, setSelectedPerkIds] = useState<number[]>([]);
   const [perkLoading, setPerkLoading] = useState(false);
   const [perkLoadError, setPerkLoadError] = useState<string | null>(null);
   const isBulletDealerBot = bot.id === BULLET_BOT_ID;
   const allowedPerkCategories = BOT_ALLOWED_PERK_CATEGORIES[bot.id] ?? [];
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaInventory) {
-      setInventoryReady(true);
-      return;
-    }
-    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => setInventoryReady(true), { once: true });
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setInventoryReady(true);
-    document.head.appendChild(script);
-  }, []);
 
   const fetchBotInfo = useCallback(async () => {
     if (!address || !publicClient) return;
@@ -1068,7 +1053,7 @@ export function HelperBotDetail({
           <p className="line-clamp-2 text-[10px] text-red-400">
             {error.message.includes("User rejected")
               ? "Transaction rejected by user"
-              : error.message.split("\n")[0]}
+              : getErrorMessage(error)}
           </p>
         </div>
       )}

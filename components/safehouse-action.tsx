@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import {
@@ -530,7 +531,7 @@ export function SafehouseAction() {
             <p className="line-clamp-2 text-[10px] text-red-400">
               {approveError.message.includes("User rejected")
                 ? "Approval rejected by user"
-                : approveError.message.split("\n")[0]}
+                : getErrorMessage(approveError)}
             </p>
           </div>
         )}
@@ -627,7 +628,7 @@ export function SafehouseAction() {
             <p className="line-clamp-2 text-[10px] text-red-400">
               {enterError.message.includes("User rejected")
                 ? "Transaction rejected by user"
-                : enterError.message.split("\n")[0]}
+                : getErrorMessage(enterError)}
             </p>
           </div>
         )}

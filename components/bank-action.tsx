@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import {
@@ -549,7 +550,7 @@ export function BankAction() {
             <p className="line-clamp-2 text-[10px] text-red-400">
               {error.message.includes("User rejected")
                 ? "Transaction rejected by user"
-                : error.message.split("\n")[0]}
+                : getErrorMessage(error)}
             </p>
           </div>
         )}

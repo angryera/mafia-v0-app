@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAccount, useWaitForTransactionReceipt } from "wagmi";
 import { useChain, useChainExplorer } from "@/components/chain-provider";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { getErrorMessage, getTravelCityName } from "@/lib/format";
 import {
   TRAVEL_DESTINATIONS,
   INVENTORY_CONTRACT_ABI,
@@ -77,44 +79,7 @@ interface CarItem {
   damagePercent: number;
 }
 
-// ── Script loader ───────────────────────────────────────────────
-function useInventoryScript() {
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaInventory) {
-      setReady(true);
-      return;
-    }
-
-    const existing = document.querySelector(
-      'script[src="/js/mafia-utils.js"]',
-    );
-    if (existing) {
-      existing.addEventListener("load", () => setReady(true));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setReady(true);
-    script.onerror = () => setError("Failed to load inventory script");
-    document.head.appendChild(script);
-  }, []);
-
-  return { ready, error };
-}
-
 // ── Helpers ─────────────────────────────────────────────────────
-function getCityName(cityId: number): string {
-  if (cityId >= 0 && cityId < TRAVEL_DESTINATIONS.length) {
-    return TRAVEL_DESTINATIONS[cityId].label;
-  }
-  return `City #${cityId}`;
-}
-
 function getConditionColor(condition: number): string {
   if (condition >= 75) return "bg-green-500";
   if (condition >= 50) return "bg-yellow-500";
@@ -212,7 +177,7 @@ function GarageActionDialog({
   useEffect(() => {
     if (isSuccess && hash) {
       const messages: Record<GarageActionType, string> = {
-        ship: `Car #${item.itemId} shipped to ${getCityName(Number(destinationCity))}`,
+        ship: `Car #${item.itemId} shipped to ${getTravelCityName(Number(destinationCity))}`,
         transfer: `Car #${item.itemId} transferred successfully`,
         sell: `Car #${item.itemId} sold successfully`,
         repair: `Car #${item.itemId} repaired successfully`,
@@ -356,7 +321,7 @@ function GarageActionDialog({
                 {item.car.brand}
               </p>
               <p className="text-xs text-muted-foreground">
-                #{item.itemId} &middot; {getCityName(item.cityId)}
+                #{item.itemId} &middot; {getTravelCityName(item.cityId)}
               </p>
             </div>
           </div>
@@ -434,7 +399,7 @@ function GarageActionDialog({
                       <p className="mt-1 text-[10px] text-red-400">
                         {approveError.message.includes("User rejected")
                           ? "Transaction rejected by user"
-                          : approveError.message.split("\n")[0]}
+                          : getErrorMessage(approveError)}
                       </p>
                     )}
 
@@ -625,7 +590,7 @@ function GarageActionDialog({
                       <p className="mt-1 text-[10px] text-red-400">
                         {approveError.message.includes("User rejected")
                           ? "Transaction rejected by user"
-                          : approveError.message.split("\n")[0]}
+                          : getErrorMessage(approveError)}
                       </p>
                     )}
 
@@ -869,7 +834,7 @@ function GarageRow({
             >
               <MapPin className="h-3.5 w-3.5 text-primary/70" />
               <span className="font-medium text-foreground">
-                {getCityName(item.cityId)}
+                {getTravelCityName(item.cityId)}
               </span>
             </div>
           </div>
@@ -977,7 +942,10 @@ function GarageRowSkeleton() {
 export function GarageAction() {
   const { address, isConnected } = useAccount();
   const { chainConfig } = useChain();
-  const { ready: scriptReady, error: scriptError } = useInventoryScript();
+  const inventoryScript = useMafiaUtilsScript("MafiaInventory");
+  const scriptReady = inventoryScript === "ready";
+  const scriptError =
+    inventoryScript === "error" ? "Failed to load inventory script" : null;
 
   const [cars, setCars] = useState<CarItem[]>([]);
   const [loading, setLoading] = useState(false);

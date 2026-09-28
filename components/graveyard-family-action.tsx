@@ -23,6 +23,7 @@ import {
   User,
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
+import { formatWalletAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import "@/types/mafia-globals";
 
@@ -61,10 +62,6 @@ interface FamilyPayload {
   }>;
 }
 
-function shortAddress(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-}
-
 function roleIcon(role: FamilyMemberRole) {
   switch (role) {
     case "Don":
@@ -93,7 +90,7 @@ function collectDeadMembers(families: FamilyPayload[]): GraveyardMember[] {
       const key = leader.address.toLowerCase();
       byAddress.set(key, {
         address: leader.address,
-        name: leader.name || shortAddress(leader.address),
+        name: leader.name || formatWalletAddress(leader.address),
         familyId: family.familyId,
         familyName,
         level: Number(leader.level) || 0,
@@ -107,7 +104,7 @@ function collectDeadMembers(families: FamilyPayload[]): GraveyardMember[] {
       if (!byAddress.has(key)) {
         byAddress.set(key, {
           address: successor.address,
-          name: successor.name || shortAddress(successor.address),
+          name: successor.name || formatWalletAddress(successor.address),
           familyId: family.familyId,
           familyName,
           level: Number(successor.level) || 0,
@@ -122,7 +119,7 @@ function collectDeadMembers(families: FamilyPayload[]): GraveyardMember[] {
       if (byAddress.has(key)) continue;
       byAddress.set(key, {
         address: player.address,
-        name: player.name || shortAddress(player.address),
+        name: player.name || formatWalletAddress(player.address),
         familyId: family.familyId,
         familyName,
         level: Number(player.level) || 0,
@@ -319,7 +316,7 @@ export function GraveyardFamilyAction() {
                       {member.level}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
-                      {shortAddress(member.address)}
+                      {formatWalletAddress(member.address)}
                     </TableCell>
                   </TableRow>
                 ))}

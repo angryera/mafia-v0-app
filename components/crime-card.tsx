@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useMemo, useEffect, useRef } from "react";
 import { useWaitForTransactionReceipt, useReadContract, useAccount } from "wagmi";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
@@ -254,7 +255,7 @@ export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disab
           <p className="text-[10px] text-red-400 line-clamp-2">
             {error.message.includes("User rejected")
               ? "Transaction rejected by user"
-              : error.message.split("\n")[0]}
+              : getErrorMessage(error)}
           </p>
         </div>
       )}

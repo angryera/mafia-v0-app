@@ -46,7 +46,11 @@ must be read from and written to those contracts through Wagmi/Viem.
     `/js/mafia-utils.js`. Do not inject the script manually.
 - `lib/navigation.ts`: framework-independent route identifiers and path parsing.
 - `lib/constants/`: contract ABIs, chain addresses, and static game values.
-- `lib/format.ts`: shared, pure display formatting.
+- `lib/format.ts`: shared, pure display formatting. Use `getErrorMessage`,
+  `formatWeiDisplay`, `formatWalletAddress`, `formatEllipsisAddress`, and
+  `getTravelCityName` instead of local copies. City lookups with a different
+  fallback (`lib/otc-helpers.ts`, `lib/story-mode.ts`, `lib/weekly-mission.ts`)
+  stay where they are.
 - `lib/`: contract adapters and feature-domain helpers that do not render UI.
 - `types/`: shared TypeScript declarations.
 - `scripts/`: development-time contract inspection utilities; never imported

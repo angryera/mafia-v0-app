@@ -16,8 +16,8 @@ import {
   INGAME_CURRENCY_ABI,
   INGAME_CURRENCY_APPROVE_AMOUNT,
   USER_PROFILE_CONTRACT_ABI,
-  TRAVEL_DESTINATIONS,
 } from "@/lib/contract";
+import { getErrorMessage, getTravelCityName } from "@/lib/format";
 import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -75,13 +75,6 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function getCityName(cityId: number): string {
-  if (cityId < TRAVEL_DESTINATIONS.length) {
-    return TRAVEL_DESTINATIONS[cityId].label;
-  }
-  return `City #${cityId}`;
-}
-
 export function DetectiveAgencyAction() {
   const { address, isConnected } = useAccount();
   const addresses = useChainAddresses();
@@ -100,9 +93,7 @@ export function DetectiveAgencyAction() {
   });
   const profile = profileRaw as ProfileData | undefined;
   const cityId = profile?.cityId;
-  const cityName = profile && profile.cityId < TRAVEL_DESTINATIONS.length
-    ? TRAVEL_DESTINATIONS[profile.cityId].label
-    : profile ? `City #${profile.cityId}` : null;
+  const cityName = profile ? getTravelCityName(profile.cityId) : null;
 
   // ---------- Detective cost for current city ----------
   const [detectiveCost, setDetectiveCost] = useState<bigint | null>(null);
@@ -641,7 +632,7 @@ export function DetectiveAgencyAction() {
             <p className="line-clamp-2 text-[10px] text-red-400">
               {approveError.message.includes("User rejected")
                 ? "Transaction rejected by user"
-                : approveError.message.split("\n")[0]}
+                : getErrorMessage(approveError)}
             </p>
           </div>
         )}
@@ -789,7 +780,7 @@ export function DetectiveAgencyAction() {
             <p className="line-clamp-2 text-[10px] text-red-400">
               {hireError.message.includes("User rejected")
                 ? "Transaction rejected by user"
-                : hireError.message.split("\n")[0]}
+                : getErrorMessage(hireError)}
             </p>
           </div>
         )}
@@ -972,7 +963,7 @@ export function DetectiveAgencyAction() {
                       <p className="line-clamp-2 text-[10px] text-red-400">
                         {finishError.message.includes("User rejected")
                           ? "Transaction rejected by user"
-                          : finishError.message.split("\n")[0]}
+                          : getErrorMessage(finishError)}
                       </p>
                     </div>
                   )}
@@ -982,7 +973,7 @@ export function DetectiveAgencyAction() {
                       <p className="line-clamp-2 text-[10px] text-red-400">
                         {revealError.message.includes("User rejected")
                           ? "Transaction rejected by user"
-                          : revealError.message.split("\n")[0]}
+                          : getErrorMessage(revealError)}
                       </p>
                     </div>
                   )}
@@ -1015,7 +1006,7 @@ function StatusBadge({ status }: { status: "pending" | "searching" | "found" | "
 }
 
 function RevealedInfo({ hire, now, explorer }: { hire: DetectiveHire; now: number; explorer: string }) {
-  const targetCity = getCityName(hire.targetCityId);
+  const targetCity = getTravelCityName(hire.targetCityId);
 
   // canKillUntil is startedAt + targetNumber*60 + targetFoundDuration(2h)
   // We approximate: startedAt + targetNumber * 60 + 7200

@@ -11,6 +11,8 @@ import {
   INGAME_CURRENCY_APPROVE_AMOUNT,
 } from "@/lib/contract";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { formatEllipsisAddress } from "@/lib/format";
 import { formatEther, parseEther } from "viem";
 import { toast } from "sonner";
 import {
@@ -52,34 +54,6 @@ interface LiquidityPosition {
   active: boolean;
 }
 
-// ── Script loader ───────────────────────────────────────────────
-function useDepositScript() {
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.MafiaDeposit) {
-      setReady(true);
-    } else {
-      const existingScript = document.querySelector(
-        'script[src="/js/mafia-utils.js"]'
-      );
-      if (existingScript) {
-        existingScript.addEventListener("load", () => setReady(true));
-      } else {
-        const script = document.createElement("script");
-        script.src = "/js/mafia-utils.js";
-        script.async = true;
-        script.onload = () => setReady(true);
-        script.onerror = () => setError("Failed to load deposit script");
-        document.head.appendChild(script);
-      }
-    }
-  }, []);
-
-  return { ready, error };
-}
-
 // ── Helper functions ────────────────────────────────────────────
 function formatCash(value: bigint): string {
   const num = Number(formatEther(value));
@@ -112,11 +86,6 @@ function isLiquidityProvider(
   );
 }
 
-function shortAddress(addr: string): string {
-  if (addr.length < 12) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
 // ── Main Component ──────────────────────────────────────────────
 export function ExchangeLiquidityAction() {
   const { address, isConnected } = useAccount();
@@ -128,7 +97,9 @@ export function ExchangeLiquidityAction() {
   const { writeContractAsync } = useChainWriteContract();
   const { authData, requestSignature, isSigning: authSigning, signError: authSignError } =
     useAuth();
-  const { ready: scriptReady, error: scriptError } = useDepositScript();
+  const depositScript = useMafiaUtilsScript("MafiaDeposit");
+  const scriptReady = depositScript === "ready";
+  const scriptError = depositScript === "error" ? "Failed to load deposit script" : null;
 
   const {
     data: ingameCashRaw,
@@ -968,7 +939,7 @@ export function ExchangeLiquidityAction() {
                                 className="font-mono text-foreground/80 underline-offset-2 hover:underline"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {shortAddress(position.provider)}
+                                {formatEllipsisAddress(position.provider)}
                               </a>
                             </>
                           )}

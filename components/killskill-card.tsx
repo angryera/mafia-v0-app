@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import { useMemo, useState } from "react";
 import {
   useWaitForTransactionReceipt,
@@ -228,7 +229,7 @@ export function KillSkillCard({
           <p className="line-clamp-2 text-[10px] text-red-400">
             {error.message.includes("User rejected")
               ? "Transaction rejected by user"
-              : error.message.split("\n")[0]}
+              : getErrorMessage(error)}
           </p>
         </div>
       )}
@@ -240,7 +241,7 @@ export function KillSkillCard({
           <p className="line-clamp-2 text-[10px] text-red-400">
             {approveError.message.includes("User rejected")
               ? "Approval rejected by user"
-              : approveError.message.split("\n")[0]}
+              : getErrorMessage(approveError)}
           </p>
         </div>
       )}

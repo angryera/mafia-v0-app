@@ -10,6 +10,8 @@ import {
   usePublicClient,
 } from "wagmi";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { getErrorMessage } from "@/lib/format";
 import {
   SHOP_CONTRACT_ABI,
   SHOP_ITEMS,
@@ -163,7 +165,7 @@ export function ShopAction() {
   const [shopFetching, setShopFetching] = useState(false);
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [editableOwnerPrices, setEditableOwnerPrices] = useState<Record<number, string>>({});
-  const [inventoryReady, setInventoryReady] = useState(false);
+  const inventoryReady = useMafiaUtilsScript("MafiaInventory") === "ready";
   const [cityShopBusinessItems, setCityShopBusinessItems] = useState<BusinessInventoryItem[]>([]);
 
   // ---------- Per-item quantity selector (before adding to cart) ----------
@@ -236,26 +238,6 @@ export function ShopAction() {
     );
 
   console.log(cityShopBusinessItems);
-
-  // ---------- Load Mafia inventory script ----------
-  useEffect(() => {
-    if (typeof window !== "undefined" && (window as { MafiaInventory?: unknown }).MafiaInventory) {
-      setInventoryReady(true);
-      return;
-    }
-
-    const existing = document.querySelector('script[src="/js/mafia-utils.js"]');
-    if (existing) {
-      existing.addEventListener("load", () => setInventoryReady(true));
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "/js/mafia-utils.js";
-    script.async = true;
-    script.onload = () => setInventoryReady(true);
-    document.head.appendChild(script);
-  }, []);
 
   // ---------- Approve cash spend ----------
   const {
@@ -952,7 +934,7 @@ export function ShopAction() {
               <p className="line-clamp-2 text-[10px] text-red-400">
                 {buyError.message.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : buyError.message.split("\n")[0]}
+                  : getErrorMessage(buyError)}
               </p>
             </div>
           )}
@@ -1058,7 +1040,7 @@ export function ShopAction() {
             <p className="line-clamp-2 text-[10px] text-red-400">
               {approveError.message.includes("User rejected")
                 ? "Approval rejected by user"
-                : approveError.message.split("\n")[0]}
+                : getErrorMessage(approveError)}
             </p>
           </div>
         )}
@@ -1150,7 +1132,7 @@ export function ShopAction() {
             <p className="line-clamp-2 text-[10px] text-red-400">
               {restockError.message.includes("User rejected")
                 ? "Transaction rejected by user"
-                : restockError.message.split("\n")[0]}
+                : getErrorMessage(restockError)}
             </p>
           </div>
         )}

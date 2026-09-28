@@ -1,5 +1,6 @@
 "use client";
 
+import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   useAccount,
@@ -868,7 +869,7 @@ function CreateListingPanel({
             <p className="text-[10px] text-red-400 line-clamp-2">
               {listError.message.includes("User rejected")
                 ? "Transaction rejected by user"
-                : listError.message.split("\n")[0]}
+                : getErrorMessage(listError)}
             </p>
           </div>
         )}
@@ -1116,7 +1117,7 @@ function ViewListingsPanel() {
       title: "Cancel Failed",
       description: cancelError.message.includes("User rejected")
         ? "Transaction rejected by user."
-        : cancelError.message.split("\n")[0],
+        : getErrorMessage(cancelError),
     });
     setCancelingListingId(null);
   }, [cancelError, toast]);
@@ -1140,7 +1141,7 @@ function ViewListingsPanel() {
       title: "Finish Failed",
       description: finishError.message.includes("User rejected")
         ? "Transaction rejected by user."
-        : finishError.message.split("\n")[0],
+        : getErrorMessage(finishError),
     });
     setFinishingListingId(null);
   }, [finishError, toast]);
@@ -1164,7 +1165,7 @@ function ViewListingsPanel() {
       title: "Bid Failed",
       description: bidError.message.includes("User rejected")
         ? "Transaction rejected by user."
-        : bidError.message.split("\n")[0],
+        : getErrorMessage(bidError),
     });
   }, [bidError, toast]);
 
@@ -1185,7 +1186,7 @@ function ViewListingsPanel() {
       title: "Approval Failed",
       description: approveBidTokenError.message.includes("User rejected")
         ? "Transaction rejected by user."
-        : approveBidTokenError.message.split("\n")[0],
+        : getErrorMessage(approveBidTokenError),
     });
   }, [approveBidTokenError, toast]);
 
