@@ -4,21 +4,14 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useAccount, useReadContract, useReadContracts } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { formatEther, type Abi } from "viem";
 import {
   GI_CREDITS_ABI,
-  CONTRACT_ABI,
-  NICKCAR_CONTRACT_ABI,
-  TRAVEL_CONTRACT_ABI,
-  BULLET_FACTORY_ABI,
-  HOSPITAL_CONTRACT_ABI,
-  SHOP_CONTRACT_ABI,
   JAIL_CONTRACT_ABI,
   SAFEHOUSE_ABI,
   KILLSKILL_CONTRACT_ABI,
   BUSTOUT_SKILL_ABI,
-  CAR_CRUSHER_ABI,
   BULLET_ABI,
   HEALTH_ABI,
   CREDITS_ABI,
@@ -39,139 +32,23 @@ import {
   Shield,
   ShieldAlert,
   CheckCircle2,
-  Crosshair,
-  Plane,
-  Car,
-  Swords,
-  Lock,
-  Bot,
   ChevronDown,
-  Key,
-  Sparkles,
-  Package,
-  Crown,
-  Trophy,
-  Ticket,
   Coins,
   User,
   DollarSign,
   Zap,
   CreditCard,
   Heart,
-  Store,
-  Stethoscope,
-  Factory,
-  Search,
-  Wrench,
-  Landmark,
-  Building2,
-  FileText,
   Menu,
   X,
-  BoxSelect,
-  Gift,
-  Dices,
-  Cherry,
-  Warehouse,
-  Home,
-  Map,
-  TrendingUp,
-  Users,
-  Beer,
-  Pill,
-  UserPlus,
-  Target,
-  BookOpen,
-  Flag,
-  Wallet,
-  ArrowRightLeft,
-  Skull,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTabUrl, type Tab } from "@/lib/navigation";
-
-type NavItem = { id: Tab; label: string; icon: React.ReactNode };
-
-// ────────────────────────────────────────────────────────────────
-// Sidebar sections
-// ────────────────────────────────────────────────────────────────
-const CRIME_SECTION: NavItem[] = [
-  { id: "crime", label: "Crime", icon: <Crosshair className="h-4 w-4" /> },
-  { id: "organized-crime", label: "Organized Crime", icon: <Users className="h-4 w-4" /> },
-  { id: "nickcar", label: "Nick a Car", icon: <Car className="h-4 w-4" /> },
-  { id: "racing", label: "Racing", icon: <Flag className="h-4 w-4" /> },
-  { id: "travel", label: "Travel", icon: <Plane className="h-4 w-4" /> },
-  { id: "jail", label: "Jail", icon: <Lock className="h-4 w-4" /> },
-  { id: "helperbots", label: "Helper Bots", icon: <Bot className="h-4 w-4" /> },
-];
-
-const KILL_SECTION: NavItem[] = [
-  { id: "killskill", label: "Kill Skill", icon: <Swords className="h-4 w-4" /> },
-  { id: "kill-initiation", label: "Kill Initiation", icon: <Target className="h-4 w-4" /> },
-  { id: "backfire-settings", label: "Backfire", icon: <Target className="h-4 w-4" /> },
-  { id: "graveyard", label: "Graveyard", icon: <Skull className="h-4 w-4" /> },
-  { id: "kill-attempt", label: "Kill Attempt", icon: <Swords className="h-4 w-4" /> },
-  { id: "rebirth", label: "Rebirth", icon: <Skull className="h-4 w-4" /> },
-];
-
-const CITY_SECTION: NavItem[] = [
-  { id: "city-map", label: "City Map", icon: <Map className="h-4 w-4" /> },
-  { id: "garage", label: "Garage", icon: <Warehouse className="h-4 w-4" /> },
-  { id: "biz-safehouse", label: "Safehouse", icon: <Home className="h-4 w-4" /> },
-  { id: "biz-booze", label: "Booze Warehouse", icon: <Beer className="h-4 w-4" /> },
-  { id: "biz-narcs", label: "Narcotics Warehouse", icon: <Pill className="h-4 w-4" /> },
-  { id: "biz-roulette", label: "Roulette", icon: <Dices className="h-4 w-4" /> },
-  { id: "biz-slotmachine", label: "Slot Machine", icon: <Cherry className="h-4 w-4" /> },
-  { id: "biz-jackpot", label: "Jackpot", icon: <Trophy className="h-4 w-4" /> },
-  { id: "biz-lottery-hall", label: "Lottery Hall", icon: <Ticket className="h-4 w-4" /> },
-  { id: "biz-detective-agency", label: "Detective Agency", icon: <Search className="h-4 w-4" /> },
-  { id: "biz-bank", label: "Bank", icon: <Landmark className="h-4 w-4" /> },
-  { id: "biz-bulletfactory", label: "Bullet Factory", icon: <Factory className="h-4 w-4" /> },
-  { id: "biz-car-crusher", label: "Car Crusher", icon: <Wrench className="h-4 w-4" /> },
-  { id: "biz-shop", label: "Shop", icon: <Store className="h-4 w-4" /> },
-  { id: "biz-hospital", label: "Hospital", icon: <Stethoscope className="h-4 w-4" /> },
-];
-
-const GAME_SECTION: NavItem[] = [
-  { id: "story-mode", label: "Story Mode", icon: <BookOpen className="h-4 w-4" /> },
-  { id: "weekly-missions", label: "Weekly Missions", icon: <Target className="h-4 w-4" /> },
-  { id: "worth", label: "Player Worth", icon: <DollarSign className="h-4 w-4" /> },
-  { id: "rank-activation", label: "Rank Activation", icon: <TrendingUp className="h-4 w-4" /> },
-  { id: "bodyguard-training", label: "Bodyguard Training", icon: <Shield className="h-4 w-4" /> },
-  { id: "equipment", label: "Equipment", icon: <Swords className="h-4 w-4" /> },
-  { id: "exchange-convert", label: "Exchange Convert", icon: <Coins className="h-4 w-4" /> },
-  { id: "exchange-bullet", label: "Bullet exchange", icon: <Zap className="h-4 w-4" /> },
-  { id: "exchange-liquidity", label: "Exchange Liquidity", icon: <Wallet className="h-4 w-4" /> },
-  { id: "exchange-otc", label: "OTC Desk", icon: <ArrowRightLeft className="h-4 w-4" /> },
-  { id: "xp-market", label: "XP Market", icon: <TrendingUp className="h-4 w-4" /> },
-  { id: "marketplace", label: "Marketplace", icon: <Store className="h-4 w-4" /> },
-  { id: "referral", label: "Referral", icon: <UserPlus className="h-4 w-4" /> },
-  { id: "players", label: "Players", icon: <Users className="h-4 w-4" /> },
-  { id: "families", label: "Families", icon: <Building2 className="h-4 w-4" /> },
-  { id: "marketing-dao", label: "Marketing DAO", icon: <Landmark className="h-4 w-4" /> },
-  { id: "info", label: "Contracts", icon: <FileText className="h-4 w-4" /> },
-  { id: "open-crate", label: "Open Crate", icon: <BoxSelect className="h-4 w-4" /> },
-  { id: "open-perkbox", label: "Open Perk Box", icon: <Gift className="h-4 w-4" /> },
-  { id: "mystery-box", label: "Mystery Box", icon: <Sparkles className="h-4 w-4" /> },
-];
-
-const BUY_SECTION: NavItem[] = [
-  { id: "buy-helper-credits", label: "Helper Credits", icon: <Sparkles className="h-4 w-4" /> },
-  { id: "buy-keys", label: "Keys", icon: <Key className="h-4 w-4" /> },
-  { id: "buy-perk-boxes", label: "Perk Boxes", icon: <Package className="h-4 w-4" /> },
-  { id: "buy-gi-credits", label: "GI Credits", icon: <Coins className="h-4 w-4" /> },
-  { id: "buy-premium", label: "Premium", icon: <Crown className="h-4 w-4" /> },
-];
-
-function buildSections(cityLabel: string | null) {
-  return [
-    { label: "Crime", items: CRIME_SECTION },
-    { label: "Kill", items: KILL_SECTION },
-    { label: cityLabel ?? "City", items: CITY_SECTION },
-    { label: "Game", items: GAME_SECTION },
-    { label: "Buy", items: BUY_SECTION },
-  ];
-}
+import type { CooldownMap } from "@/hooks/use-cooldowns";
+import {
+  buildNavigationSections,
+  type NavItem,
+} from "@/components/navigation-config";
 
 // Hook to read the connected user's city name
 function useCityName(): string | null {
@@ -609,131 +486,6 @@ function RankActivationIndicator({ onGoToRank }: { onGoToRank: () => void }) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// Cooldown hook: reads all action cooldowns from contracts
-// ────────────────��───────────────────────────────────────────────
-type CooldownMap = Record<string, { seconds: number; label: string }>;
-
-function formatCooldown(secs: number): string {
-  if (secs <= 0) return "";
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function useCooldowns(): CooldownMap {
-  const { address, isConnected } = useAccount();
-  const addresses = useChainAddresses();
-  const enabled = isConnected && !!address;
-
-  const contracts = useMemo(() => {
-    if (!address) return [];
-    return [
-      { address: addresses.crime, abi: CONTRACT_ABI, functionName: "nextCrimeTime", args: [address] },           // 0
-      { address: addresses.nickcar, abi: NICKCAR_CONTRACT_ABI, functionName: "nextNickTime", args: [address] },   // 1
-      { address: addresses.travel, abi: TRAVEL_CONTRACT_ABI, functionName: "userTravelInfo", args: [address] },   // 2
-      { address: addresses.jail, abi: JAIL_CONTRACT_ABI, functionName: "jailedUntil", args: [address] },          // 3
-      { address: addresses.killskill, abi: KILLSKILL_CONTRACT_ABI, functionName: "nextTrainTime", args: [address] }, // 4
-      { address: addresses.bulletFactory, abi: BULLET_FACTORY_ABI, functionName: "nextBuyTime", args: [address] },// 5
-      { address: addresses.hospital, abi: HOSPITAL_CONTRACT_ABI, functionName: "nextBuyTime", args: [address] },  // 6
-      { address: addresses.shop, abi: SHOP_CONTRACT_ABI, functionName: "nextBuyTime", args: [address] },          // 7
-      { address: addresses.carCrusher, abi: CAR_CRUSHER_ABI, functionName: "nextCrushTime", args: [address] },   // 8
-    ];
-  }, [address, addresses]);
-
-  const { data: results } = useReadContracts({
-    contracts: contracts as any,
-    query: { enabled, refetchInterval: 10_000 },
-  });
-
-  const [cooldowns, setCooldowns] = useState<CooldownMap>({});
-
-  useEffect(() => {
-    if (!results || !enabled) {
-      setCooldowns({});
-      return;
-    }
-
-    const calcRemaining = (timestamp: bigint | number | undefined): number => {
-      if (timestamp === undefined) return 0;
-      const target = Number(timestamp) * 1000;
-      const diff = target - Date.now();
-      return diff > 0 ? Math.ceil(diff / 1000) : 0;
-    };
-
-    const tick = () => {
-      const map: CooldownMap = {};
-
-      // 0: Crime - nextCrimeTime
-      if (results[0]?.status === "success") {
-        const s = calcRemaining(results[0].result as bigint);
-        if (s > 0) map["crime"] = { seconds: s, label: formatCooldown(s) };
-      }
-
-      // 1: Nick a car - nextNickTime
-      if (results[1]?.status === "success") {
-        const s = calcRemaining(results[1].result as bigint);
-        if (s > 0) map["nickcar"] = { seconds: s, label: formatCooldown(s) };
-      }
-
-      // 2: Travel - userTravelInfo returns { travelUntil }
-      if (results[2]?.status === "success") {
-        const info = results[2].result as { travelUntil: bigint } | undefined;
-        if (info) {
-          const s = calcRemaining(info.travelUntil);
-          if (s > 0) map["travel"] = { seconds: s, label: formatCooldown(s) };
-        }
-      }
-
-      // 3: Jail - jailedUntil
-      if (results[3]?.status === "success") {
-        const s = calcRemaining(results[3].result as bigint);
-        if (s > 0) map["jail"] = { seconds: s, label: formatCooldown(s) };
-      }
-
-      // 4: Kill Skill - nextTrainTime
-      if (results[4]?.status === "success") {
-        const s = calcRemaining(results[4].result as bigint);
-        if (s > 0) map["killskill"] = { seconds: s, label: formatCooldown(s) };
-      }
-
-      // 5: Bulletfactory - nextBuyTime
-      if (results[5]?.status === "success") {
-        const s = calcRemaining(results[5].result as bigint);
-        if (s > 0) map["biz-bulletfactory"] = { seconds: s, label: formatCooldown(s) };
-      }
-
-      // 6: Hospital - nextBuyTime
-      if (results[6]?.status === "success") {
-        const s = calcRemaining(results[6].result as bigint);
-        if (s > 0) map["biz-hospital"] = { seconds: s, label: formatCooldown(s) };
-      }
-
-      // 7: Shop - nextBuyTime  
-      if (results[7]?.status === "success") {
-        const s = calcRemaining(results[7].result as bigint);
-        if (s > 0) map["biz-shop"] = { seconds: s, label: formatCooldown(s) };
-      }
-
-      // 8: Car Crusher - nextCrushTime
-      if (results[8]?.status === "success") {
-        const s = calcRemaining(results[8].result as bigint);
-        if (s > 0) map["biz-car-crusher"] = { seconds: s, label: formatCooldown(s) };
-      }
-
-      setCooldowns(map);
-    };
-
-    tick();
-    const id = setInterval(tick, 1_000);
-    return () => clearInterval(id);
-  }, [results, enabled]);
-
-  return cooldowns;
-}
-
-// ────────────────────────────────────────────────────────────────
 // Desktop sidebar nav section
 // ────────────────────────────────────────────────────────────────
 function SidebarSection({
@@ -743,7 +495,7 @@ function SidebarSection({
   cooldowns,
 }: {
   label: string;
-  items: NavItem[];
+  items: readonly NavItem[];
   activeTab: Tab;
   cooldowns: CooldownMap;
 }) {
@@ -791,12 +543,13 @@ function SidebarSection({
 // ──���───────────────────────────────────────��──���──────────────────
 export function Sidebar({
   activeTab,
+  cooldowns,
 }: {
   activeTab: Tab;
+  cooldowns: CooldownMap;
 }) {
   const cityName = useCityName();
-  const sections = buildSections(cityName);
-  const cooldowns = useCooldowns();
+  const sections = buildNavigationSections(cityName);
 
   return (
     <aside className="hidden lg:flex w-56 shrink-0 flex-col border-r border-border bg-background">
@@ -839,8 +592,10 @@ export function Sidebar({
 // ────────────────────────────────────────────────────────────────
 export function TopBar({
   activeTab,
+  cooldowns,
 }: {
   activeTab: Tab;
+  cooldowns: CooldownMap;
 }) {
   const router = useRouter();
   const { activeChain, chainConfig, setActiveChain } = useChain();
@@ -974,7 +729,7 @@ export function TopBar({
       </div>
 
       {/* ===== MOBILE HEADER ===== */}
-      <MobileHeader activeTab={activeTab} />
+      <MobileHeader activeTab={activeTab} cooldowns={cooldowns} />
     </header>
   );
 }
@@ -984,8 +739,10 @@ export function TopBar({
 // ───────────────────────────────────────────────────────────��────
 function MobileHeader({
   activeTab,
+  cooldowns,
 }: {
   activeTab: Tab;
+  cooldowns: CooldownMap;
 }) {
   const router = useRouter();
   const { activeChain, chainConfig, setActiveChain } = useChain();
@@ -995,8 +752,7 @@ function MobileHeader({
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [mobileAssetsOpen, setMobileAssetsOpen] = useState(false);
   const cityName = useCityName();
-  const sections = buildSections(cityName);
-  const cooldowns = useCooldowns();
+  const sections = buildNavigationSections(cityName);
 
   const handleMobileNav = (tab: Tab) => {
     router.push(getTabUrl(tab));
