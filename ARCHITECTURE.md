@@ -41,6 +41,7 @@ must be read from and written to those contracts through Wagmi/Viem.
 - `hooks/`: reusable wallet and contract interaction lifecycle.
   - `use-contract-transaction.ts`: one write (`write` or awaited `writeAsync`) plus its receipt.
     `onSuccess`, `onWriteError`, and `onReceiptError` each run once per hash or error.
+    `confirmations` overrides the default of one block. XP listing uses 2.
     Prefer it over hand-wiring `useChainWriteContract` and `useWaitForTransactionReceipt`.
   - `use-cooldown-remaining.ts`: milliseconds left until a unix-second deadline.
     Page countdowns use this. `useCooldowns` stays the navigation-badge aggregate.

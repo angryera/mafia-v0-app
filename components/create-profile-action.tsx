@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAccount, useReadContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useChainAddresses } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { USER_PROFILE_CONTRACT_ABI } from "@/lib/contract";
 import { COUNTRIES } from "@/lib/countries";
 import { cn } from "@/lib/utils";
@@ -57,7 +57,11 @@ function validateProfileName(name: string): { valid: boolean; error?: string } {
 export function CreateProfileAction() {
   const { address, isConnected } = useAccount();
   const addresses = useChainAddresses();
-  const { writeContractAsync, isPending } = useChainWriteContract();
+  const profileTx = useContractTransaction();
+  const writeContractAsync = profileTx.writeAsync;
+  const isPending = profileTx.isPending;
+  const isConfirming = profileTx.isConfirming;
+  const isSuccess = profileTx.isSuccess;
 
   // Form state
   const [profileName, setProfileName] = useState("");
@@ -73,7 +77,6 @@ export function CreateProfileAction() {
   const [nameAvailable, setNameAvailable] = useState<boolean | null>(null);
 
   // Transaction state
-  const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Check if name is taken
@@ -83,11 +86,6 @@ export function CreateProfileAction() {
     functionName: "isTakenName",
     args: profileName ? [profileName] : undefined,
     query: { enabled: false },
-  });
-
-  // Wait for transaction
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: txHash,
   });
 
   // Debounced name check
@@ -171,7 +169,7 @@ export function CreateProfileAction() {
         ? referralAddress
         : ZERO_ADDRESS;
 
-      const hash = await writeContractAsync({
+      await writeContractAsync({
         address: addresses.userProfile,
         abi: USER_PROFILE_CONTRACT_ABI,
         functionName: "createProfile",
@@ -184,8 +182,6 @@ export function CreateProfileAction() {
           BigInt(0), // imageId — default avatar until profile image UI exists
         ],
       });
-
-      setTxHash(hash);
     } catch (err) {
       console.error("Error creating profile:", err);
       setSubmitError(err instanceof Error ? err.message : "Failed to create profile");

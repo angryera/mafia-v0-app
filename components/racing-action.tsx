@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { formatWalletAddress, getErrorMessage, getTravelCityName } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -49,11 +49,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { decodeEventLog, formatEther, maxUint256, parseEther } from "viem";
-import {
-  useAccount,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 
 // ── Types ───────────────────────────────────────────────────────
 enum RaceStatus {
@@ -548,26 +544,45 @@ function CreateRaceDialog({
   const allowance = allowanceRaw as bigint | undefined;
 
   // Approve cash spend
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Cash Spend Approved",
+        description: "You can now create your race.",
+      });
+      refetchAllowance();
+    },
+  });
+  const writeApprove = approveTx.write;
+  const approvePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
+  const approveConfirming = approveTx.isConfirming;
+  const approveSuccess = approveTx.isSuccess;
 
   // Create race tx
-  const {
-    writeContract,
-    data: hash,
-    isPending,
-    error,
-    reset,
-  } = useChainWriteContract();
-  const { isLoading: isConfirming, isSuccess } =
-    useWaitForTransactionReceipt({ hash });
+  const createTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Race Created",
+        description: "Your race lobby has been created successfully.",
+      });
+      setIsSubmitting(false);
+      onOpenChange(false);
+      onSuccess();
+    },
+    onWriteError: () => {
+      setIsSubmitting(false);
+    },
+    onReceiptError: () => {
+      setIsSubmitting(false);
+    },
+  });
+  const writeContract = createTx.write;
+  const isPending = createTx.isPending;
+  const error = createTx.error;
+  const reset = createTx.reset;
+  const isConfirming = createTx.isConfirming;
 
   // Filter cars in the same city
   const carsInCity = useMemo(
@@ -606,37 +621,6 @@ function CreateRaceDialog({
       refetchActiveLobby();
     }
   }, [open, reset, resetApprove, refetchAllowance, refetchActiveLobby]);
-
-  // Handle success
-  useEffect(() => {
-    if (isSuccess && hash) {
-      toast({
-        title: "Race Created",
-        description: "Your race lobby has been created successfully.",
-      });
-      setIsSubmitting(false);
-      onOpenChange(false);
-      onSuccess();
-    }
-  }, [isSuccess, hash, toast, onOpenChange, onSuccess]);
-
-  // Handle transaction error
-  useEffect(() => {
-    if (error) {
-      setIsSubmitting(false);
-    }
-  }, [error]);
-
-  // Toast on approve success and refetch allowance
-  useEffect(() => {
-    if (approveSuccess && approveHash) {
-      toast({
-        title: "Cash Spend Approved",
-        description: "You can now create your race.",
-      });
-      refetchAllowance();
-    }
-  }, [approveSuccess, approveHash, toast, refetchAllowance]);
 
   const approveLoading = approvePending || approveConfirming;
   const isWorking = isPending || isConfirming || isSubmitting;
@@ -1038,26 +1022,31 @@ function JoinRaceDialog({
   const [selectedCarId, setSelectedCarId] = useState<string>("");
 
   // Approve cash spend
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Cash Spend Approved",
+        description: "You can now join the race.",
+      });
+    },
+  });
+  const writeApprove = approveTx.write;
+  const approvePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
+  const approveConfirming = approveTx.isConfirming;
+  const approveSuccess = approveTx.isSuccess;
 
-  // Join race tx
-  const {
-    writeContract,
-    data: hash,
-    isPending,
-    error,
-    reset,
-  } = useChainWriteContract();
-  const { data: joinReceipt, isLoading: isConfirming, isSuccess } =
-    useWaitForTransactionReceipt({ hash });
+  // Join race tx. Finished-race log parsing stays in a local effect.
+  const joinTx = useContractTransaction();
+  const writeContract = joinTx.write;
+  const hash = joinTx.hash;
+  const isPending = joinTx.isPending;
+  const error = joinTx.error;
+  const reset = joinTx.reset;
+  const isConfirming = joinTx.isConfirming;
+  const isSuccess = joinTx.isSuccess;
+  const joinReceipt = joinTx.receipt.data;
 
   // Filter cars in the same city as the race
   const carsInCity = useMemo(
@@ -1074,9 +1063,11 @@ function JoinRaceDialog({
     }
   }, [open, reset, resetApprove]);
 
-  // Handle success
+  // Handle success — parse RaceFinished, then toast once per hash.
+  const joinHandledHash = useRef<typeof hash>(undefined);
   useEffect(() => {
-    if (isSuccess && hash) {
+    if (!isSuccess || !hash || joinHandledHash.current === hash) return;
+    joinHandledHash.current = hash;
       let finishedRaceFromEvent: Race | undefined;
 
       if (joinReceipt) {
@@ -1127,18 +1118,7 @@ function JoinRaceDialog({
       });
       onOpenChange(false);
       onSuccess(race?.id, finishedRaceFromEvent);
-    }
   }, [isSuccess, hash, race, toast, onOpenChange, onSuccess, joinReceipt, addresses.raceLobby]);
-
-  // Toast on approve success
-  useEffect(() => {
-    if (approveSuccess && approveHash) {
-      toast({
-        title: "Cash Spend Approved",
-        description: "You can now join the race.",
-      });
-    }
-  }, [approveSuccess, approveHash, toast]);
 
   if (!race) return null;
 
@@ -1379,32 +1359,27 @@ function CancelRaceDialog({
   const { authData } = useAuth();
   const { toast } = useToast();
 
-  const {
-    writeContract,
-    data: hash,
-    isPending,
-    error,
-    reset,
-  } = useChainWriteContract();
-  const { isLoading: isConfirming, isSuccess } =
-    useWaitForTransactionReceipt({ hash });
-
-  useEffect(() => {
-    if (!open) {
-      reset();
-    }
-  }, [open, reset]);
-
-  useEffect(() => {
-    if (isSuccess && hash) {
+  const cancelTx = useContractTransaction({
+    onSuccess: () => {
       toast({
         title: "Race Cancelled",
         description: `Race #${race?.id ? Number(race.id) : ""} has been cancelled.`,
       });
       onOpenChange(false);
       onSuccess();
+    },
+  });
+  const writeContract = cancelTx.write;
+  const isPending = cancelTx.isPending;
+  const error = cancelTx.error;
+  const reset = cancelTx.reset;
+  const isConfirming = cancelTx.isConfirming;
+
+  useEffect(() => {
+    if (!open) {
+      reset();
     }
-  }, [isSuccess, hash, race, toast, onOpenChange, onSuccess]);
+  }, [open, reset]);
 
   if (!race) return null;
 

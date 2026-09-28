@@ -9,12 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import {
-  useAccount,
-  usePublicClient,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import {
   formatEther,
   formatUnits,
@@ -22,7 +17,7 @@ import {
   zeroAddress,
 } from "viem";
 import { INGAME_CURRENCY_ABI, LOTTERY_HALL_ABI } from "@/lib/contract";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { getErrorMessage } from "@/lib/format";
 import {
@@ -543,72 +538,64 @@ export function LotteryHallAction() {
     refetchAllowance,
   ]);
 
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const enterWriteRef = useRef<ReturnType<typeof useContractTransaction>["write"] | null>(null);
+  const enterResetRef = useRef<() => void>(() => {});
 
-  const {
-    writeContract: writeEnter,
-    data: enterHash,
-    isPending: enterPending,
-    error: enterError,
-    reset: resetEnter,
-  } = useChainWriteContract();
-  const { isLoading: enterConfirming, isSuccess: enterSuccess } =
-    useWaitForTransactionReceipt({ hash: enterHash });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      const wei = enterAfterApproveRef.current;
+      if (wei === null) return;
+      enterAfterApproveRef.current = null;
+      enterResetRef.current();
+      enterWriteRef.current?.({
+        address: lotteryHall,
+        abi: LOTTERY_HALL_ABI,
+        functionName: "enter",
+        args: [wei],
+      });
+    },
+    onWriteError: () => {
+      enterAfterApproveRef.current = null;
+    },
+  });
+  const enterTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Entered the lottery round");
+      void refetchAll();
+      setTicketCountInput("");
+    },
+  });
+  const drawTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Winner drawn — new round started");
+      void refetchAll().then(() => resetAndLoadHistory());
+    },
+  });
+  const ownerTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Owner withdraw complete");
+      void refetchAll().then(() => resetAndLoadHistory());
+    },
+  });
+  enterWriteRef.current = enterTx.write;
+  enterResetRef.current = enterTx.reset;
 
-  const {
-    writeContract: writeDraw,
-    data: drawHash,
-    isPending: drawPending,
-    reset: resetDraw,
-  } = useChainWriteContract();
-  const { isLoading: drawConfirming, isSuccess: drawSuccess } =
-    useWaitForTransactionReceipt({ hash: drawHash });
+  const writeApprove = approveTx.write;
+  const resetApprove = approveTx.reset;
+  const writeEnter = enterTx.write;
+  const enterHash = enterTx.hash;
+  const enterError = enterTx.error;
+  const resetEnter = enterTx.reset;
+  const enterSuccess = enterTx.isSuccess;
+  const writeDraw = drawTx.write;
+  const resetDraw = drawTx.reset;
+  const writeOwnerWithdraw = ownerTx.write;
+  const resetOwner = ownerTx.reset;
 
-  const {
-    writeContract: writeOwnerWithdraw,
-    data: ownerHash,
-    isPending: ownerPending,
-    reset: resetOwner,
-  } = useChainWriteContract();
-  const { isLoading: ownerConfirming, isSuccess: ownerSuccess } =
-    useWaitForTransactionReceipt({ hash: ownerHash });
-
-  const approveLoading = approvePending || approveConfirming;
-  const enterLoading = enterPending || enterConfirming;
-  const drawLoading = drawPending || drawConfirming;
-  const ownerWithdrawLoading = ownerPending || ownerConfirming;
-
-  useEffect(() => {
-    if (approveError) enterAfterApproveRef.current = null;
-  }, [approveError]);
-
-  useEffect(() => {
-    if (!approveSuccess || !approveHash) return;
-    const wei = enterAfterApproveRef.current;
-    if (wei === null) return;
-    enterAfterApproveRef.current = null;
-    resetEnter();
-    writeEnter({
-      address: lotteryHall,
-      abi: LOTTERY_HALL_ABI,
-      functionName: "enter",
-      args: [wei],
-    });
-  }, [
-    approveSuccess,
-    approveHash,
-    writeEnter,
-    lotteryHall,
-    resetEnter,
-  ]);
+  const approveLoading = approveTx.isLoading;
+  const enterLoading = enterTx.isLoading;
+  const drawLoading = drawTx.isLoading;
+  const ownerWithdrawLoading = ownerTx.isLoading;
 
   const handleEnter = () => {
     if (!configured) return;
@@ -672,37 +659,6 @@ export function LotteryHallAction() {
       functionName: "ownerWithdraw",
     });
   };
-
-  const enterToastRef = useRef(false);
-  useEffect(() => {
-    if (enterSuccess && enterHash && !enterToastRef.current) {
-      enterToastRef.current = true;
-      toast.success("Entered the lottery round");
-      void refetchAll();
-      setTicketCountInput("");
-    }
-    if (!enterHash) enterToastRef.current = false;
-  }, [enterSuccess, enterHash, refetchAll]);
-
-  const drawToastRef = useRef(false);
-  useEffect(() => {
-    if (drawSuccess && drawHash && !drawToastRef.current) {
-      drawToastRef.current = true;
-      toast.success("Winner drawn — new round started");
-      void refetchAll().then(() => resetAndLoadHistory());
-    }
-    if (!drawHash) drawToastRef.current = false;
-  }, [drawSuccess, drawHash, refetchAll, resetAndLoadHistory]);
-
-  const ownerToastRef = useRef(false);
-  useEffect(() => {
-    if (ownerSuccess && ownerHash && !ownerToastRef.current) {
-      ownerToastRef.current = true;
-      toast.success("Owner withdraw complete");
-      void refetchAll().then(() => resetAndLoadHistory());
-    }
-    if (!ownerHash) ownerToastRef.current = false;
-  }, [ownerSuccess, ownerHash, refetchAll, resetAndLoadHistory]);
 
   const poolWei = prizeRaw != null ? BigInt(prizeRaw as bigint) : BigInt(0);
   const ownerFeePct =

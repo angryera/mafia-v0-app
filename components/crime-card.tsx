@@ -2,8 +2,8 @@
 
 import { getErrorMessage } from "@/lib/format";
 import { useMemo, useEffect, useRef } from "react";
-import { useWaitForTransactionReceipt, useReadContract, useAccount } from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useReadContract, useAccount } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { decodeEventLog, formatEther } from "viem";
 import { toast } from "sonner";
 import { CONTRACT_ABI, RANK_ABI, type CRIME_TYPES } from "@/lib/contract";
@@ -45,11 +45,15 @@ export function CrimeCard({ crime, disabled = false }: { crime: CrimeType; disab
 
   const successRate = successRateData !== undefined ? Math.min(Number(successRateData) / 100, 100) : null;
 
-  const { writeContractAsync: writeContract, data: hash, isPending, error, reset } = useChainWriteContract();
-
-  const { data: receipt, isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
-  });
+  const crimeTx = useContractTransaction();
+  const writeContract = crimeTx.writeAsync;
+  const hash = crimeTx.hash;
+  const isPending = crimeTx.isPending;
+  const error = crimeTx.error;
+  const reset = crimeTx.reset;
+  const receipt = crimeTx.receipt.data;
+  const isConfirming = crimeTx.isConfirming;
+  const isSuccess = crimeTx.isSuccess;
 
   const crimeResult = useMemo(() => {
     if (!receipt?.logs) return null;

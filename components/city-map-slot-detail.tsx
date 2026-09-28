@@ -6,7 +6,7 @@ import {
   useChainExplorer,
 } from "@/components/chain-provider";
 import { Input } from "@/components/ui/input";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   formatMafiaStakingFromWei,
   isMafiaStakingPositive,
@@ -39,11 +39,7 @@ import { ExternalLink, Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { maxUint256, parseEther } from "viem";
-import {
-  useAccount,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 
 const MAX_FAMILY_NAME_LEN = 40;
 const MAX_FAMILY_NAME_SPACES = 2;
@@ -142,46 +138,63 @@ export function CityMapSlotDetail({
   const [gameCashMapApprovedSession, setGameCashMapApprovedSession] =
     useState(false);
 
-  const {
-    writeContract: writeMap,
-    data: mapHash,
-    isPending: mapPending,
-    reset: resetMap,
-  } = useChainWriteContract();
+  const resetMapRef = useRef<() => void>(() => {});
+  const resetApproveRef = useRef<() => void>(() => {});
+  const resetGameCashApproveRef = useRef<() => void>(() => {});
+  const resetOgCrateApproveRef = useRef<() => void>(() => {});
 
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    reset: resetApprove,
-  } = useChainWriteContract();
+  const mapTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Transaction confirmed");
+      resetMapRef.current();
+      void refetchYield();
+      void refetchAllowance();
+      void refetchGameCashAllowance();
+      void refetchOgCrateApproval();
+      void refetchOgCrateBalance();
+      void refetchPlayerFamilyInfo();
+      onActionSuccess();
+    },
+  });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("MAFIA approved");
+      resetApproveRef.current();
+      void refetchAllowance();
+    },
+  });
+  const gameCashApproveTx = useContractTransaction({
+    onSuccess: () => {
+      setGameCashMapApprovedSession(true);
+      toast.success("Game Cash approved for map");
+      resetGameCashApproveRef.current();
+      void refetchGameCashAllowance();
+    },
+  });
+  const ogCrateApproveTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("OG Crate approved for map");
+      resetOgCrateApproveRef.current();
+      void refetchOgCrateApproval();
+    },
+  });
+  resetMapRef.current = mapTx.reset;
+  resetApproveRef.current = approveTx.reset;
+  resetGameCashApproveRef.current = gameCashApproveTx.reset;
+  resetOgCrateApproveRef.current = ogCrateApproveTx.reset;
 
-  const {
-    writeContract: writeApproveGameCash,
-    data: gameCashApproveHash,
-    isPending: gameCashApprovePending,
-    reset: resetGameCashApprove,
-  } = useChainWriteContract();
-
-  const {
-    writeContract: writeApproveOgCrate,
-    data: ogCrateApproveHash,
-    isPending: ogCrateApprovePending,
-    reset: resetOgCrateApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: mapConfirming, isSuccess: mapSuccess } =
-    useWaitForTransactionReceipt({ hash: mapHash });
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-  const {
-    isLoading: gameCashApproveConfirming,
-    isSuccess: gameCashApproveSuccess,
-  } = useWaitForTransactionReceipt({ hash: gameCashApproveHash });
-  const {
-    isLoading: ogCrateApproveConfirming,
-    isSuccess: ogCrateApproveSuccess,
-  } = useWaitForTransactionReceipt({ hash: ogCrateApproveHash });
+  const writeMap = mapTx.write;
+  const mapPending = mapTx.isPending;
+  const mapConfirming = mapTx.isConfirming;
+  const writeApprove = approveTx.write;
+  const approvePending = approveTx.isPending;
+  const approveConfirming = approveTx.isConfirming;
+  const writeApproveGameCash = gameCashApproveTx.write;
+  const gameCashApprovePending = gameCashApproveTx.isPending;
+  const gameCashApproveConfirming = gameCashApproveTx.isConfirming;
+  const writeApproveOgCrate = ogCrateApproveTx.write;
+  const ogCrateApprovePending = ogCrateApproveTx.isPending;
+  const ogCrateApproveConfirming = ogCrateApproveTx.isConfirming;
 
   const nowSec = Math.floor(Date.now() / 1000);
 
@@ -497,89 +510,9 @@ export function CityMapSlotDetail({
     ? getResidentialGameCashYieldPer24h(s.slotType, s.slotSubType)
     : null;
 
-  const mapToastFired = useRef(false);
-  useEffect(() => {
-    if (mapSuccess && mapHash && !mapToastFired.current) {
-      mapToastFired.current = true;
-      toast.success("Transaction confirmed");
-      resetMap();
-      void refetchYield();
-      void refetchAllowance();
-      void refetchGameCashAllowance();
-      void refetchOgCrateApproval();
-      void refetchOgCrateBalance();
-      void refetchPlayerFamilyInfo();
-      onActionSuccess();
-    }
-    if (!mapHash) mapToastFired.current = false;
-  }, [
-    mapSuccess,
-    mapHash,
-    resetMap,
-    refetchYield,
-    refetchAllowance,
-    refetchGameCashAllowance,
-    refetchOgCrateApproval,
-    refetchOgCrateBalance,
-    refetchPlayerFamilyInfo,
-    onActionSuccess,
-  ]);
-
-  const approveToastFired = useRef(false);
-  useEffect(() => {
-    if (approveSuccess && approveHash && !approveToastFired.current) {
-      approveToastFired.current = true;
-      toast.success("MAFIA approved");
-      resetApprove();
-      void refetchAllowance();
-    }
-    if (!approveHash) approveToastFired.current = false;
-  }, [approveSuccess, approveHash, resetApprove, refetchAllowance]);
-
   useEffect(() => {
     setGameCashMapApprovedSession(false);
   }, [address, activeChain]);
-
-  const gameCashApproveToastFired = useRef(false);
-  useEffect(() => {
-    if (
-      gameCashApproveSuccess &&
-      gameCashApproveHash &&
-      !gameCashApproveToastFired.current
-    ) {
-      gameCashApproveToastFired.current = true;
-      setGameCashMapApprovedSession(true);
-      toast.success("Game Cash approved for map");
-      resetGameCashApprove();
-      void refetchGameCashAllowance();
-    }
-    if (!gameCashApproveHash) gameCashApproveToastFired.current = false;
-  }, [
-    gameCashApproveSuccess,
-    gameCashApproveHash,
-    resetGameCashApprove,
-    refetchGameCashAllowance,
-  ]);
-
-  const ogCrateApproveToastFired = useRef(false);
-  useEffect(() => {
-    if (
-      ogCrateApproveSuccess &&
-      ogCrateApproveHash &&
-      !ogCrateApproveToastFired.current
-    ) {
-      ogCrateApproveToastFired.current = true;
-      toast.success("OG Crate approved for map");
-      resetOgCrateApprove();
-      void refetchOgCrateApproval();
-    }
-    if (!ogCrateApproveHash) ogCrateApproveToastFired.current = false;
-  }, [
-    ogCrateApproveSuccess,
-    ogCrateApproveHash,
-    resetOgCrateApprove,
-    refetchOgCrateApproval,
-  ]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

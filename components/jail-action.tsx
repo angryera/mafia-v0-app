@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   useReadContract,
-  useWaitForTransactionReceipt,
   useAccount,
 } from "wagmi";
 import { formatEther, parseEther } from "viem";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { formatWalletAddress as formatAddress, getErrorMessage } from "@/lib/format";
 import {
@@ -248,16 +247,20 @@ export function JailAction() {
   };
 
   // ---------- Approve cash spending ----------
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      setLocalApproved(true);
+      toast.success("Cash spending approved for Jail contract");
+      refetchAllowance();
+    },
+  });
+  const writeApprove = approveTx.write;
+  const approveHash = approveTx.hash;
+  const approvePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
+  const approveConfirming = approveTx.isConfirming;
+  const approveSuccess = approveTx.isSuccess;
 
   const handleApprove = () => {
     resetApprove();
@@ -269,32 +272,24 @@ export function JailAction() {
     });
   };
 
-  const approveLoading = approvePending || approveConfirming;
-
-  const approveToastFired = useRef(false);
-  useEffect(() => {
-    if (approveSuccess && approveHash && !approveToastFired.current) {
-      approveToastFired.current = true;
-      setLocalApproved(true);
-      toast.success("Cash spending approved for Jail contract");
-      refetchAllowance();
-    }
-    if (!approveHash) {
-      approveToastFired.current = false;
-    }
-  }, [approveSuccess, approveHash, refetchAllowance]);
+  const approveLoading = approveTx.isLoading;
 
   // ---------- Buy Out ----------
-  const {
-    writeContractAsync: writeBuyOut,
-    data: buyOutHash,
-    isPending: buyOutPending,
-    error: buyOutError,
-    reset: resetBuyOut,
-  } = useChainWriteContract();
-
-  const { isLoading: buyOutConfirming, isSuccess: buyOutSuccess } =
-    useWaitForTransactionReceipt({ hash: buyOutHash });
+  const buyOutTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Player bought out successfully!");
+      setSelectedPlayer(null);
+      setActionType(null);
+      fetchPlayers();
+    },
+  });
+  const writeBuyOut = buyOutTx.writeAsync;
+  const buyOutHash = buyOutTx.hash;
+  const buyOutPending = buyOutTx.isPending;
+  const buyOutError = buyOutTx.error;
+  const resetBuyOut = buyOutTx.reset;
+  const buyOutConfirming = buyOutTx.isConfirming;
+  const buyOutSuccess = buyOutTx.isSuccess;
 
   const handleBuyOut = async (playerAddress: string) => {
     resetBuyOut();
@@ -310,29 +305,24 @@ export function JailAction() {
     }
   };
 
-  const buyOutLoading = buyOutPending || buyOutConfirming;
-
-  useEffect(() => {
-    if (buyOutSuccess && buyOutHash) {
-      toast.success("Player bought out successfully!");
-      setSelectedPlayer(null);
-      setActionType(null);
-      // Refresh the player list
-      fetchPlayers();
-    }
-  }, [buyOutSuccess, buyOutHash, fetchPlayers]);
+  const buyOutLoading = buyOutTx.isLoading;
 
   // ---------- Bust Out ----------
-  const {
-    writeContractAsync: writeBustOut,
-    data: bustOutHash,
-    isPending: bustOutPending,
-    error: bustOutError,
-    reset: resetBustOut,
-  } = useChainWriteContract();
-
-  const { isLoading: bustOutConfirming, isSuccess: bustOutSuccess } =
-    useWaitForTransactionReceipt({ hash: bustOutHash });
+  const bustOutTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Bust out attempt completed!");
+      setSelectedPlayer(null);
+      setActionType(null);
+      fetchPlayers();
+    },
+  });
+  const writeBustOut = bustOutTx.writeAsync;
+  const bustOutHash = bustOutTx.hash;
+  const bustOutPending = bustOutTx.isPending;
+  const bustOutError = bustOutTx.error;
+  const resetBustOut = bustOutTx.reset;
+  const bustOutConfirming = bustOutTx.isConfirming;
+  const bustOutSuccess = bustOutTx.isSuccess;
 
   const handleBustOut = async (playerAddress: string) => {
     resetBustOut();
@@ -348,17 +338,7 @@ export function JailAction() {
     }
   };
 
-  const bustOutLoading = bustOutPending || bustOutConfirming;
-
-  useEffect(() => {
-    if (bustOutSuccess && bustOutHash) {
-      toast.success("Bust out attempt completed!");
-      setSelectedPlayer(null);
-      setActionType(null);
-      // Refresh the player list
-      fetchPlayers();
-    }
-  }, [bustOutSuccess, bustOutHash, fetchPlayers]);
+  const bustOutLoading = bustOutTx.isLoading;
 
   // Open action dialog
   const openActionDialog = (

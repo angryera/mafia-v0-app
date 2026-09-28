@@ -1,12 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  useAccount,
-  usePublicClient,
-  useWaitForTransactionReceipt,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useState, useEffect, useCallback } from "react";
+import { useAccount, usePublicClient } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { getErrorMessage } from "@/lib/format";
 import {
@@ -462,16 +458,26 @@ export function HelperBotDetail({
     );
   }, [availablePerkItems]);
 
-  const {
-    writeContract: writeStart,
-    data: startHash,
-    isPending: startPending,
-    error: startError,
-    reset: resetStart,
-  } = useChainWriteContract();
-
-  const { isLoading: startConfirming, isSuccess: startSuccess } =
-    useWaitForTransactionReceipt({ hash: startHash });
+  const startTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success(`${bot.label} hired successfully`);
+      fetchBotInfo();
+      fetchBulletBotCostInputs();
+      onCreditChange?.();
+      window.setTimeout(() => {
+        fetchBotInfo();
+        fetchBulletBotCostInputs();
+        onCreditChange?.();
+      }, 3000);
+    },
+  });
+  const writeStart = startTx.write;
+  const startHash = startTx.hash;
+  const startPending = startTx.isPending;
+  const startError = startTx.error;
+  const resetStart = startTx.reset;
+  const startConfirming = startTx.isConfirming;
+  const startSuccess = startTx.isSuccess;
 
   const togglePerkSelection = (perk: PerkInventoryItem) => {
     const isSelected = selectedPerkIds.includes(perk.itemId);
@@ -525,34 +531,26 @@ export function HelperBotDetail({
     });
   };
 
-  const startToastFired = useRef(false);
-  useEffect(() => {
-    if (startSuccess && startHash && !startToastFired.current) {
-      startToastFired.current = true;
-      toast.success(`${bot.label} hired successfully`);
+  const endTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success(`${bot.label} withdrawn successfully`);
       fetchBotInfo();
       fetchBulletBotCostInputs();
       onCreditChange?.();
-      const t = setTimeout(() => {
+      window.setTimeout(() => {
         fetchBotInfo();
         fetchBulletBotCostInputs();
         onCreditChange?.();
       }, 3000);
-      return () => clearTimeout(t);
-    }
-    if (!startHash) startToastFired.current = false;
-  }, [startSuccess, startHash, bot.label, fetchBotInfo, fetchBulletBotCostInputs, onCreditChange]);
-
-  const {
-    writeContract: writeEnd,
-    data: endHash,
-    isPending: endPending,
-    error: endError,
-    reset: resetEnd,
-  } = useChainWriteContract();
-
-  const { isLoading: endConfirming, isSuccess: endSuccess } =
-    useWaitForTransactionReceipt({ hash: endHash });
+    },
+  });
+  const writeEnd = endTx.write;
+  const endHash = endTx.hash;
+  const endPending = endTx.isPending;
+  const endError = endTx.error;
+  const resetEnd = endTx.reset;
+  const endConfirming = endTx.isConfirming;
+  const endSuccess = endTx.isSuccess;
 
   const handleEnd = async (bulletAccepting: boolean = true) => {
     resetEnd();
@@ -609,24 +607,6 @@ export function HelperBotDetail({
       });
     }
   };
-
-  const endToastFired = useRef(false);
-  useEffect(() => {
-    if (endSuccess && endHash && !endToastFired.current) {
-      endToastFired.current = true;
-      toast.success(`${bot.label} withdrawn successfully`);
-      fetchBotInfo();
-      fetchBulletBotCostInputs();
-      onCreditChange?.();
-      const t = setTimeout(() => {
-        fetchBotInfo();
-        fetchBulletBotCostInputs();
-        onCreditChange?.();
-      }, 3000);
-      return () => clearTimeout(t);
-    }
-    if (!endHash) endToastFired.current = false;
-  }, [endSuccess, endHash, bot.label, fetchBotInfo, fetchBulletBotCostInputs, onCreditChange]);
 
   const startLoading = startPending || startConfirming;
   const endLoading = endPending || endConfirming;

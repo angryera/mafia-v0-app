@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  useWaitForTransactionReceipt,
   useAccount,
   useReadContract,
   useSignMessage,
   usePublicClient,
 } from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   DETECTIVE_AGENCY_ABI,
   DETECTIVE_HIRING_TIME,
@@ -147,16 +146,17 @@ export function DetectiveAgencyAction() {
     : null;
 
   // ---------- Step 1: Approve cash ----------
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Cash spending approved for Detective Agency");
+    },
+  });
+  const writeApprove = approveTx.write;
+  const approveHash = approveTx.hash;
+  const approvePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
+  const approveSuccess = approveTx.isSuccess;
 
   const handleApprove = () => {
     resetApprove();
@@ -168,19 +168,21 @@ export function DetectiveAgencyAction() {
     });
   };
 
-  const approveLoading = approvePending || approveConfirming;
+  const approveLoading = approveTx.isLoading;
 
   // ---------- Step 2: Request hire ----------
-  const {
-    writeContract: writeHire,
-    data: hireHash,
-    isPending: hirePending,
-    error: hireError,
-    reset: resetHire,
-  } = useChainWriteContract();
-
-  const { isLoading: hireConfirming, isSuccess: hireSuccess } =
-    useWaitForTransactionReceipt({ hash: hireHash });
+  const hireTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Detective hire requested successfully");
+      fetchHireList();
+    },
+  });
+  const writeHire = hireTx.write;
+  const hireHash = hireTx.hash;
+  const hirePending = hireTx.isPending;
+  const hireError = hireTx.error;
+  const resetHire = hireTx.reset;
+  const hireSuccess = hireTx.isSuccess;
 
   const handleRequestHire = async () => {
     if (!isValidTarget || !isValidCount || !address) return;
@@ -204,28 +206,7 @@ export function DetectiveAgencyAction() {
     }
   };
 
-  const hireLoading = hireSigning || hirePending || hireConfirming;
-
-  // ---------- Hire toast ----------
-  const hireToastFired = useRef(false);
-  useEffect(() => {
-    if (hireSuccess && hireHash && !hireToastFired.current) {
-      hireToastFired.current = true;
-      toast.success("Detective hire requested successfully");
-      fetchHireList();
-    }
-    if (!hireHash) hireToastFired.current = false;
-  }, [hireSuccess, hireHash]);
-
-  // ---------- Approve toast ----------
-  const approveToastFired = useRef(false);
-  useEffect(() => {
-    if (approveSuccess && approveHash && !approveToastFired.current) {
-      approveToastFired.current = true;
-      toast.success("Cash spending approved for Detective Agency");
-    }
-    if (!approveHash) approveToastFired.current = false;
-  }, [approveSuccess, approveHash]);
+  const hireLoading = hireSigning || hireTx.isLoading;
 
   // ---------- Detective hire list ----------
   const [hireList, setHireList] = useState<DetectiveHire[]>([]);
@@ -323,16 +304,17 @@ export function DetectiveAgencyAction() {
   }, [address, authData, publicClient, fetchHireList]);
 
   // ---------- Finish hire ----------
-  const {
-    writeContract: writeFinish,
-    data: finishHash,
-    isPending: finishPending,
-    error: finishError,
-    reset: resetFinish,
-  } = useChainWriteContract();
-
-  const { isLoading: finishConfirming, isSuccess: finishSuccess } =
-    useWaitForTransactionReceipt({ hash: finishHash });
+  const finishTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Detective hire finished");
+      fetchHireList();
+      setFinishingHireId(null);
+    },
+  });
+  const writeFinish = finishTx.write;
+  const finishPending = finishTx.isPending;
+  const finishError = finishTx.error;
+  const resetFinish = finishTx.reset;
 
   const [finishingHireId, setFinishingHireId] = useState<number | null>(null);
 
@@ -348,30 +330,20 @@ export function DetectiveAgencyAction() {
     });
   };
 
-  const finishLoading = finishPending || finishConfirming;
-
-  const finishToastFired = useRef(false);
-  useEffect(() => {
-    if (finishSuccess && finishHash && !finishToastFired.current) {
-      finishToastFired.current = true;
-      toast.success("Detective hire finished");
-      fetchHireList();
-      setFinishingHireId(null);
-    }
-    if (!finishHash) finishToastFired.current = false;
-  }, [finishSuccess, finishHash]);
+  const finishLoading = finishTx.isLoading;
 
   // ---------- Reveal target ----------
-  const {
-    writeContract: writeReveal,
-    data: revealHash,
-    isPending: revealPending,
-    error: revealError,
-    reset: resetReveal,
-  } = useChainWriteContract();
-
-  const { isLoading: revealConfirming, isSuccess: revealSuccess } =
-    useWaitForTransactionReceipt({ hash: revealHash });
+  const revealTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Target location revealed!");
+      fetchHireList();
+      setRevealingHireId(null);
+    },
+  });
+  const writeReveal = revealTx.write;
+  const revealPending = revealTx.isPending;
+  const revealError = revealTx.error;
+  const resetReveal = revealTx.reset;
 
   const [revealingHireId, setRevealingHireId] = useState<number | null>(null);
 
@@ -387,18 +359,7 @@ export function DetectiveAgencyAction() {
     });
   };
 
-  const revealLoading = revealPending || revealConfirming;
-
-  const revealToastFired = useRef(false);
-  useEffect(() => {
-    if (revealSuccess && revealHash && !revealToastFired.current) {
-      revealToastFired.current = true;
-      toast.success("Target location revealed!");
-      fetchHireList();
-      setRevealingHireId(null);
-    }
-    if (!revealHash) revealToastFired.current = false;
-  }, [revealSuccess, revealHash]);
+  const revealLoading = revealTx.isLoading;
 
   // ---------- Current time for countdowns ----------
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));

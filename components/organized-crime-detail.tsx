@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { formatWalletAddress, getTravelCityName } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -69,9 +69,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { formatEther, maxUint256, parseEther } from "viem";
-import { useAccount, useReadContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 
 // ── Types ───────────────────────────────────────────────────────
 interface Member {
@@ -342,18 +342,46 @@ function JoinRoleDialog({
   const [needsApproval, setNeedsApproval] = useState(false);
 
   // Write hooks
-  const { writeContract, data: hash, isPending, reset } = useChainWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
-
-  // Approval hooks
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: isApprovePending,
-    reset: resetApprove,
-  } = useChainWriteContract();
-  const { isLoading: isApproveConfirming, isSuccess: isApproveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const resetJoinRef = useRef<() => void>(() => {});
+  const resetApproveRef = useRef<() => void>(() => {});
+  const joinTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Joined Lobby",
+        description: (
+          <a
+            href={`${explorer}/tx/${hash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 underline"
+          >
+            View transaction <ExternalLink className="h-3 w-3" />
+          </a>
+        ),
+      });
+      resetJoinRef.current();
+      onOpenChange(false);
+      onSuccess();
+    },
+  });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast({ title: "Approval Successful" });
+      refetchBulletAllowance();
+      resetApproveRef.current();
+    },
+  });
+  resetJoinRef.current = joinTx.reset;
+  resetApproveRef.current = approveTx.reset;
+  const writeContract = joinTx.write;
+  const hash = joinTx.hash;
+  const isPending = joinTx.isPending;
+  const reset = joinTx.reset;
+  const isConfirming = joinTx.isConfirming;
+  const writeApprove = approveTx.write;
+  const isApprovePending = approveTx.isPending;
+  const resetApprove = approveTx.reset;
+  const isApproveConfirming = approveTx.isConfirming;
 
   // Check bullet allowance for weapon expert
   const { data: bulletAllowanceRaw, refetch: refetchBulletAllowance } = useReadContract({
@@ -457,37 +485,6 @@ function JoinRoleDialog({
       setIsLoadingItems(false);
     }
   };
-
-  // Handle approval success
-  useEffect(() => {
-    if (isApproveSuccess) {
-      toast({ title: "Approval Successful" });
-      refetchBulletAllowance();
-      resetApprove();
-    }
-  }, [isApproveSuccess, toast, refetchBulletAllowance, resetApprove]);
-
-  // Handle join success
-  useEffect(() => {
-    if (isSuccess) {
-      toast({
-        title: "Joined Lobby",
-        description: (
-          <a
-            href={`${explorer}/tx/${hash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 underline"
-          >
-            View transaction <ExternalLink className="h-3 w-3" />
-          </a>
-        ),
-      });
-      reset();
-      onOpenChange(false);
-      onSuccess();
-    }
-  }, [isSuccess, hash, explorer, toast, reset, onOpenChange, onSuccess]);
 
   const handleApprove = () => {
     if (!address || !addresses.ocJoin) return;
@@ -1122,14 +1119,9 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
   const canFinish = Boolean(nonceStatusRaw);
 
   // Action hooks
-  const { writeContract, data: actionHash, isPending, reset: resetAction } = useChainWriteContract();
-  const { isLoading: isActionConfirming, isSuccess: isActionSuccess } = useWaitForTransactionReceipt({
-    hash: actionHash,
-  });
-
-  // Handle action success
-  useEffect(() => {
-    if (isActionSuccess) {
+  const resetActionRef = useRef<() => void>(() => {});
+  const actionTx = useContractTransaction({
+    onSuccess: () => {
       toast({
         title: "Action Successful",
         description: (
@@ -1143,10 +1135,15 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
           </a>
         ),
       });
-      resetAction();
+      resetActionRef.current();
       refetchLobby();
-    }
-  }, [isActionSuccess, actionHash, explorer, toast, resetAction, refetchLobby]);
+    },
+  });
+  resetActionRef.current = actionTx.reset;
+  const writeContract = actionTx.write;
+  const actionHash = actionTx.hash;
+  const isPending = actionTx.isPending;
+  const isActionConfirming = actionTx.isConfirming;
 
   // Poll nonce status when lobby is started
   useEffect(() => {

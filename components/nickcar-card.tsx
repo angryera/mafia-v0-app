@@ -1,13 +1,8 @@
 "use client";
 
 import { useMemo, useEffect, useRef, useState } from "react";
-import {
-  useWaitForTransactionReceipt,
-  useReadContract,
-  useAccount,
-  useSignMessage,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useReadContract, useAccount, useSignMessage } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { decodeEventLog, formatEther } from "viem";
 import { toast } from "sonner";
 import {
@@ -59,16 +54,15 @@ export function NickCarCard({ carCrime, disabled = false }: { carCrime: NickCarT
   });
 
   const successRate = successRateData !== undefined ? Math.min(Number(successRateData) / 100, 100) : null;
-  const {
-    writeContractAsync: writeContract,
-    data: hash,
-    isPending,
-    error,
-    reset,
-  } = useChainWriteContract();
-
-  const { data: receipt, isLoading: isConfirming, isSuccess } =
-    useWaitForTransactionReceipt({ hash });
+  const nickTx = useContractTransaction();
+  const writeContract = nickTx.writeAsync;
+  const hash = nickTx.hash;
+  const isPending = nickTx.isPending;
+  const error = nickTx.error;
+  const reset = nickTx.reset;
+  const receipt = nickTx.receipt.data;
+  const isConfirming = nickTx.isConfirming;
+  const isSuccess = nickTx.isSuccess;
 
   const nickResult = useMemo<NickResult | null>(() => {
     if (!receipt?.logs) return null;

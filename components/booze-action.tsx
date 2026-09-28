@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/components/auth-provider";
 import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   BOOZE_TYPES,
   INGAME_CURRENCY_ABI,
@@ -31,7 +31,6 @@ import {
   useAccount,
   usePublicClient,
   useReadContract,
-  useWaitForTransactionReceipt
 } from "wagmi";
 
 interface ProfileData {
@@ -228,35 +227,22 @@ export function BoozeAction() {
   const currentAllowance = allowanceData ? BigInt(allowanceData as bigint) : BigInt(0);
 
   // ---------- Transaction state ----------
-  const {
-    writeContractAsync: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    reset: resetApprove,
-  } = useChainWriteContract();
+  const approveTx = useContractTransaction();
+  const writeApprove = approveTx.writeAsync;
 
-  const {
-    writeContractAsync: writeBuy,
-    data: buyHash,
-    isPending: buyPending,
-    reset: resetBuy,
-  } = useChainWriteContract();
+  const buyTx = useContractTransaction();
+  const writeBuy = buyTx.writeAsync;
+  const buyHash = buyTx.hash;
+  const buyPending = buyTx.isPending;
+  const buyConfirming = buyTx.isConfirming;
+  const buyReceipt = buyTx.receipt.data;
 
-  const {
-    writeContractAsync: writeSell,
-    data: sellHash,
-    isPending: sellPending,
-    reset: resetSell,
-  } = useChainWriteContract();
-
-  // ---------- Transaction receipt tracking for jail detection ----------
-  const { data: buyReceipt, isLoading: buyConfirming } = useWaitForTransactionReceipt({
-    hash: buyHash,
-  });
-
-  const { data: sellReceipt, isLoading: sellConfirming } = useWaitForTransactionReceipt({
-    hash: sellHash,
-  });
+  const sellTx = useContractTransaction();
+  const writeSell = sellTx.writeAsync;
+  const sellHash = sellTx.hash;
+  const sellPending = sellTx.isPending;
+  const sellConfirming = sellTx.isConfirming;
+  const sellReceipt = sellTx.receipt.data;
 
   // Track shown toasts to prevent duplicates
   const buyToastShownRef = useRef<string | null>(null);

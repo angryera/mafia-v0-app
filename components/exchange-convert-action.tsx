@@ -1,10 +1,10 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useAccount, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
+import React, { useState, useEffect, useCallback } from "react";
+import { useAccount, usePublicClient } from "wagmi";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -186,18 +186,22 @@ export function ExchangeConvertAction() {
   );
 
   // ── Contract write ────────────────────────────────────────────
-  const {
-    writeContract,
-    data: convertHash,
-    isPending: convertPending,
-    error: convertError,
-    reset: resetConvert,
-  } = useChainWriteContract();
+  const convertTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success(`Converted ${selectedIds.size} items to cash!`);
+      setSelectedIds(new Set());
+      fetchItems();
+    },
+  });
+  const writeContract = convertTx.write;
+  const convertHash = convertTx.hash;
+  const convertPending = convertTx.isPending;
+  const convertError = convertTx.error;
+  const resetConvert = convertTx.reset;
+  const convertConfirming = convertTx.isConfirming;
+  const convertSuccess = convertTx.isSuccess;
 
-  const { isLoading: convertConfirming, isSuccess: convertSuccess } =
-    useWaitForTransactionReceipt({ hash: convertHash });
-
-  const isWorking = convertPending || convertConfirming;
+  const isWorking = convertTx.isLoading;
 
   // ── Fetch MAFIA price from Dexscreener ────────────────────────
   const fetchMafiaPrice = useCallback(async () => {
@@ -469,20 +473,6 @@ export function ExchangeConvertAction() {
       gas: BigInt(500_000 + selectedIds.size * 50_000),
     });
   };
-
-  // ── Success handler ───────────────────────────────────────────
-  const convertToastFired = useRef(false);
-  useEffect(() => {
-    if (convertSuccess && convertHash && !convertToastFired.current) {
-      convertToastFired.current = true;
-      toast.success(`Converted ${selectedIds.size} items to cash!`);
-      setSelectedIds(new Set());
-      fetchItems();
-    }
-    if (!convertHash) {
-      convertToastFired.current = false;
-    }
-  }, [convertSuccess, convertHash, selectedIds.size, fetchItems]);
 
   // ── Group items by category ───────────────────────────────────
   const groupedItems = items.reduce((acc, item) => {

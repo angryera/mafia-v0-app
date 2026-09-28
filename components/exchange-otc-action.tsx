@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAccount, usePublicClient, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 import { useChain } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
   EXCHANGE_ADDRESSES,
@@ -146,15 +146,34 @@ export function ExchangeOTCAction() {
   const [pendingOfferId, setPendingOfferId] = useState<number | null>(null);
   const [pendingAction, setPendingAction] = useState<"accept" | "cancel" | "create" | null>(null);
 
-  const {
-    writeContract,
-    data: txHash,
-    isPending: isWritePending,
-    reset: resetWrite,
-  } = useChainWriteContract();
-
-  const { isLoading: isReceiptPending, isSuccess: isReceiptSuccess } =
-    useWaitForTransactionReceipt({ hash: txHash });
+  const resetWriteRef = useRef<() => void>(() => {});
+  const otcTx = useContractTransaction({
+    onSuccess: () => {
+      if (pendingAction === "accept") {
+        toast.success("Offer accepted");
+        setAcceptDialogOpen(false);
+        setSelectedAcceptOffer(null);
+        setAcceptCheckError(null);
+        setAcceptCheckMissing([]);
+        setAcceptMatchItemIds([]);
+      } else if (pendingAction === "cancel") {
+        toast.success("Offer canceled");
+      } else if (pendingAction === "create") {
+        toast.success("OTC offer created");
+        setCreateDialogOpen(false);
+        setOfferedItemIdsDraft([]);
+        setRequestItemsDraft([]);
+      }
+      setPendingOfferId(null);
+      setPendingAction(null);
+      resetWriteRef.current();
+      void loadOffers();
+    },
+  });
+  resetWriteRef.current = otcTx.reset;
+  const writeContract = otcTx.write;
+  const isWritePending = otcTx.isPending;
+  const isReceiptPending = otcTx.isConfirming;
 
   // ── Load offers ────────────────────────────────────────────────
   const loadOffers = useCallback(async () => {
@@ -270,34 +289,6 @@ export function ExchangeOTCAction() {
       void loadOwnedInventory();
     }
   }, [acceptDialogOpen, loadOwnedInventory]);
-
-  // ── Success handling: refresh on receipt ───────────────────────
-  const lastSuccessHash = useRef<`0x${string}` | null>(null);
-  useEffect(() => {
-    if (!isReceiptSuccess || !txHash) return;
-    if (lastSuccessHash.current === txHash) return;
-    lastSuccessHash.current = txHash;
-
-    if (pendingAction === "accept") {
-      toast.success("Offer accepted");
-      setAcceptDialogOpen(false);
-      setSelectedAcceptOffer(null);
-      setAcceptCheckError(null);
-      setAcceptCheckMissing([]);
-      setAcceptMatchItemIds([]);
-    } else if (pendingAction === "cancel") {
-      toast.success("Offer canceled");
-    } else if (pendingAction === "create") {
-      toast.success("OTC offer created");
-      setCreateDialogOpen(false);
-      setOfferedItemIdsDraft([]);
-      setRequestItemsDraft([]);
-    }
-    setPendingOfferId(null);
-    setPendingAction(null);
-    resetWrite();
-    void loadOffers();
-  }, [isReceiptSuccess, txHash, pendingAction, resetWrite, loadOffers]);
 
   // ── Filtering + pagination ─────────────────────────────────────
   const filteredOffers = useMemo(() => {

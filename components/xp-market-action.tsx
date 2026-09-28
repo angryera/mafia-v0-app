@@ -1,13 +1,9 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  useAccount,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useAccount, useReadContract } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { formatUnits, parseUnits, parseEther } from "viem";
 import {
   XP_MARKET_ABI,
@@ -76,9 +72,6 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string
 
 // Max race XP constant
 const MAX_RACE_XP = 5000;
-
-// Confirmation delay multiplier
-const CONFIRMATION_DELAY = 2;
 
 type SwapToken = {
   name: string;
@@ -367,40 +360,32 @@ export function XpMarketAction() {
   // Contract Write
   // ────────────────────────────────────────────────────────────────
 
-  const {
-    writeContract: writeList,
-    data: listHash,
-    isPending: isListPending,
-    error: listError,
-    reset: resetList,
-  } = useChainWriteContract();
-
-  const { isLoading: isListConfirming, isSuccess: isListSuccess } =
-    useWaitForTransactionReceipt({
-      hash: listHash,
-      confirmations: CONFIRMATION_DELAY,
-    });
-
-  useEffect(() => {
-    if (isListSuccess) {
+  const listTx = useContractTransaction({
+    confirmations: 2,
+    onSuccess: () => {
       setIsListXP(false);
       toast({
         title: "XP Listed Successfully",
         description: "Your XP has been listed on the market.",
       });
-      // Reset form
       setSelectedXpType(null);
       setUnitStartAmount("");
       setDuration(null);
       setConfirmed(false);
-    }
-  }, [isListSuccess, toast]);
-
-  useEffect(() => {
-    if (listError) {
+    },
+    onWriteError: () => {
       setIsListXP(false);
-    }
-  }, [listError]);
+    },
+    onReceiptError: () => {
+      setIsListXP(false);
+    },
+  });
+  const writeList = listTx.write;
+  const listHash = listTx.hash;
+  const listError = listTx.error;
+  const resetList = listTx.reset;
+  const isListSuccess = listTx.isSuccess;
+  const isLoading = listTx.isLoading;
 
   // ────────────────────────────────────────────────────────────────
   // Handlers
@@ -492,8 +477,6 @@ export function XpMarketAction() {
     selectedToken,
     unitStartAmount,
   ]);
-
-  const isLoading = isListPending || isListConfirming;
 
   // ────────────────────────────────────────────────────────────────
   // Render
@@ -960,42 +943,111 @@ function ViewListingsPanel() {
   const [finishingListingId, setFinishingListingId] = useState<bigint | null>(null);
   const [biddingListing, setBiddingListing] = useState<XPListing | null>(null);
 
-  const {
-    writeContract: writeCancelListing,
-    data: cancelHash,
-    isPending: cancelPending,
-    error: cancelError,
-    reset: resetCancel,
-  } = useChainWriteContract();
-  const { isLoading: cancelConfirming, isSuccess: isCancelSuccess } =
-    useWaitForTransactionReceipt({ hash: cancelHash });
-  const {
-    writeContract: writeFinishListing,
-    data: finishHash,
-    isPending: finishPending,
-    error: finishError,
-    reset: resetFinish,
-  } = useChainWriteContract();
-  const { isLoading: finishConfirming, isSuccess: isFinishSuccess } =
-    useWaitForTransactionReceipt({ hash: finishHash });
-  const {
-    writeContract: writeBid,
-    data: bidHash,
-    isPending: bidPending,
-    error: bidError,
-    reset: resetBid,
-  } = useChainWriteContract();
-  const { isLoading: bidConfirming, isSuccess: isBidSuccess } =
-    useWaitForTransactionReceipt({ hash: bidHash });
-  const {
-    writeContract: writeApproveBidToken,
-    data: approveBidTokenHash,
-    isPending: approveBidTokenPending,
-    error: approveBidTokenError,
-    reset: resetApproveBidToken,
-  } = useChainWriteContract();
-  const { isLoading: approveBidTokenConfirming, isSuccess: isApproveBidTokenSuccess } =
-    useWaitForTransactionReceipt({ hash: approveBidTokenHash });
+  const resetCancelRef = useRef<() => void>(() => {});
+  const resetFinishRef = useRef<() => void>(() => {});
+  const resetBidRef = useRef<() => void>(() => {});
+
+  const cancelTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Listing Cancelled",
+        description: "Your XP listing was cancelled successfully.",
+      });
+      setCancelingListingId(null);
+      fetchListings();
+      resetCancelRef.current();
+    },
+    onWriteError: (cancelError) => {
+      toast({
+        variant: "destructive",
+        title: "Cancel Failed",
+        description: cancelError.message.includes("User rejected")
+          ? "Transaction rejected by user."
+          : getErrorMessage(cancelError),
+      });
+      setCancelingListingId(null);
+    },
+  });
+  const finishTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Listing Finished",
+        description: "Auction has been finished successfully.",
+      });
+      setFinishingListingId(null);
+      fetchListings();
+      resetFinishRef.current();
+    },
+    onWriteError: (finishError) => {
+      toast({
+        variant: "destructive",
+        title: "Finish Failed",
+        description: finishError.message.includes("User rejected")
+          ? "Transaction rejected by user."
+          : getErrorMessage(finishError),
+      });
+      setFinishingListingId(null);
+    },
+  });
+  const bidTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Bid Submitted",
+        description: "Your bid has been placed successfully.",
+      });
+      setBiddingListing(null);
+      fetchListings();
+      resetBidRef.current();
+    },
+    onWriteError: (bidError) => {
+      toast({
+        variant: "destructive",
+        title: "Bid Failed",
+        description: bidError.message.includes("User rejected")
+          ? "Transaction rejected by user."
+          : getErrorMessage(bidError),
+      });
+    },
+  });
+  const approveBidTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "MAFIA Approved",
+        description: "You can now place your bid.",
+      });
+      refetchMafiaBidAllowance();
+    },
+    onWriteError: (approveBidTokenError) => {
+      toast({
+        variant: "destructive",
+        title: "Approval Failed",
+        description: approveBidTokenError.message.includes("User rejected")
+          ? "Transaction rejected by user."
+          : getErrorMessage(approveBidTokenError),
+      });
+    },
+  });
+  resetCancelRef.current = cancelTx.reset;
+  resetFinishRef.current = finishTx.reset;
+  resetBidRef.current = bidTx.reset;
+
+  const writeCancelListing = cancelTx.write;
+  const cancelPending = cancelTx.isPending;
+  const resetCancel = cancelTx.reset;
+  const cancelConfirming = cancelTx.isConfirming;
+  const writeFinishListing = finishTx.write;
+  const finishPending = finishTx.isPending;
+  const resetFinish = finishTx.reset;
+  const finishConfirming = finishTx.isConfirming;
+  const writeBid = bidTx.write;
+  const bidPending = bidTx.isPending;
+  const resetBid = bidTx.reset;
+  const bidConfirming = bidTx.isConfirming;
+  const writeApproveBidToken = approveBidTx.write;
+  const approveBidTokenPending = approveBidTx.isPending;
+  const resetApproveBidToken = approveBidTx.reset;
+  const approveBidTokenConfirming = approveBidTx.isConfirming;
+  const isApproveBidTokenSuccess = approveBidTx.isSuccess;
 
   const { data: swapData } = useReadContract({
     address: addresses.xpMarket,
@@ -1097,98 +1149,6 @@ function ViewListingsPanel() {
   useEffect(() => {
     fetchListings();
   }, [fetchListings]);
-
-  useEffect(() => {
-    if (isCancelSuccess && cancelHash) {
-      toast({
-        title: "Listing Cancelled",
-        description: "Your XP listing was cancelled successfully.",
-      });
-      setCancelingListingId(null);
-      fetchListings();
-      resetCancel();
-    }
-  }, [isCancelSuccess, cancelHash, toast, fetchListings, resetCancel]);
-
-  useEffect(() => {
-    if (!cancelError) return;
-    toast({
-      variant: "destructive",
-      title: "Cancel Failed",
-      description: cancelError.message.includes("User rejected")
-        ? "Transaction rejected by user."
-        : getErrorMessage(cancelError),
-    });
-    setCancelingListingId(null);
-  }, [cancelError, toast]);
-
-  useEffect(() => {
-    if (isFinishSuccess && finishHash) {
-      toast({
-        title: "Listing Finished",
-        description: "Auction has been finished successfully.",
-      });
-      setFinishingListingId(null);
-      fetchListings();
-      resetFinish();
-    }
-  }, [isFinishSuccess, finishHash, toast, fetchListings, resetFinish]);
-
-  useEffect(() => {
-    if (!finishError) return;
-    toast({
-      variant: "destructive",
-      title: "Finish Failed",
-      description: finishError.message.includes("User rejected")
-        ? "Transaction rejected by user."
-        : getErrorMessage(finishError),
-    });
-    setFinishingListingId(null);
-  }, [finishError, toast]);
-
-  useEffect(() => {
-    if (isBidSuccess && bidHash) {
-      toast({
-        title: "Bid Submitted",
-        description: "Your bid has been placed successfully.",
-      });
-      setBiddingListing(null);
-      fetchListings();
-      resetBid();
-    }
-  }, [isBidSuccess, bidHash, toast, fetchListings, resetBid]);
-
-  useEffect(() => {
-    if (!bidError) return;
-    toast({
-      variant: "destructive",
-      title: "Bid Failed",
-      description: bidError.message.includes("User rejected")
-        ? "Transaction rejected by user."
-        : getErrorMessage(bidError),
-    });
-  }, [bidError, toast]);
-
-  useEffect(() => {
-    if (isApproveBidTokenSuccess && approveBidTokenHash) {
-      toast({
-        title: "MAFIA Approved",
-        description: "You can now place your bid.",
-      });
-      refetchMafiaBidAllowance();
-    }
-  }, [isApproveBidTokenSuccess, approveBidTokenHash, toast, refetchMafiaBidAllowance]);
-
-  useEffect(() => {
-    if (!approveBidTokenError) return;
-    toast({
-      variant: "destructive",
-      title: "Approval Failed",
-      description: approveBidTokenError.message.includes("User rejected")
-        ? "Transaction rejected by user."
-        : getErrorMessage(approveBidTokenError),
-    });
-  }, [approveBidTokenError, toast]);
 
   const handleCancelListing = useCallback(
     (listingId: bigint) => {

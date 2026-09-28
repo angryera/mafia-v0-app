@@ -2,11 +2,8 @@
 
 import { getErrorMessage } from "@/lib/format";
 import { useMemo, useState } from "react";
-import {
-  useWaitForTransactionReceipt,
-  useAccount,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useAccount } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { decodeEventLog, parseEther } from "viem";
 import {
   KILLSKILL_CONTRACT_ABI,
@@ -43,33 +40,23 @@ export function KillSkillCard({
   const onCooldown = (cooldown?.seconds ?? 0) > 0;
 
   // Approve transaction
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: isApprovePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
+  const approveTx = useContractTransaction({
+    onSuccess: () => setApproved(true),
+  });
+  const writeApprove = approveTx.write;
+  const isApprovePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
 
-  const { isLoading: isApproveConfirming, isSuccess: isApproveConfirmed } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-
-  // Mark approved once confirmed
-  if (isApproveConfirmed && !approved) {
-    setApproved(true);
-  }
-
-  // Train transaction
-  const {
-    writeContractAsync: writeContract,
-    data: hash,
-    isPending,
-    error,
-    reset,
-  } = useChainWriteContract();
-
-  const { isLoading: isConfirming, isSuccess: isTxConfirmed, data: receipt } =
-    useWaitForTransactionReceipt({ hash });
+  const trainTx = useContractTransaction();
+  const writeContract = trainTx.writeAsync;
+  const hash = trainTx.hash;
+  const isPending = trainTx.isPending;
+  const error = trainTx.error;
+  const reset = trainTx.reset;
+  const isConfirming = trainTx.isConfirming;
+  const isTxConfirmed = trainTx.isSuccess;
+  const receipt = trainTx.receipt.data;
 
   // Parse the TrainedSkill event from the receipt logs
   const trainResult = useMemo(() => {
@@ -113,8 +100,8 @@ export function KillSkillCard({
     });
   };
 
-  const isApproveLoading = isApprovePending || isApproveConfirming;
-  const isTrainLoading = isPending || isConfirming;
+  const isApproveLoading = approveTx.isLoading;
+  const isTrainLoading = trainTx.isLoading;
   const isLoading = isApproveLoading || isTrainLoading;
 
   return (

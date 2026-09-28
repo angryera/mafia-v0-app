@@ -1,11 +1,10 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   useReadContract,
   useAccount,
-  useWaitForTransactionReceipt,
 } from "wagmi";
 import {
   TRAVEL_CONTRACT_ABI,
@@ -16,7 +15,7 @@ import {
 } from "@/lib/contract";
 import { useChainAddresses, useChain } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { formatEther, parseEther } from "viem";
 import {
   Timer,
@@ -233,44 +232,32 @@ export function TravelGrid() {
   };
 
   // Approve transaction
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: isApprovePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: isApproveConfirming, isSuccess: isApproveConfirmed } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-
-  useEffect(() => {
-    if (isApproveConfirmed && !approved) {
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
       setApproved(true);
       toast({ title: "Approved!", description: "You can now travel." });
-    }
-  }, [isApproveConfirmed, approved, toast]);
+    },
+  });
+  const writeApprove = approveTx.write;
+  const isApprovePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
 
   // Travel transaction
-  const {
-    writeContractAsync: writeTravel,
-    data: travelHash,
-    isPending: isTravelPending,
-    error: travelError,
-    reset: resetTravel,
-  } = useChainWriteContract();
-
-  const { isLoading: isTravelConfirming, isSuccess: isTravelSuccess } =
-    useWaitForTransactionReceipt({ hash: travelHash });
-
-  useEffect(() => {
-    if (isTravelSuccess) {
+  const travelResetRef = useRef<(() => void) | null>(null);
+  const travelTx = useContractTransaction({
+    onSuccess: () => {
       toast({ title: "Traveling!", description: "Your journey has begun." });
       refetchTravelInfo();
       setSelectedDestination(null);
-      resetTravel();
-    }
-  }, [isTravelSuccess, toast, refetchTravelInfo, resetTravel]);
+      travelResetRef.current?.();
+    },
+  });
+  travelResetRef.current = travelTx.reset;
+  const writeTravel = travelTx.writeAsync;
+  const isTravelPending = travelTx.isPending;
+  const travelError = travelTx.error;
+  const resetTravel = travelTx.reset;
 
   const handleApprove = () => {
     resetApprove();
@@ -320,8 +307,8 @@ export function TravelGrid() {
     }
   };
 
-  const isApproveLoading = isApprovePending || isApproveConfirming;
-  const isTravelLoading = isTravelPending || isTravelConfirming;
+  const isApproveLoading = approveTx.isLoading;
+  const isTravelLoading = travelTx.isLoading;
   const isLoading = isApproveLoading || isTravelLoading;
   const selectedTravelTypeData = TRAVEL_TYPES[selectedTravelType];
 

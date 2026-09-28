@@ -2,13 +2,9 @@
 
 import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import {
-  useWaitForTransactionReceipt,
-  useReadContract,
-  useAccount,
-} from "wagmi";
+import { useReadContract, useAccount } from "wagmi";
 import { decodeEventLog } from "viem";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { PERK_OPENER_CONTRACT_ABI } from "@/lib/contract";
 import {
   useChain,
@@ -280,16 +276,14 @@ export function OpenPerkBoxAction() {
   }, [isPending, phase]);
 
   // ---------- Step 1: requestOpenPerkBox(itemId) ----------
-  const {
-    writeContract: writeRequest,
-    data: requestHash,
-    isPending: isRequestPending,
-    error: requestError,
-    reset: resetRequest,
-  } = useChainWriteContract();
-
-  const { isLoading: isRequestConfirming, isSuccess: isRequestSuccess } =
-    useWaitForTransactionReceipt({ hash: requestHash });
+  const requestTx = useContractTransaction();
+  const writeRequest = requestTx.write;
+  const requestHash = requestTx.hash;
+  const isRequestPending = requestTx.isPending;
+  const requestError = requestTx.error;
+  const resetRequest = requestTx.reset;
+  const isRequestConfirming = requestTx.isConfirming;
+  const isRequestSuccess = requestTx.isSuccess;
 
   useEffect(() => {
     if (isRequestSuccess && phase === "requesting") {
@@ -351,19 +345,15 @@ export function OpenPerkBoxAction() {
   }, [phase, refetchNonce]);
 
   // ---------- Step 2: finishOpenPerkBox ----------
-  const {
-    writeContract: writeFinish,
-    data: finishHash,
-    isPending: isFinishPending,
-    error: finishError,
-    reset: resetFinish,
-  } = useChainWriteContract();
-
-  const {
-    isLoading: isFinishConfirming,
-    isSuccess: isFinishSuccess,
-    data: finishReceipt,
-  } = useWaitForTransactionReceipt({ hash: finishHash });
+  const finishTx = useContractTransaction();
+  const writeFinish = finishTx.write;
+  const finishHash = finishTx.hash;
+  const isFinishPending = finishTx.isPending;
+  const finishError = finishTx.error;
+  const resetFinish = finishTx.reset;
+  const isFinishConfirming = finishTx.isConfirming;
+  const isFinishSuccess = finishTx.isSuccess;
+  const finishReceipt = finishTx.receipt.data;
 
   // Parse PerkGenerated event from the receipt
   useEffect(() => {
@@ -454,8 +444,8 @@ export function OpenPerkBoxAction() {
 
   // ---------- Derived state ----------
   const boxCount = perkBoxes.length;
-  const isRequestLoading = isRequestPending || isRequestConfirming;
-  const isFinishLoading = isFinishPending || isFinishConfirming;
+  const isRequestLoading = requestTx.isLoading;
+  const isFinishLoading = finishTx.isLoading;
   const step1Done =
     isRequestSuccess || phase === "waiting-vrf" || phase === "finishing" || phase === "done";
   const step2Done = phase === "done";

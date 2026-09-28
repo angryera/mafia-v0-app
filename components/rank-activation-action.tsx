@@ -1,14 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import {
-  useWaitForTransactionReceipt,
-  useReadContract,
-  useReadContracts,
-  useAccount,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useReadContract, useReadContracts, useAccount } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { formatEther, parseEther } from "viem";
 import {
   RANK_STAKE_ABI,
@@ -230,86 +225,73 @@ export function RankActivationAction() {
   const unstakeCooldownRemaining = canUnstakeAt > now ? canUnstakeAt - now : 0;
 
   // ── Write contract hooks ──────────────────
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    reset: resetApprove,
-  } = useChainWriteContract();
+  const resetStakeRef = useRef<() => void>(() => {});
+  const resetUnstakeRef = useRef<() => void>(() => {});
+  const resetAdjustRef = useRef<() => void>(() => {});
 
-  const { isLoading: approveConfirming, isSuccess: approveConfirmed } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-
-  const {
-    writeContract: writeStake,
-    data: stakeHash,
-    isPending: stakePending,
-    reset: resetStake,
-  } = useChainWriteContract();
-
-  const { isLoading: stakeConfirming, isSuccess: stakeConfirmed } =
-    useWaitForTransactionReceipt({ hash: stakeHash });
-
-  const {
-    writeContract: writeUnstake,
-    data: unstakeHash,
-    isPending: unstakePending,
-    reset: resetUnstake,
-  } = useChainWriteContract();
-
-  const { isLoading: unstakeConfirming, isSuccess: unstakeConfirmed } =
-    useWaitForTransactionReceipt({ hash: unstakeHash });
-
-  const {
-    writeContract: writeAdjust,
-    data: adjustHash,
-    isPending: adjustPending,
-    reset: resetAdjust,
-  } = useChainWriteContract();
-
-  const { isLoading: adjustConfirming, isSuccess: adjustConfirmed } =
-    useWaitForTransactionReceipt({ hash: adjustHash });
-
-  // Refetch on confirmed transactions
-  useEffect(() => {
-    if (approveConfirmed) {
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
       refetchAllowance();
       toast.success("MAFIA token approved!");
-    }
-  }, [approveConfirmed, refetchAllowance]);
-
-  useEffect(() => {
-    if (stakeConfirmed) {
+    },
+  });
+  const stakeTx = useContractTransaction({
+    onSuccess: () => {
       refetchStaking();
       refetchActive();
       refetchMissing();
       refetchReduction();
       refetchAllowance();
       toast.success("Staked successfully!");
-      resetStake();
-    }
-  }, [stakeConfirmed, refetchStaking, refetchActive, refetchMissing, refetchReduction, refetchAllowance, resetStake]);
-
-  useEffect(() => {
-    if (unstakeConfirmed) {
+      resetStakeRef.current();
+    },
+  });
+  const unstakeTx = useContractTransaction({
+    onSuccess: () => {
       refetchStaking();
       refetchActive();
       refetchMissing();
       toast.success("Unstaked successfully!");
-      resetUnstake();
-    }
-  }, [unstakeConfirmed, refetchStaking, refetchActive, refetchMissing, resetUnstake]);
-
-  useEffect(() => {
-    if (adjustConfirmed) {
+      resetUnstakeRef.current();
+    },
+  });
+  const adjustTx = useContractTransaction({
+    onSuccess: () => {
       refetchStaking();
       refetchActive();
       refetchMissing();
       refetchAllowance();
       toast.success("Stake adjusted successfully!");
-      resetAdjust();
-    }
-  }, [adjustConfirmed, refetchStaking, refetchActive, refetchMissing, refetchAllowance, resetAdjust]);
+      resetAdjustRef.current();
+    },
+  });
+  resetStakeRef.current = stakeTx.reset;
+  resetUnstakeRef.current = unstakeTx.reset;
+  resetAdjustRef.current = adjustTx.reset;
+
+  const writeApprove = approveTx.write;
+  const approvePending = approveTx.isPending;
+  const approveConfirming = approveTx.isConfirming;
+  const approveConfirmed = approveTx.isSuccess;
+  const writeStake = stakeTx.write;
+  const stakeHash = stakeTx.hash;
+  const stakePending = stakeTx.isPending;
+  const stakeConfirming = stakeTx.isConfirming;
+  const stakeConfirmed = stakeTx.isSuccess;
+  const writeUnstake = unstakeTx.write;
+  const unstakeHash = unstakeTx.hash;
+  const unstakePending = unstakeTx.isPending;
+  const unstakeConfirming = unstakeTx.isConfirming;
+  const writeAdjust = adjustTx.write;
+  const adjustPending = adjustTx.isPending;
+  const adjustConfirming = adjustTx.isConfirming;
+  const adjustConfirmed = adjustTx.isSuccess;
+
+  const isBusy =
+    approveTx.isLoading ||
+    stakeTx.isLoading ||
+    unstakeTx.isLoading ||
+    adjustTx.isLoading;
 
   // ── Handlers ──────────────────────────────
   const approveAmount = useMemo(() => {
@@ -388,15 +370,6 @@ export function RankActivationAction() {
 
   const totalRanks = Object.keys(RANK_NAMES).length;
   const allMaxed = nextLevel > totalRanks;
-  const isBusy =
-    approvePending ||
-    approveConfirming ||
-    stakePending ||
-    stakeConfirming ||
-    unstakePending ||
-    unstakeConfirming ||
-    adjustPending ||
-    adjustConfirming;
 
   // ── Format cooldown ──
   function fmtCooldown(secs: number) {

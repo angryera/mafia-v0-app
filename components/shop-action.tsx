@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import {
-  useWaitForTransactionReceipt,
   useAccount,
   useReadContract,
   useSignMessage,
   usePublicClient,
 } from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { getErrorMessage } from "@/lib/format";
@@ -241,16 +240,17 @@ export function ShopAction() {
   console.log(cityShopBusinessItems);
 
   // ---------- Approve cash spend ----------
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Cash spend approved for Shop contract");
+    },
+  });
+  const writeApprove = approveTx.write;
+  const approveHash = approveTx.hash;
+  const approvePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
+  const approveSuccess = approveTx.isSuccess;
 
   const handleApprove = () => {
     resetApprove();
@@ -262,18 +262,7 @@ export function ShopAction() {
     });
   };
 
-  const approveLoading = approvePending || approveConfirming;
-
-  const approveToastFired = useRef(false);
-  useEffect(() => {
-    if (approveSuccess && approveHash && !approveToastFired.current) {
-      approveToastFired.current = true;
-      toast.success("Cash spend approved for Shop contract");
-    }
-    if (!approveHash) {
-      approveToastFired.current = false;
-    }
-  }, [approveSuccess, approveHash]);
+  const approveLoading = approveTx.isLoading;
 
   // ---------- Read user profile to get cityId ----------
   const { data: profileRaw, isLoading: profileLoading } = useReadContract({
@@ -390,27 +379,35 @@ export function ShopAction() {
   }, [fetchCityShopBusinessItems]);
 
   // ---------- Restock items ----------
-  const {
-    writeContractAsync: writeRestock,
-    data: restockHash,
-    isPending: restockPending,
-    error: restockError,
-    reset: resetRestock,
-  } = useChainWriteContract();
-
-  const { isLoading: restockConfirming, isSuccess: restockSuccess } =
-    useWaitForTransactionReceipt({ hash: restockHash });
+  const restockTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Shop items restocked successfully");
+      fetchShopItems();
+    },
+  });
+  const writeRestock = restockTx.writeAsync;
+  const restockHash = restockTx.hash;
+  const restockPending = restockTx.isPending;
+  const restockError = restockTx.error;
+  const resetRestock = restockTx.reset;
+  const restockSuccess = restockTx.isSuccess;
 
   // ---------- Manage owner prices ----------
-  const {
-    writeContractAsync: writeUpdateCityCostPrice,
-    data: updateCityPriceHash,
-    isPending: updateCityPricePending,
-  } = useChainWriteContract();
-  const { isLoading: updateCityPriceConfirming } = useWaitForTransactionReceipt({
-    hash: updateCityPriceHash,
+  const updateCityPriceTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Shop owner prices updated.");
+      setManageDialogOpen(false);
+      void fetchShopItems();
+    },
+    onReceiptError: (error) => {
+      const message = getErrorMessage(error) || "Failed to update prices";
+      if (!message.includes("User rejected")) {
+        toast.error(message);
+      }
+    },
   });
-  const updateCityPriceLoading = updateCityPricePending || updateCityPriceConfirming;
+  const writeUpdateCityCostPrice = updateCityPriceTx.writeAsync;
+  const updateCityPriceLoading = updateCityPriceTx.isLoading;
 
   useEffect(() => {
     if (!manageDialogOpen) return;
@@ -453,20 +450,14 @@ export function ShopAction() {
 
     try {
       const parsedPrices = rawPrices.map((price) => parseEther(price.toString()));
-      const txHash = await writeUpdateCityCostPrice({
+      await writeUpdateCityCostPrice({
         address: addresses.shop,
         abi: SHOP_CONTRACT_ABI,
         functionName: "updateCityCostPrice",
         args: [cityId, parsedPrices],
       });
-      if (publicClient && txHash) {
-        await publicClient.waitForTransactionReceipt({ hash: txHash });
-      }
-      toast.success("Shop owner prices updated.");
-      setManageDialogOpen(false);
-      await fetchShopItems();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update prices";
+      const message = err instanceof Error ? getErrorMessage(err) : "Failed to update prices";
       if (!message.includes("User rejected")) {
         toast.error(message);
       }
@@ -488,21 +479,30 @@ export function ShopAction() {
     }
   };
 
-  const restockLoading = restockPending || restockConfirming;
+  const restockLoading = restockTx.isLoading;
 
   // ---------- Checkout (buyItems with arrays) ----------
   const [checkoutSigning, setCheckoutSigning] = useState(false);
 
-  const {
-    writeContractAsync: writeBuy,
-    data: buyHash,
-    isPending: buyPending,
-    error: buyError,
-    reset: resetBuy,
-  } = useChainWriteContract();
-
-  const { isLoading: buyConfirming, isSuccess: buySuccess } =
-    useWaitForTransactionReceipt({ hash: buyHash });
+  const buyTx = useContractTransaction({
+    onSuccess: () => {
+      const itemNames = cartEntries
+        .map((e) => {
+          const meta = SHOP_ITEMS.find((i) => i.typeId === e.typeId);
+          return `${e.amount}x ${meta?.name ?? `#${e.typeId}`}`;
+        })
+        .join(", ");
+      toast.success(`Purchased ${itemNames}`);
+      clearCart();
+      fetchShopItems();
+    },
+  });
+  const writeBuy = buyTx.writeAsync;
+  const buyHash = buyTx.hash;
+  const buyPending = buyTx.isPending;
+  const buyError = buyTx.error;
+  const resetBuy = buyTx.reset;
+  const buySuccess = buyTx.isSuccess;
 
   const handleCheckout = async () => {
     if (!address || cartEntries.length === 0) return;
@@ -529,7 +529,7 @@ export function ShopAction() {
     }
   };
 
-  const checkoutLoading = checkoutSigning || buyPending || buyConfirming;
+  const checkoutLoading = checkoutSigning || buyTx.isLoading;
 
   // ---------- Cooldown: nextBuyTime ----------
   const { data: nextBuyTimeRaw } = useReadContract({
@@ -552,38 +552,6 @@ export function ShopAction() {
   const cooldownSecs = cooldownSeconds % 60;
   const cooldownReady = cooldownSeconds <= 0;
   const onCooldown = isConnected && !cooldownReady;
-
-  // ---------- Toast notifications ----------
-  const buyToastFired = useRef(false);
-  useEffect(() => {
-    if (buySuccess && buyHash && !buyToastFired.current) {
-      buyToastFired.current = true;
-      const itemNames = cartEntries
-        .map((e) => {
-          const meta = SHOP_ITEMS.find((i) => i.typeId === e.typeId);
-          return `${e.amount}x ${meta?.name ?? `#${e.typeId}`}`;
-        })
-        .join(", ");
-      toast.success(`Purchased ${itemNames}`);
-      clearCart();
-      fetchShopItems();
-    }
-    if (!buyHash) {
-      buyToastFired.current = false;
-    }
-  }, [buySuccess, buyHash, cartEntries, fetchShopItems]);
-
-  const restockToastFired = useRef(false);
-  useEffect(() => {
-    if (restockSuccess && restockHash && !restockToastFired.current) {
-      restockToastFired.current = true;
-      toast.success("Shop items restocked successfully");
-      fetchShopItems();
-    }
-    if (!restockHash) {
-      restockToastFired.current = false;
-    }
-  }, [restockSuccess, restockHash, fetchShopItems]);
 
   // ---------- Auth states ----------
   if (!isConnected) {

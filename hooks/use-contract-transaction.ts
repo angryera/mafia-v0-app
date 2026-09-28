@@ -11,6 +11,8 @@ interface UseContractTransactionOptions {
   onWriteError?: (error: Error) => void;
   /** Runs once per failed receipt. */
   onReceiptError?: (error: Error) => void;
+  /** Blocks to wait before the receipt counts as confirmed. Defaults to 1. */
+  confirmations?: number;
 }
 
 /**
@@ -22,6 +24,7 @@ export function useContractTransaction({
   onSuccess,
   onWriteError,
   onReceiptError,
+  confirmations,
 }: UseContractTransactionOptions = {}) {
   const {
     writeContract,
@@ -31,7 +34,7 @@ export function useContractTransaction({
     error: writeError,
     reset,
   } = useChainWriteContract();
-  const receipt = useWaitForTransactionReceipt({ hash });
+  const receipt = useWaitForTransactionReceipt({ hash, confirmations });
 
   const onSuccessRef = useRef(onSuccess);
   const onWriteErrorRef = useRef(onWriteError);

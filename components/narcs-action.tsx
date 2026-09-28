@@ -6,9 +6,8 @@ import {
   useAccount,
   useReadContract,
   usePublicClient,
-  useWaitForTransactionReceipt,
 } from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   USER_PROFILE_CONTRACT_ABI,
   TRAVEL_DESTINATIONS,
@@ -228,35 +227,26 @@ export function NarcsAction() {
   const currentAllowance = allowanceData ? BigInt(allowanceData as bigint) : BigInt(0);
 
   // ---------- Transaction state ----------
-  const {
-    writeContractAsync: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    reset: resetApprove,
-  } = useChainWriteContract();
+  const approveTx = useContractTransaction();
+  const writeApprove = approveTx.writeAsync;
+  const approvePending = approveTx.isPending;
+  const resetApprove = approveTx.reset;
 
-  const {
-    writeContractAsync: writeBuy,
-    data: buyHash,
-    isPending: buyPending,
-    reset: resetBuy,
-  } = useChainWriteContract();
+  const buyTx = useContractTransaction();
+  const writeBuy = buyTx.writeAsync;
+  const buyHash = buyTx.hash;
+  const buyPending = buyTx.isPending;
+  const resetBuy = buyTx.reset;
+  const buyReceipt = buyTx.receipt.data;
+  const buyConfirming = buyTx.isConfirming;
 
-  const {
-    writeContractAsync: writeSell,
-    data: sellHash,
-    isPending: sellPending,
-    reset: resetSell,
-  } = useChainWriteContract();
-
-  // ---------- Transaction receipt tracking for jail detection ----------
-  const { data: buyReceipt, isLoading: buyConfirming } = useWaitForTransactionReceipt({
-    hash: buyHash,
-  });
-
-  const { data: sellReceipt, isLoading: sellConfirming } = useWaitForTransactionReceipt({
-    hash: sellHash,
-  });
+  const sellTx = useContractTransaction();
+  const writeSell = sellTx.writeAsync;
+  const sellHash = sellTx.hash;
+  const sellPending = sellTx.isPending;
+  const resetSell = sellTx.reset;
+  const sellReceipt = sellTx.receipt.data;
+  const sellConfirming = sellTx.isConfirming;
 
   // Track shown toasts to prevent duplicates
   const buyToastShownRef = useRef<string | null>(null);

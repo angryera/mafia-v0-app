@@ -6,10 +6,9 @@ import { toast } from "sonner";
 import {
   useAccount,
   useReadContract,
-  useWaitForTransactionReceipt,
   usePublicClient,
 } from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
   JACKPOT_ABI,
@@ -265,35 +264,31 @@ export function JackpotAction() {
   const stateInfo = round ? ROUND_STATES[round.state] ?? { label: `State ${round.state}`, color: "text-muted-foreground", description: "Unknown state" } : null;
 
   // ── Contracts: Approve ─────────────────────────────────────────
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
-
-  const approveLoading = approvePending || approveConfirming;
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Cash spend approved for Jackpot");
+    },
+  });
+  const writeApprove = approveTx.write;
+  const approveHash = approveTx.hash;
+  const approvePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
+  const approveConfirming = approveTx.isConfirming;
+  const approveSuccess = approveTx.isSuccess;
+  const approveLoading = approveTx.isLoading;
 
   // ── Contracts: Enter Pot ───────────────────────────────────────
-  const {
-    writeContract: writeEnter,
-    data: enterHash,
-    isPending: enterPending,
-    error: enterError,
-    reset: resetEnter,
-  } = useChainWriteContract();
-
-  const {
-    isLoading: enterConfirming,
-    isSuccess: enterSuccess,
-    data: enterReceipt,
-  } = useWaitForTransactionReceipt({ hash: enterHash });
-
-  const enterLoading = enterPending || enterConfirming;
+  const enterTx = useContractTransaction();
+  const writeEnter = enterTx.write;
+  const enterHash = enterTx.hash;
+  const enterPending = enterTx.isPending;
+  const enterError = enterTx.error;
+  const resetEnter = enterTx.reset;
+  const enterConfirming = enterTx.isConfirming;
+  const enterSuccess = enterTx.isSuccess;
+  const enterReceipt = enterTx.receipt.data;
+  const enterLoading = enterTx.isLoading;
 
   // ── Handle approve ─────────────────────────────────────────────
   function handleApprove() {
@@ -360,16 +355,6 @@ export function JackpotAction() {
       args: [selectedEntryType, amountValue],
     });
   }
-
-  // ── Toast on approve success ───────────────────────────────────
-  const approveToastRef = useRef(false);
-  useEffect(() => {
-    if (approveSuccess && approveHash && !approveToastRef.current) {
-      approveToastRef.current = true;
-      toast.success("Cash spend approved for Jackpot");
-    }
-    if (!approveHash) approveToastRef.current = false;
-  }, [approveSuccess, approveHash]);
 
   // ── Parse EnteredPot event on success ──────────────────────────
   const enteredPotResult = useMemo(() => {

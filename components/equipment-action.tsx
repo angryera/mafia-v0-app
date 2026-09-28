@@ -1,19 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  useAccount,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import {
   useChain,
   useChainAddresses,
   useChainExplorer,
 } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { getErrorMessage } from "@/lib/format";
 import {
   EQUIPMENT_ABI,
   EQUIPMENT_SLOTS,
@@ -838,28 +835,28 @@ export function EquipmentAction() {
   })();
 
   // Equip transaction
-  const {
-    writeContract,
-    data: equipHash,
-    isPending: equipPending,
-    error: equipError,
-    reset: resetEquip,
-  } = useChainWriteContract();
-
-  const { isLoading: equipConfirming, isSuccess: equipSuccess } =
-    useWaitForTransactionReceipt({ hash: equipHash });
+  const equipTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Equipment Updated",
+        description: "Your equipment has been successfully updated!",
+      });
+      refetchEquipment();
+      refetchCitiesPower();
+      refetchBalance();
+      refetchAllowance();
+    },
+  });
+  const writeContract = equipTx.write;
+  const equipHash = equipTx.hash;
+  const equipError = equipTx.error;
+  const resetEquip = equipTx.reset;
 
   // Approve MAFIA if needed
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approveTx = useContractTransaction();
+  const writeApprove = approveTx.write;
+  const resetApprove = approveTx.reset;
+  const approveSuccess = approveTx.isSuccess;
 
   const needsApproval = mafiaDelta > 0;
 
@@ -899,26 +896,13 @@ export function EquipmentAction() {
   // MAFIA wallet balance
   const mafiaBalance = mafiaBalanceRaw ? Number(formatEther(mafiaBalanceRaw as bigint)) : 0;
 
-  // Success effect
-  useEffect(() => {
-    if (equipSuccess && equipHash) {
-      toast({
-        title: "Equipment Updated",
-        description: "Your equipment has been successfully updated!",
-      });
-      refetchEquipment();
-      refetchCitiesPower();
-      refetchBalance();
-      refetchAllowance();
-    }
-  }, [equipSuccess, equipHash, toast, refetchEquipment, refetchCitiesPower, refetchBalance, refetchAllowance]);
+  const isLoadingEquip = equipTx.isLoading;
+  const isLoadingApprove = approveTx.isLoading;
 
   // Items available for selection (owned by user)
   const selectableItems = [...shopItems, ...bodyguards];
   // ALL items (for looking up equipped item info - these may be owned by the contract)
   const allItemsGlobal = [...allShopItemsGlobal, ...allBodyguardsGlobal];
-  const isLoadingEquip = equipPending || equipConfirming;
-  const isLoadingApprove = approvePending || approveConfirming;
 
   if (!isConnected) {
     return (
@@ -1156,7 +1140,7 @@ export function EquipmentAction() {
 
               {equipError && (
                 <p className="text-xs text-red-400">
-                  {(equipError as Error).message?.split("\n")[0]}
+                  {getErrorMessage(equipError as Error)}
                 </p>
               )}
 

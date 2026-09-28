@@ -1,14 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  useAccount,
-  useReadContract,
-  useWaitForTransactionReceipt,
-} from "wagmi";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useAccount, useReadContract } from "wagmi";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { getErrorMessage } from "@/lib/format";
 import {
   BODYGUARD_TRAINING_ABI,
   BODYGUARD_INFO,
@@ -283,25 +280,37 @@ function TrainingDialog({
   const cost = getBodyguardTrainingCost(item.categoryId, item.typeId);
 
   // Approve cash
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Cash Spend Approved",
+        description: "You can now start training your bodyguard.",
+      });
+    },
+  });
+  const writeApprove = approveTx.write;
+  const approveHash = approveTx.hash;
+  const approvePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
+  const approveSuccess = approveTx.isSuccess;
 
   // Train action
-  const {
-    writeContract,
-    data: trainHash,
-    isPending: trainPending,
-    reset: resetTrain,
-  } = useChainWriteContract();
-  const { isLoading: trainConfirming, isSuccess: trainSuccess } =
-    useWaitForTransactionReceipt({ hash: trainHash });
+  const trainTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Training Started",
+        description: `${bgName} #${item.itemId} is now training to Level ${nextLevel}!`,
+      });
+      onOpenChange(false);
+      onSuccess();
+    },
+  });
+  const writeContract = trainTx.write;
+  const trainHash = trainTx.hash;
+  const trainPending = trainTx.isPending;
+  const trainConfirming = trainTx.isConfirming;
+  const resetTrain = trainTx.reset;
 
   // Reset on open/close
   useEffect(() => {
@@ -311,29 +320,8 @@ function TrainingDialog({
     }
   }, [open, resetApprove, resetTrain]);
 
-  // Success toast
-  useEffect(() => {
-    if (trainSuccess && trainHash) {
-      toast({
-        title: "Training Started",
-        description: `${bgName} #${item.itemId} is now training to Level ${nextLevel}!`,
-      });
-      onOpenChange(false);
-      onSuccess();
-    }
-  }, [trainSuccess, trainHash, bgName, item.itemId, nextLevel, toast, onOpenChange, onSuccess]);
-
-  useEffect(() => {
-    if (approveSuccess && approveHash) {
-      toast({
-        title: "Cash Spend Approved",
-        description: "You can now start training your bodyguard.",
-      });
-    }
-  }, [approveSuccess, approveHash, toast]);
-
-  const approveLoading = approvePending || approveConfirming;
-  const trainLoading = trainPending || trainConfirming;
+  const approveLoading = approveTx.isLoading;
+  const trainLoading = trainTx.isLoading;
 
   function handleApprove() {
     resetApprove();
@@ -481,7 +469,7 @@ function TrainingDialog({
                   <p className="mt-1 text-[10px] text-red-400">
                     {(approveError as Error).message?.includes("User rejected")
                       ? "Transaction rejected by user"
-                      : (approveError as Error).message?.split("\n")[0]}
+                      : getErrorMessage(approveError as Error)}
                   </p>
                 )}
 
@@ -788,14 +776,23 @@ export function BodyguardTrainingAction() {
 
   // Finish training state
   const [finishingSlotId, setFinishingSlotId] = useState<number | null>(null);
-  const {
-    writeContract: writeFinish,
-    data: finishHash,
-    isPending: finishPending,
-    reset: resetFinish,
-  } = useChainWriteContract();
-  const { isLoading: finishConfirming, isSuccess: finishSuccess } =
-    useWaitForTransactionReceipt({ hash: finishHash });
+  const resetFinishRef = useRef<() => void>(() => {});
+  const finishTx = useContractTransaction({
+    onSuccess: () => {
+      toast({
+        title: "Training Complete!",
+        description: "Your bodyguard has finished training and leveled up!",
+      });
+      setFinishingSlotId(null);
+      resetFinishRef.current();
+      refetchSlots();
+      fetchBodyguards();
+    },
+  });
+  resetFinishRef.current = finishTx.reset;
+  const writeFinish = finishTx.write;
+  const finishPending = finishTx.isPending;
+  const finishConfirming = finishTx.isConfirming;
   const { toast } = useToast();
 
   const fetchBodyguards = useCallback(async () => {
@@ -871,20 +868,6 @@ export function BodyguardTrainingAction() {
     refetchSlots();
     fetchBodyguards();
   }
-
-  // Handle finish training success
-  useEffect(() => {
-    if (finishSuccess && finishHash) {
-      toast({
-        title: "Training Complete!",
-        description: "Your bodyguard has finished training and leveled up!",
-      });
-      setFinishingSlotId(null);
-      resetFinish();
-      refetchSlots();
-      fetchBodyguards();
-    }
-  }, [finishSuccess, finishHash, toast, resetFinish, refetchSlots, fetchBodyguards]);
 
   function handleFinishTraining(slotId: number) {
     setFinishingSlotId(slotId);

@@ -3,13 +3,8 @@
 import { getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
-import {
-  useWaitForTransactionReceipt,
-  useAccount,
-  useReadContract,
-  usePublicClient,
-} from "wagmi";
-import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { useAccount, useReadContract, usePublicClient } from "wagmi";
+import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   ROULETTE_CONTRACT_ABI,
   ROULETTE_BET_TYPES,
@@ -145,38 +140,42 @@ export function RouletteAction() {
   const [result, setResult] = useState<FinishedBetResult | null>(null);
 
   // ── Contracts ──────────────────────────────────────────────────
-  const {
-    writeContract: writeBet,
-    data: betHash,
-    isPending: betPending,
-    error: betError,
-    reset: resetBet,
-  } = useChainWriteContract();
+  const betTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Bet placed! Waiting for block confirmation...");
+      setPhase("pending");
+      refetchBetInfo();
+    },
+  });
+  const writeBet = betTx.write;
+  const betHash = betTx.hash;
+  const betPending = betTx.isPending;
+  const betError = betTx.error;
+  const resetBet = betTx.reset;
+  const betConfirming = betTx.isConfirming;
 
-  const {
-    writeContract: writeFinish,
-    data: finishHash,
-    isPending: finishPending,
-    error: finishError,
-    reset: resetFinish,
-  } = useChainWriteContract();
+  const finishTx = useContractTransaction();
+  const writeFinish = finishTx.write;
+  const finishHash = finishTx.hash;
+  const finishPending = finishTx.isPending;
+  const finishError = finishTx.error;
+  const resetFinish = finishTx.reset;
+  const finishConfirming = finishTx.isConfirming;
+  const finishSuccess = finishTx.isSuccess;
+  const finishReceipt = finishTx.receipt.data;
 
-  const {
-    writeContract: writeApprove,
-    data: approveHash,
-    isPending: approvePending,
-    error: approveError,
-    reset: resetApprove,
-  } = useChainWriteContract();
-
-  const { isLoading: betConfirming, isSuccess: betSuccess } =
-    useWaitForTransactionReceipt({ hash: betHash });
-
-  const { isLoading: finishConfirming, isSuccess: finishSuccess } =
-    useWaitForTransactionReceipt({ hash: finishHash });
-
-  const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      toast.success("Cash spend approved for Roulette contract");
+    },
+  });
+  const writeApprove = approveTx.write;
+  const approveHash = approveTx.hash;
+  const approvePending = approveTx.isPending;
+  const approveError = approveTx.error;
+  const resetApprove = approveTx.reset;
+  const approveConfirming = approveTx.isConfirming;
+  const approveSuccess = approveTx.isSuccess;
 
   // ── Pending-bet status per table from contract ─────────────────
   const { data: userBetInfoRaw, refetch: refetchBetInfo } = useReadContract({
@@ -274,75 +273,41 @@ export function RouletteAction() {
     }
   }, [userBetInfoRaw]);
 
-  // ── After bet tx confirms → move to pending ────────────────────
-  const betToastFired = useRef(false);
+  // Finish log parsing stays local: the shared hook fires before this effect.
+  const finishParsedHash = useRef<typeof finishHash>(undefined);
   useEffect(() => {
-    if (betSuccess && betHash && !betToastFired.current) {
-      betToastFired.current = true;
-      toast.success("Bet placed! Waiting for block confirmation...");
-      setPhase("pending");
-      refetchBetInfo();
-    }
-    if (!betHash) betToastFired.current = false;
-  }, [betSuccess, betHash, refetchBetInfo]);
+    if (!finishSuccess || !finishHash || !finishReceipt) return;
+    if (finishParsedHash.current === finishHash) return;
+    finishParsedHash.current = finishHash;
 
-  // ── After approve tx confirms ────────────────────────────────────
-  const approveToastFired = useRef(false);
-  useEffect(() => {
-    if (approveSuccess && approveHash && !approveToastFired.current) {
-      approveToastFired.current = true;
-      toast.success("Cash spend approved for Roulette contract");
-    }
-    if (!approveHash) approveToastFired.current = false;
-  }, [approveSuccess, approveHash]);
-
-  // ── After finish tx confirms → parse result ────────────────────
-  const finishToastFired = useRef(false);
-  useEffect(() => {
-    if (!finishSuccess || !finishHash || finishToastFired.current) return;
-    finishToastFired.current = true;
-
-    const parseResult = async () => {
-      if (!publicClient) return;
+    for (const log of finishReceipt.logs) {
       try {
-        const receipt = await publicClient.waitForTransactionReceipt({
-          hash: finishHash,
+        const decoded = decodeEventLog({
+          abi: ROULETTE_CONTRACT_ABI,
+          data: log.data,
+          topics: (log as Log).topics,
+          strict: false,
         });
-        for (const log of receipt.logs) {
-          try {
-            const decoded = decodeEventLog({
-              abi: ROULETTE_CONTRACT_ABI,
-              data: log.data,
-              topics: (log as Log).topics,
-              strict: false,
-            });
-            if (decoded.eventName === "FinishedBet") {
-              const args = decoded.args as unknown as {
-                rouletteId: number;
-                betId: bigint;
-                nonce: bigint;
-                betAmount: bigint;
-                totalReward: bigint;
-                rewardReceived: bigint;
-                feeAmount: bigint;
-              };
-              setResult(args);
-              setPhase("result");
-              return;
-            }
-          } catch {
-            // not our event
-          }
+        if (decoded.eventName === "FinishedBet") {
+          const args = decoded.args as unknown as {
+            rouletteId: number;
+            betId: bigint;
+            nonce: bigint;
+            betAmount: bigint;
+            totalReward: bigint;
+            rewardReceived: bigint;
+            feeAmount: bigint;
+          };
+          setResult(args);
+          setPhase("result");
+          return;
         }
-        setPhase("result");
       } catch {
-        setPhase("result");
+        // not our event
       }
-    };
-    parseResult();
-
-    if (!finishHash) finishToastFired.current = false;
-  }, [finishSuccess, finishHash, publicClient]);
+    }
+    setPhase("result");
+  }, [finishSuccess, finishHash, finishReceipt]);
 
   // ── Bet management ─────────────────────────────────────────────
   const addBet = () => {
@@ -813,7 +778,7 @@ export function RouletteAction() {
               <p className="line-clamp-2 text-[10px] text-red-400">
                 {((betError || finishError) as Error).message?.includes("User rejected")
                   ? "Transaction rejected by user"
-                  : ((betError || finishError) as Error).message?.split("\n")[0]}
+                  : getErrorMessage((betError || finishError) as Error)}
               </p>
             </div>
           )}
@@ -907,7 +872,7 @@ export function RouletteAction() {
                     ? "Transaction rejected"
                     : finishError.message?.includes("too early")
                       ? "Block not ready yet. Please wait a moment and try again."
-                      : finishError.message?.split("\n")[0]}
+                      : getErrorMessage(finishError)}
                 </p>
               </div>
             )}
