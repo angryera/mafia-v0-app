@@ -31,7 +31,19 @@ must be read from and written to those contracts through Wagmi/Viem.
 
 - `app/`: routing and page composition.
 - `components/`: UI and feature-level interaction components.
+- `features/<feature>/`: a feature split out of a large component.
+  - `lib/`: pure contract decoders, domain rules, and formatting (no React).
+  - `hooks/`: the feature's contract reads and data loading.
+  - `components/`: sections and dialogs; each dialog owns its inputs and
+    transaction lifecycle so the entry component only orchestrates.
+  - The public entry component may stay in `components/` so routes keep
+    their imports.
 - `hooks/`: reusable wallet and contract interaction lifecycle.
+  - `use-contract-transaction.ts`: write + receipt + one-shot `onSuccess`.
+    Prefer it over hand-wiring `useChainWriteContract` and
+    `useWaitForTransactionReceipt` with a success effect.
+  - `use-mafia-utils-script.ts`: readiness of a `window.Mafia*` global from
+    `/js/mafia-utils.js`. Do not inject the script manually.
 - `lib/navigation.ts`: framework-independent route identifiers and path parsing.
 - `lib/constants/`: contract ABIs, chain addresses, and static game values.
 - `lib/format.ts`: shared, pure display formatting.
