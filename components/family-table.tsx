@@ -28,55 +28,9 @@ import {
 import { useChain } from "@/components/chain-provider";
 import { MyFamilyShareStakesButton } from "@/components/my-family-share-stakes";
 import { cn } from "@/lib/utils";
+import type { Family } from "@/features/families/types";
 
-// Data structures
-interface Leader {
-  address: string;
-  role: string;
-  name: string;
-  familyId: number;
-  level: number;
-  isDead: boolean;
-  isJailed: boolean;
-  gender: number;
-  country: string;
-  jailedUntil: number;
-}
-
-interface Successor {
-  address: string;
-  name: string;
-  familyId: number;
-  level: number;
-  isDead: boolean;
-  isJailed: boolean;
-  gender: number;
-  country: string;
-  jailedUntil: number;
-}
-
-interface Player {
-  address: string;
-  name: string;
-  familyId: number;
-  level: number;
-  isDead: boolean;
-  isJailed: boolean;
-  gender: number;
-  country: string;
-  jailedUntil: number;
-}
-
-export interface Family {
-  familyId: number;
-  leaders: Leader[];
-  successor: Successor;
-  leaveFee: number;
-  memberCount: number;
-  isDead: boolean;
-  name: string;
-  players: Player[];
-}
+export type { Family } from "@/features/families/types";
 
 export function FamilyTable() {
   const router = useRouter();

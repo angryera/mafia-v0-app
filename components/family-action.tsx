@@ -30,56 +30,8 @@ import {
 import { useChain } from "@/components/chain-provider";
 import { cn } from "@/lib/utils";
 import { formatWalletAddress as formatAddress } from "@/lib/format";
+import type { Family } from "@/features/families/types";
 import "@/types/mafia-globals";
-
-// Data structures from the prompt
-interface Leader {
-  address: string;
-  role: string;
-  name: string;
-  familyId: number;
-  level: number;
-  isDead: boolean;
-  isJailed: boolean;
-  gender: number;
-  country: string;
-  jailedUntil: number;
-}
-
-interface Successor {
-  address: string;
-  name: string;
-  familyId: number;
-  level: number;
-  isDead: boolean;
-  isJailed: boolean;
-  gender: number;
-  country: string;
-  jailedUntil: number;
-}
-
-interface Player {
-  address: string;
-  name: string;
-  familyId: number;
-  level: number;
-  isDead: boolean;
-  isJailed: boolean;
-  gender: number;
-  country: string;
-  jailedUntil: number;
-}
-
-interface Family {
-  familyId: number;
-  leaders: Leader[];
-  successor: Successor;
-  leaveFee: number;
-  memberCount: number;
-  isDead: boolean;
-  name: string;
-  players: Player[];
-}
 
 // Role hierarchy for sorting
 const ROLE_ORDER: Record<string, number> = {

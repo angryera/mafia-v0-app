@@ -2,7 +2,15 @@
 
 import { useAuth } from "@/components/auth-provider";
 import { useChain, useChainAddresses } from "@/components/chain-provider";
-import type { Family } from "@/components/family-table";
+import type { Family } from "@/features/families/types";
+import {
+  FAMILY_ROLE_ORDER,
+  WITHDRAW_LEADER_ROLES,
+  buildLeaderSlots,
+  canManageLeaderSlot,
+  isLeaderAssigned,
+  type LeaderSlot,
+} from "@/features/families/lib/family-leadership";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,79 +88,11 @@ import {
   useWaitForTransactionReceipt,
 } from "wagmi";
 
-// Role hierarchy for sorting
-const ROLE_ORDER: Record<string, number> = {
-  Don: 0,
-  Consigliere: 1,
-  Capodecina: 2,
-  Capo: 3,
-};
-
-const WITHDRAW_LEADER_ROLES = new Set(["Don", "Consigliere", "Capodecina"]);
-
-/** On-chain `FamilyRole` leader slot indices (Don=0 … Capo5=7). */
-const FAMILY_LEADER_ROLE_INDEX: Record<string, number> = {
-  Don: 0,
-  Consigliere: 1,
-  Capodecina: 2,
-};
-
-const CAPO_LEADER_INDEX_MIN = 3;
-const CAPO_LEADER_INDEX_MAX = 7;
-
 type FamilyMemberOption = {
   address: string;
   name: string;
   level: number;
 };
-
-type LeaderSlot = {
-  address: string;
-  role: string;
-  name: string;
-  familyId: number;
-  level: number;
-  isDead: boolean;
-  isJailed: boolean;
-  gender: number;
-  country: string;
-  jailedUntil: number;
-  leaderIndex: number;
-  displayRole: string;
-};
-
-function canManageLeaderSlot(
-  myRole: string | null,
-  leaderIndex: number,
-): boolean {
-  if (!myRole || leaderIndex < 0) return false;
-  if (myRole === "Don") {
-    return leaderIndex >= 0 && leaderIndex <= CAPO_LEADER_INDEX_MAX;
-  }
-  if (myRole === "Consigliere" || myRole === "Capodecina") {
-    return leaderIndex >= CAPO_LEADER_INDEX_MIN && leaderIndex <= CAPO_LEADER_INDEX_MAX;
-  }
-  return false;
-}
-
-function buildLeaderSlots(
-  leaders: Family["leaders"],
-): LeaderSlot[] {
-  let capoNum = 0;
-  return leaders.map((leader) => {
-    if (leader.role === "Capo") {
-      const leaderIndex = CAPO_LEADER_INDEX_MIN + capoNum;
-      capoNum += 1;
-      return {
-        ...leader,
-        leaderIndex,
-        displayRole: `Capo ${capoNum}`,
-      };
-    }
-    const leaderIndex = FAMILY_LEADER_ROLE_INDEX[leader.role] ?? -1;
-    return { ...leader, leaderIndex, displayRole: leader.role };
-  });
-}
 
 const BANK_REFETCH_MS = 10_000;
 const BANK_LOG_PAGE_SIZE = 20;
@@ -420,16 +360,6 @@ function StatusIndicators({ isJailed, isDead }: { isJailed: boolean; isDead: boo
   );
 }
 
-function isLeaderAssigned(leader: { name: string; address: string }): boolean {
-  if (!leader.name?.trim()) return false;
-  const addr = leader.address?.toLowerCase() ?? "";
-  return (
-    addr !== "" &&
-    addr !== zeroAddress.toLowerCase() &&
-    addr !== "0x0000000000000000000000000000000000000000"
-  );
-}
-
 interface FamilyDetailProps {
   familyId: number;
 }
@@ -663,8 +593,8 @@ export function FamilyDetail({ familyId }: FamilyDetailProps) {
   const sortedLeaderSlots = useMemo(() => {
     if (!family) return [];
     const sorted = [...family.leaders].sort((a, b) => {
-      const orderA = ROLE_ORDER[a.role] ?? 99;
-      const orderB = ROLE_ORDER[b.role] ?? 99;
+      const orderA = FAMILY_ROLE_ORDER[a.role] ?? 99;
+      const orderB = FAMILY_ROLE_ORDER[b.role] ?? 99;
       return orderA - orderB;
     });
     return buildLeaderSlots(sorted);

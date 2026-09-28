@@ -366,7 +366,7 @@ export function BulletFactoryAction() {
         <div>
           <h2 className="text-lg font-bold text-foreground">Bullet Factory</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Purchase bullets at your city's factory.
+            Purchase bullets at your city&apos;s factory.
           </p>
         </div>
         <span className="text-xs text-muted-foreground font-mono">
