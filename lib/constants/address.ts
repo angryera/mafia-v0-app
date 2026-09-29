@@ -224,3 +224,8 @@ export const MAFIA_PAIR_ADDRESSES: Record<ChainId, `0x${string}`> = {
     bnb: getAddress("0xdE6e6378623C4F2c1102F2CcD35507d5bAf7924d"),
     pulse: getAddress("0x113bbdfea64b06aebe14a50e00c70149a32973ab"),
 };
+
+export const MARKETING_DAO_ADDRESSES: Record<ChainId, `0x${string}`> = {
+    bnb: getAddress("0x727405987580B9C44052f8F1f82Fa268C966Ba09"),
+    pulse: getAddress("0x50ad97424d3e7Cf5F7D4B73b0F97AdE1f4e140eD"),
+};

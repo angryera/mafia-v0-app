@@ -2,74 +2,161 @@
 
 import { useState } from "react";
 import { useChain } from "@/components/chain-provider";
+import { getFtsNetwork } from "@/features/fts/lib/fts";
+import {
+  DEPOSIT_ADDRESSES,
+  EXCHANGE_ADDRESSES,
+  MAFIA_PAIR_ADDRESSES,
+  MARKETING_DAO_ADDRESSES,
+  type ChainConfig,
+  type ChainId,
+} from "@/lib/constants/address";
 import { ExternalLink, Copy, Check, FileText } from "lucide-react";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-const CONTRACT_REGISTRY: {
-  section: string;
-  contracts: { key: string; label: string }[];
-}[] = [
-    {
-      section: "Core Gameplay",
-      contracts: [
-        { key: "crime", label: "Crime" },
-        { key: "travel", label: "Travel" },
-        { key: "nickcar", label: "Nick a Car" },
-        { key: "killskill", label: "Kill Skill" },
-        { key: "jail", label: "Jail" },
-        { key: "helperbot", label: "Helper Bots" },
-        { key: "safehouse", label: "Safehouse" },
-        { key: "rankStake", label: "Rank Activation" },
-      ],
-    },
-    {
-      section: "Businesses",
-      contracts: [
-        { key: "shop", label: "Shop" },
-        { key: "hospital", label: "Hospital" },
-        { key: "bulletFactory", label: "Bullet Factory" },
-        { key: "roulette", label: "Roulette" },
-        { key: "slotMachine", label: "Slot Machine" },
-        { key: "carCrusher", label: "Car Crusher" },
-        { key: "jackpot", label: "Jackpot" },
-        { key: "detectiveAgency", label: "Detective Agency" },
-      ],
-    },
-    {
-      section: "Purchases",
-      contracts: [
-        { key: "buyCredit", label: "Buy Credits" },
-        { key: "buyPerkbox", label: "Buy Perk Boxes" },
-        { key: "buyKeys", label: "Buy Keys" },
-        { key: "inventory", label: "Inventory (Open Crate)" },
-        { key: "perkOpener", label: "Perk Opener (Open Perk Box)" },
-        { key: "playerSubscription", label: "Player Subscription" },
-      ],
-    },
-    {
-      section: "Tokens / Resources",
-      contracts: [
-        { key: "ingameCurrency", label: "In-Game Currency" },
-        { key: "cash", label: "Cash" },
-        { key: "bullets", label: "Bullets" },
-        { key: "health", label: "Health" },
-        { key: "giCredits", label: "GI Credits" },
-        { key: "power", label: "Power" },
-        { key: "rankXp", label: "Rank XP" },
-        { key: "raceXp", label: "Race XP" },
-        { key: "ogCrate", label: "OG Crate (ERC1155 keys)" },
-      ],
-    },
-    {
-      section: "Infrastructure",
-      contracts: [
-        { key: "userProfile", label: "User Profile" },
-        { key: "swapRouter", label: "Swap Router" },
-        { key: "chainlinkPriceFeed", label: "Price Feed" },
-      ],
-    },
-  ];
+type AddressKey = keyof ChainConfig["addresses"];
+
+const CONTRACT_REGISTRY = [
+  {
+    section: "Core Gameplay",
+    contracts: [
+      { key: "crime", label: "Crime" },
+      { key: "travel", label: "Travel" },
+      { key: "nickcar", label: "Nick a Car" },
+      { key: "killskill", label: "Kill Skill" },
+      { key: "bustOutSkill", label: "Bust Out Skill" },
+      { key: "jail", label: "Jail" },
+      { key: "helperbot", label: "Helper Bots" },
+      { key: "safehouse", label: "Safehouse" },
+      { key: "rankStake", label: "Rank Activation" },
+      { key: "bodyguardTraining", label: "Bodyguard Training" },
+      { key: "equipment", label: "Equipment" },
+      { key: "kill", label: "Kill" },
+      { key: "rebirth", label: "Rebirth" },
+      { key: "storyMode", label: "Story Mode" },
+      { key: "weeklyMission", label: "Weekly Missions" },
+      { key: "raceLobby", label: "Racing" },
+    ],
+  },
+  {
+    section: "Organized Crime",
+    contracts: [
+      { key: "ocLobby", label: "OC Lobby" },
+      { key: "ocJoin", label: "OC Join" },
+      { key: "ocExecution", label: "OC Execution" },
+    ],
+  },
+  {
+    section: "Businesses",
+    contracts: [
+      { key: "shop", label: "Shop" },
+      { key: "hospital", label: "Hospital" },
+      { key: "bulletFactory", label: "Bullet Factory" },
+      { key: "roulette", label: "Roulette" },
+      { key: "slotMachine", label: "Slot Machine" },
+      { key: "carCrusher", label: "Car Crusher" },
+      { key: "jackpot", label: "Jackpot" },
+      { key: "lotteryHall", label: "Lottery Hall" },
+      { key: "detectiveAgency", label: "Detective Agency" },
+      { key: "smuggleMarket", label: "Smuggle Market" },
+      { key: "map", label: "City Map" },
+    ],
+  },
+  {
+    section: "Purchases",
+    contracts: [
+      { key: "buyCredit", label: "Buy Credits" },
+      { key: "buyPerkbox", label: "Buy Perk Boxes" },
+      { key: "buyKeys", label: "Buy Keys" },
+      { key: "inventory", label: "Inventory (Open Crate)" },
+      { key: "perkOpener", label: "Perk Opener (Open Perk Box)" },
+      { key: "playerSubscription", label: "Player Subscription" },
+    ],
+  },
+  {
+    section: "Tokens / Resources",
+    contracts: [
+      { key: "ingameCurrency", label: "Cash" },
+      { key: "bullets", label: "Bullets" },
+      { key: "bulletToken", label: "Bullet Token" },
+      { key: "health", label: "Health" },
+      { key: "giCredits", label: "GI Credits" },
+      { key: "rankXp", label: "Rank XP" },
+      { key: "raceXp", label: "Race XP" },
+      { key: "ogCrate", label: "OG Crate (ERC1155 keys)" },
+      { key: "mafia", label: "MAFIA" },
+    ],
+  },
+  {
+    section: "Family",
+    contracts: [
+      { key: "mafiaFamily", label: "Family" },
+      { key: "familyGameCashBank", label: "Family Cash Bank" },
+      { key: "familyShareStake", label: "Family Share Stake" },
+    ],
+  },
+  {
+    section: "Exchange",
+    contracts: [
+      { key: "exchange", label: "Exchange" },
+      { key: "deposit", label: "Deposit" },
+      { key: "mafiaPair", label: "MAFIA Pair" },
+    ],
+  },
+  {
+    section: "Marketplace",
+    contracts: [
+      { key: "xpMarket", label: "XP Market" },
+      { key: "inventoryMarketplace", label: "Inventory Marketplace" },
+    ],
+  },
+  {
+    section: "Infrastructure",
+    contracts: [
+      { key: "userProfile", label: "User Profile" },
+      { key: "swapRouter", label: "Swap Router" },
+      { key: "marketingDao", label: "Marketing DAO" },
+      { key: "fts", label: "Founders Shares" },
+      { key: "ftsMarket", label: "Founders Market" },
+      { key: "ftsSubscription", label: "Founders Subscription" },
+    ],
+  },
+] as const;
+
+type ListedKey = (typeof CONTRACT_REGISTRY)[number]["contracts"][number]["key"];
+type MissingAddressKey = Exclude<AddressKey, ListedKey>;
+const _allAddressesListed: [MissingAddressKey] extends [never] ? true : never = true;
+void _allAddressesListed;
+
+function resolveAddress(
+  key: ListedKey,
+  chainId: ChainId,
+  addresses: ChainConfig["addresses"],
+  wagmiChainId: number,
+): string | undefined {
+  switch (key) {
+    case "exchange":
+      return EXCHANGE_ADDRESSES[chainId];
+    case "deposit":
+      return DEPOSIT_ADDRESSES[chainId];
+    case "mafiaPair":
+      return MAFIA_PAIR_ADDRESSES[chainId];
+    case "marketingDao":
+      return MARKETING_DAO_ADDRESSES[chainId];
+    case "fts":
+    case "ftsMarket":
+    case "ftsSubscription": {
+      const network = getFtsNetwork(wagmiChainId);
+      if (!network) return undefined;
+      if (key === "fts") return network.fts;
+      if (key === "ftsMarket") return network.market;
+      return network.subscription;
+    }
+    default:
+      return addresses[key];
+  }
+}
 
 function ContractRow({
   label,
@@ -81,7 +168,7 @@ function ContractRow({
   explorerUrl: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const isZero = address === ZERO_ADDRESS;
+  const isZero = !address || address === ZERO_ADDRESS;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(address);
@@ -133,7 +220,7 @@ function ContractRow({
 
 export function ContractsPage() {
   const { chainConfig } = useChain();
-  const addresses = chainConfig.addresses as Record<string, string>;
+  const addresses = chainConfig.addresses;
   const explorerUrl = chainConfig.explorer;
 
   return (
@@ -153,11 +240,22 @@ export function ContractsPage() {
       </div>
 
       {CONTRACT_REGISTRY.map((group) => {
-        const activeContracts = group.contracts.filter(
-          (c) => addresses[c.key] && addresses[c.key] !== ZERO_ADDRESS,
+        const resolved = group.contracts.map((contract) => ({
+          key: contract.key,
+          label: contract.label,
+          address:
+            resolveAddress(
+              contract.key,
+              chainConfig.id,
+              addresses,
+              chainConfig.wagmiChainId,
+            ) ?? ZERO_ADDRESS,
+        }));
+        const activeContracts = resolved.filter(
+          (contract) => contract.address !== ZERO_ADDRESS,
         );
-        const inactiveContracts = group.contracts.filter(
-          (c) => !addresses[c.key] || addresses[c.key] === ZERO_ADDRESS,
+        const inactiveContracts = resolved.filter(
+          (contract) => contract.address === ZERO_ADDRESS,
         );
 
         return (
@@ -175,7 +273,7 @@ export function ContractsPage() {
                 <ContractRow
                   key={contract.key}
                   label={contract.label}
-                  address={addresses[contract.key]}
+                  address={contract.address}
                   explorerUrl={explorerUrl}
                 />
               ))}

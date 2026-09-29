@@ -49,6 +49,7 @@ import {
   Check,
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
+import { MARKETING_DAO_ADDRESSES } from "@/lib/constants/address";
 import { useAuth } from "@/components/auth-provider";
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
@@ -67,12 +68,6 @@ function formatNumber(num: number, maxDecimals = 2): string {
 }
 import { formatUnits, parseUnits, type Abi } from "viem";
 import { toast } from "sonner";
-
-// Contract addresses per chain
-const MARKETING_DAO_ADDRESSES: Record<string, `0x${string}`> = {
-  bnb: "0x727405987580B9C44052f8F1f82Fa268C966Ba09",
-  pulsechain: "0x50ad97424d3e7Cf5F7D4B73b0F97AdE1f4e140eD",
-};
 
 // ABI for MafiaMarketingProposal contract
 const MARKETING_DAO_ABI: Abi = [
