@@ -250,8 +250,8 @@ const TAB_CONFIG: Record<
   "biz-safehouse": {
     title: "Safehouse",
     description:
-      "Hide from attacks by entering the safehouse. Costs 100,000 cash per hour. Approve spending, then enter.",
-    codeSample: "enterSafehouse(uint256)",
+      "Hide from attacks. Protection costs 100,000 cash an hour. You can leave before the time runs out.",
+    codeSample: "enterSafehouse(uint256) / exitSafehouse()",
     contractAddress: "0x6c7e8317698986c0B92FdDB7CA3086234B5e5F60",
     contractShort: "0x6c7e...5F60",
   },

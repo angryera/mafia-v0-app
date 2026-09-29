@@ -1,19 +1,19 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useAccount } from "wagmi";
 import { useChain, useChainExplorer } from "@/components/chain-provider";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { getCarModelName } from "@/lib/constants/cars";
 import { getErrorMessage, getTravelCityName } from "@/lib/format";
 import {
   TRAVEL_DESTINATIONS,
   INVENTORY_CONTRACT_ABI,
   INGAME_CURRENCY_ABI,
 } from "@/lib/contract";
-import { parseEther, maxUint256 } from "viem";
+import { maxUint256 } from "viem";
 
-const SHIP_APPROVE_AMOUNT = parseEther("2000");
 const REPAIR_APPROVE_AMOUNT = maxUint256;
 import { useChainAddresses } from "@/components/chain-provider";
 import {
@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -122,17 +123,21 @@ function getQualityLabel(
 // ── Action types ────────────────────────────────────────────────
 type GarageActionType = "ship" | "transfer" | "sell" | "repair";
 
-const ACTIONS_NEEDING_APPROVE: GarageActionType[] = ["ship", "repair"];
+const ACTIONS_NEEDING_APPROVE: GarageActionType[] = ["repair"];
 
 // ── Action Dialog ───────────────────────────────────────────────
+function carCountLabel(count: number): string {
+  return count === 1 ? "1 car" : `${count} cars`;
+}
+
 function GarageActionDialog({
-  item,
+  items,
   action,
   open,
   onOpenChange,
   onSuccess,
 }: {
-  item: CarItem;
+  items: CarItem[];
   action: GarageActionType;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -145,11 +150,15 @@ function GarageActionDialog({
 
   const actionTx = useContractTransaction({
     onSuccess: () => {
+      const shippedCount =
+        action === "ship" && destinationCity
+          ? items.filter((car) => car.cityId !== Number(destinationCity)).length
+          : items.length;
       const messages: Record<GarageActionType, string> = {
-        ship: `Car #${item.itemId} shipped to ${getTravelCityName(Number(destinationCity))}`,
-        transfer: `Car #${item.itemId} transferred successfully`,
-        sell: `Car #${item.itemId} sold successfully`,
-        repair: `Car #${item.itemId} repaired successfully`,
+        ship: `${carCountLabel(shippedCount)} shipped to ${getTravelCityName(Number(destinationCity))}`,
+        transfer: `${carCountLabel(items.length)} transferred successfully`,
+        sell: `${carCountLabel(items.length)} sold successfully`,
+        repair: `${carCountLabel(items.filter((car) => (Number(car.damagePercent) || 0) > 0).length)} repaired successfully`,
       };
       toast({
         title: "Transaction Confirmed",
@@ -170,7 +179,7 @@ function GarageActionDialog({
     onSuccess: () => {
       toast({
         title: "Cash Spend Approved",
-        description: action === "repair" ? "You can now repair your car." : "You can now ship your car.",
+        description: "You can now repair.",
       });
     },
   });
@@ -195,47 +204,76 @@ function GarageActionDialog({
     }
   }, [open, reset, resetApprove]);
 
-  const dmg = Number(item.damagePercent) || 0;
-  const estimatedValue = Math.round(item.car.basePrice * (1 - dmg / 100));
+  const damagedItems = items.filter(
+    (car) => (Number(car.damagePercent) || 0) > 0,
+  );
+  const destinationId = destinationCity ? Number(destinationCity) : null;
+  const shippableItems =
+    destinationId === null
+      ? items
+      : items.filter((car) => car.cityId !== destinationId);
+  const skippedShipCount = items.length - shippableItems.length;
+  const actionableItems =
+    action === "repair"
+      ? damagedItems
+      : action === "ship"
+        ? shippableItems
+        : items;
+  const estimatedValue = items.reduce((sum, car) => {
+    const dmg = Number(car.damagePercent) || 0;
+    return sum + Math.round(car.car.basePrice * (1 - dmg / 100));
+  }, 0);
   const inventoryAddress = chainConfig.addresses.inventory;
+  const subject =
+    items.length === 1
+      ? `${items[0].car.brand} #${items[0].itemId}`
+      : carCountLabel(items.length);
 
   const approveLoading = approvePending || approveConfirming;
 
   function handleApprove() {
     resetApprove();
-    const amount = action === "ship" ? SHIP_APPROVE_AMOUNT : REPAIR_APPROVE_AMOUNT;
     writeApprove({
       address: addresses.ingameCurrency,
       abi: INGAME_CURRENCY_ABI,
       functionName: "approveInGameCurrency",
-      args: [inventoryAddress, amount],
+      args: [inventoryAddress, REPAIR_APPROVE_AMOUNT],
     });
   }
 
   function handleSubmit() {
+    const itemIds = actionableItems.map((car) => BigInt(car.itemId));
+    if (itemIds.length === 0) return;
+
     switch (action) {
       case "ship":
-        if (!destinationCity) return;
+        if (destinationId === null) return;
         writeContract({
           address: inventoryAddress,
           abi: INVENTORY_CONTRACT_ABI,
           functionName: "shipCars",
-          args: [
-            [BigInt(item.itemId)],
-            [Number(destinationCity)],
-          ],
+          args: [itemIds, itemIds.map(() => destinationId)],
         });
         break;
 
       case "transfer":
         if (!transferAddress || !/^0x[a-fA-F0-9]{40}$/.test(transferAddress))
           return;
-        writeContract({
-          address: inventoryAddress,
-          abi: INVENTORY_CONTRACT_ABI,
-          functionName: "transferItem",
-          args: [transferAddress as `0x${string}`, BigInt(item.itemId)],
-        });
+        if (itemIds.length === 1) {
+          writeContract({
+            address: inventoryAddress,
+            abi: INVENTORY_CONTRACT_ABI,
+            functionName: "transferItem",
+            args: [transferAddress as `0x${string}`, itemIds[0]],
+          });
+        } else {
+          writeContract({
+            address: inventoryAddress,
+            abi: INVENTORY_CONTRACT_ABI,
+            functionName: "transferItems",
+            args: [transferAddress as `0x${string}`, itemIds],
+          });
+        }
         break;
 
       case "sell":
@@ -243,7 +281,7 @@ function GarageActionDialog({
           address: inventoryAddress,
           abi: INVENTORY_CONTRACT_ABI,
           functionName: "sellCars",
-          args: [[BigInt(item.itemId)]],
+          args: [itemIds],
         });
         break;
 
@@ -252,24 +290,24 @@ function GarageActionDialog({
           address: inventoryAddress,
           abi: INVENTORY_CONTRACT_ABI,
           functionName: "repairCars",
-          args: [[BigInt(item.itemId)]],
+          args: [itemIds],
         });
         break;
     }
   }
 
   const titles: Record<GarageActionType, string> = {
-    ship: "Ship Car",
-    transfer: "Transfer Car",
-    sell: "Sell Car",
-    repair: "Repair Car",
+    ship: items.length === 1 ? "Ship Car" : "Ship Cars",
+    transfer: items.length === 1 ? "Transfer Car" : "Transfer Cars",
+    sell: items.length === 1 ? "Sell Car" : "Sell Cars",
+    repair: items.length === 1 ? "Repair Car" : "Repair Cars",
   };
 
   const descriptions: Record<GarageActionType, string> = {
-    ship: `Ship ${item.car.brand} #${item.itemId} to another city. Requires cash spend approval first.`,
-    transfer: `Transfer ${item.car.brand} #${item.itemId} to another wallet.`,
-    sell: `Sell ${item.car.brand} #${item.itemId} for an estimated ${estimatedValue.toLocaleString()} cash.`,
-    repair: `Repair ${item.car.brand} #${item.itemId} to restore it to full condition. Requires cash spend approval first.`,
+    ship: `Ship ${subject} to another city.`,
+    transfer: `Transfer ${subject} to another wallet.`,
+    sell: `Sell ${subject} for an estimated ${estimatedValue.toLocaleString()} cash.`,
+    repair: `Repair ${subject} to restore full condition. Requires cash spend approval first.`,
   };
 
   const isWorking = isPending || isConfirming;
@@ -279,7 +317,8 @@ function GarageActionDialog({
   const canSubmit = (() => {
     if (isWorking) return false;
     if (needsApproval && !approveSuccess) return false;
-    if (action === "ship") return !!destinationCity;
+    if (action === "ship") return destinationId !== null && shippableItems.length > 0;
+    if (action === "repair") return damagedItems.length > 0;
     if (action === "transfer")
       return /^0x[a-fA-F0-9]{40}$/.test(transferAddress);
     return true;
@@ -294,186 +333,58 @@ function GarageActionDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-4 py-2">
-          {/* Car preview */}
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-background/50 p-3">
-            <div className="relative h-12 w-18 flex-shrink-0 overflow-hidden rounded bg-background/50">
-              {item.car.image ? (
-                <img
-                  src={item.car.image}
-                  alt={item.car.carName}
-                  className="h-full w-full object-contain"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Car className="h-5 w-5 text-muted-foreground/40" />
+          <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-background/50">
+            {items.map((car) => (
+              <div
+                key={car.itemId}
+                className="border-b border-border px-3 py-2 last:border-b-0"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {car.car.brand}
+                  </p>
+                  <p className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                    #{car.itemId}
+                  </p>
                 </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-foreground truncate">
-                {item.car.brand}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                #{item.itemId} &middot; {getTravelCityName(item.cityId)}
-              </p>
-            </div>
+                <p className="truncate text-xs text-muted-foreground">
+                  {getCarModelName(car.car)} · {getTravelCityName(car.cityId)}
+                </p>
+              </div>
+            ))}
           </div>
 
           {/* Action-specific inputs */}
           {action === "ship" && (
-            <>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-foreground">
-                  Destination City
-                </label>
-                <Select
-                  value={destinationCity}
-                  onValueChange={setDestinationCity}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a city" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TRAVEL_DESTINATIONS.filter(
-                      (d) => d.id !== item.cityId,
-                    ).map((dest) => (
-                      <SelectItem key={dest.id} value={String(dest.id)}>
-                        {dest.label}, {dest.country}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Step 1: Approve cash spend */}
-              <div
-                className={cn(
-                  "rounded-lg border p-3",
-                  approveSuccess
-                    ? "border-green-500/30 bg-green-500/5"
-                    : approveError
-                      ? "border-red-400/30 bg-red-400/5"
-                      : "border-chain-accent/30 bg-chain-accent/5",
-                )}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-foreground">
+                Destination City
+              </label>
+              <Select
+                value={destinationCity}
+                onValueChange={setDestinationCity}
               >
-                <div className="flex items-start gap-3">
-                  <div
-                    className={cn(
-                      "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                      approveSuccess
-                        ? "bg-green-500/20 text-green-400"
-                        : "bg-chain-accent/20 text-chain-accent",
-                    )}
-                  >
-                    {approveSuccess ? (
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                    ) : (
-                      "1"
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={cn(
-                        "text-sm font-semibold",
-                        approveSuccess ? "text-green-400" : "text-foreground",
-                      )}
-                    >
-                      {approveSuccess
-                        ? "Cash Spend Approved"
-                        : "Approve Cash Spend"}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {approveSuccess
-                        ? "Approval confirmed. You can now ship your car."
-                        : "You must approve cash spend before shipping."}
-                    </p>
-
-                    {approveError && (
-                      <p className="mt-1 text-[10px] text-red-400">
-                        {approveError.message.includes("User rejected")
-                          ? "Transaction rejected by user"
-                          : getErrorMessage(approveError)}
-                      </p>
-                    )}
-
-                    {approveHash && (
-                      <a
-                        href={`${explorer}/tx/${approveHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-1 inline-block font-mono text-[10px] text-primary hover:underline"
-                      >
-                        {approveHash.slice(0, 10)}...{approveHash.slice(-8)}
-                      </a>
-                    )}
-
-                    {!approveSuccess && (
-                      <Button
-                        size="sm"
-                        onClick={handleApprove}
-                        disabled={approveLoading}
-                        className="mt-2 h-8 gap-1.5 text-xs"
-                      >
-                        {approveLoading ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            {approvePending
-                              ? "Confirm in wallet..."
-                              : "Approving..."}
-                          </>
-                        ) : (
-                          <>
-                            <ShieldCheck className="h-3.5 w-3.5" />
-                            Approve
-                          </>
-                        )}
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 2 indicator */}
-              <div
-                className={cn(
-                  "rounded-lg border p-3",
-                  approveSuccess
-                    ? "border-chain-accent/30 bg-chain-accent/5"
-                    : "border-border bg-background/30 opacity-50",
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className={cn(
-                      "flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                      approveSuccess
-                        ? "bg-chain-accent/20 text-chain-accent"
-                        : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    2
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={cn(
-                        "text-sm font-semibold",
-                        approveSuccess
-                          ? "text-foreground"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      Ship Car
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {approveSuccess
-                        ? "Select a destination and click Ship Car below."
-                        : "Complete step 1 first to unlock shipping."}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a city" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TRAVEL_DESTINATIONS.map((dest) => (
+                    <SelectItem key={dest.id} value={String(dest.id)}>
+                      {dest.label}, {dest.country}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {destinationId !== null && skippedShipCount > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {carCountLabel(skippedShipCount)} already in{" "}
+                  {getTravelCityName(destinationId)}
+                  {shippableItems.length === 0
+                    ? ". Choose a different city."
+                    : ` and will be skipped. ${carCountLabel(shippableItems.length)} will be shipped.`}
+                </p>
+              )}
+            </div>
           )}
 
           {action === "transfer" && (
@@ -513,27 +424,31 @@ function GarageActionDialog({
             </div>
           )}
 
-          {action === "repair" && dmg === 0 && (
+          {action === "repair" && damagedItems.length === 0 && (
             <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
               <p className="text-sm text-green-400">
-                This car is already in perfect condition.
+                {items.length === 1
+                  ? "This car is already in perfect condition."
+                  : "These cars are already in perfect condition."}
               </p>
             </div>
           )}
 
-          {action === "repair" && dmg > 0 && (
+          {action === "repair" && damagedItems.length > 0 && (
             <>
               <div className="rounded-lg border border-border bg-background/50 p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
-                    Current Damage
+                    Cars to repair
                   </span>
-                  <span className="text-sm font-semibold text-red-400">
-                    {dmg}%
+                  <span className="text-sm font-semibold text-foreground">
+                    {damagedItems.length}
                   </span>
                 </div>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  Repairing will restore the car to 0% damage. This costs cash.
+                  Repairing restores each car to 0% damage. This costs cash.
+                  {items.length > damagedItems.length &&
+                    ` ${carCountLabel(items.length - damagedItems.length)} already perfect and will be skipped.`}
                 </p>
               </div>
 
@@ -654,11 +569,11 @@ function GarageActionDialog({
                           : "text-muted-foreground",
                       )}
                     >
-                      Repair Car
+                      {titles.repair}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {approveSuccess
-                        ? "Click Repair below to fix your car."
+                        ? `Click ${titles.repair} below to restore condition.`
                         : "Complete step 1 first to unlock repair."}
                     </p>
                   </div>
@@ -701,10 +616,7 @@ function GarageActionDialog({
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={
-              !canSubmit ||
-              (action === "repair" && dmg === 0)
-            }
+            disabled={!canSubmit}
             className={cn(
               action === "sell" && "bg-red-600 text-white hover:bg-red-700",
             )}
@@ -722,18 +634,42 @@ function GarageActionDialog({
   );
 }
 
-// ── List Row ────────────────────────────────────────────────────
-function GarageRow({
+function Stat({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <div className="mt-0.5 truncate text-xs font-medium text-foreground">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Car card ────────────────────────────────────────────────────
+function GarageCard({
   item,
+  selected,
+  onSelectedChange,
   onRefresh,
 }: {
   item: CarItem;
+  selected: boolean;
+  onSelectedChange: (selected: boolean) => void;
   onRefresh: () => void;
 }) {
   const quality = getQualityLabel(item.car.qualityLvl);
   const dmg = Number(item.damagePercent) || 0;
   const condition = 100 - dmg;
   const estimatedValue = Math.round(item.car.basePrice * (1 - dmg / 100));
+  const modelName = getCarModelName(item.car);
 
   const [dialogAction, setDialogAction] = useState<GarageActionType | null>(
     null,
@@ -741,163 +677,138 @@ function GarageRow({
 
   return (
     <>
-      <div className="group flex items-center gap-4 rounded-lg border border-border bg-card p-3 transition-all duration-150 hover:border-primary/30 hover:bg-card/80">
-        {/* Thumbnail */}
-        <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-md bg-background/50">
-          {item.car.image ? (
-            <img
-              src={item.car.image}
-              alt={item.car.carName}
-              className="h-full w-full object-contain p-1"
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-                e.currentTarget.nextElementSibling?.classList.remove("hidden");
-              }}
+      <div
+        className={cn(
+          "flex h-full flex-col gap-3 rounded-lg border p-3 transition-all duration-150",
+          selected
+            ? "border-primary/40 bg-primary/5"
+            : "border-border bg-card hover:border-primary/30 hover:bg-card/80",
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-start gap-2">
+            <Checkbox
+              checked={selected}
+              onCheckedChange={(checked) => onSelectedChange(checked === true)}
+              aria-label={`Select ${item.car.brand} #${item.itemId}`}
+              className="mt-0.5"
             />
-          ) : null}
-          <div
-            className={cn(
-              "flex h-full w-full items-center justify-center",
-              item.car.image ? "hidden" : "",
-            )}
-          >
-            <Car className="h-6 w-6 text-muted-foreground/40" />
-          </div>
-        </div>
-
-        {/* Main info */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-          {/* Name + quality */}
-          <div className="flex min-w-0 flex-shrink-0 flex-col sm:w-40">
+            <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="truncate text-sm font-semibold text-foreground">
                 {item.car.brand}
               </h3>
-              <span className="font-mono text-[10px] text-muted-foreground">
+              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
                 #{item.itemId}
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                  quality.className,
-                )}
-              >
-                {quality.label}
-              </span>
-              <div className="flex items-center gap-1.5 text-xs">
-                <DollarSign className="h-3 w-3 text-primary/70" />
-                <span className="font-medium text-foreground">
-                  {estimatedValue.toLocaleString()}
-                </span>
-                {dmg > 0 && (
-                  <span className="text-muted-foreground/60 line-through">
-                    {item.car.basePrice.toLocaleString()}
-                  </span>
-                )}
-              </div>
+            <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
+              {modelName}
+            </p>
             </div>
           </div>
 
-          {/* Stats row */}
-          <div className="flex flex-1 items-center gap-3 text-xs sm:gap-4">
-            <div
-              className="flex items-center gap-1 text-muted-foreground"
-              title="Speed"
-            >
-              <Gauge className="h-3.5 w-3.5 text-primary/70" />
-              <span className="font-medium text-foreground">
-                {item.car.speed}
-              </span>
-              <span className="hidden sm:inline">mph</span>
-            </div>
-            <div
-              className="flex items-center gap-1 text-muted-foreground"
-              title="Seats"
-            >
-              <Users className="h-3.5 w-3.5 text-primary/70" />
-              <span className="font-medium text-foreground">
-                {item.car.seats}
-              </span>
-            </div>
-            <div
-              className="flex items-center gap-1 text-muted-foreground"
-              title="City"
-            >
-              <MapPin className="h-3.5 w-3.5 text-primary/70" />
-              <span className="font-medium text-foreground">
-                {getTravelCityName(item.cityId)}
-              </span>
-            </div>
-          </div>
-
-          {/* Condition bar */}
-          <div className="flex items-center gap-2 sm:w-36 sm:flex-shrink-0">
-            <Wrench className="hidden h-3.5 w-3.5 text-primary/70 sm:block" />
-            <div className="flex flex-1 items-center gap-2">
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all duration-500",
-                    getConditionColor(condition),
-                  )}
-                  style={{ width: `${condition}%` }}
-                />
-              </div>
-              <span
-                className={cn(
-                  "w-8 text-right text-xs font-semibold tabular-nums",
-                  getConditionTextColor(condition),
-                )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
               >
-                {condition}%
-              </span>
-            </div>
-          </div>
+                <MoreVertical className="h-4 w-4" />
+                <span className="sr-only">Car actions</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => setDialogAction("ship")}>
+                <Truck className="mr-2 h-4 w-4" />
+                Ship Car
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDialogAction("transfer")}>
+                <SendHorizontal className="mr-2 h-4 w-4" />
+                Transfer
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDialogAction("repair")}>
+                <Wrench className="mr-2 h-4 w-4" />
+                Repair Car
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setDialogAction("sell")}
+                className="text-red-400 focus:text-red-400"
+              >
+                <Banknote className="mr-2 h-4 w-4" />
+                Sell Car
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
-        {/* Actions dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 flex-shrink-0 text-muted-foreground hover:text-foreground"
-            >
-              <MoreVertical className="h-4 w-4" />
-              <span className="sr-only">Car actions</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={() => setDialogAction("ship")}>
-              <Truck className="mr-2 h-4 w-4" />
-              Ship Car
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDialogAction("transfer")}>
-              <SendHorizontal className="mr-2 h-4 w-4" />
-              Transfer
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setDialogAction("repair")}>
-              <Wrench className="mr-2 h-4 w-4" />
-              Repair Car
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setDialogAction("sell")}
-              className="text-red-400 focus:text-red-400"
-            >
-              <Banknote className="mr-2 h-4 w-4" />
-              Sell Car
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <span
+          className={cn(
+            "inline-flex w-fit rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+            quality.className,
+          )}
+        >
+          {quality.label}
+        </span>
+
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+          <Stat label="Value">
+            <span className="inline-flex items-center gap-0.5">
+              <DollarSign className="h-3 w-3 text-primary/70" />
+              {estimatedValue.toLocaleString()}
+            </span>
+            {dmg > 0 && (
+              <span className="ml-1 text-[10px] font-normal text-muted-foreground/60 line-through">
+                {item.car.basePrice.toLocaleString()}
+              </span>
+            )}
+          </Stat>
+          <Stat label="Speed">
+            <span className="inline-flex items-center gap-1">
+              <Gauge className="h-3 w-3 text-primary/70" />
+              {item.car.speed} mph
+            </span>
+          </Stat>
+          <Stat label="Seats">
+            <span className="inline-flex items-center gap-1">
+              <Users className="h-3 w-3 text-primary/70" />
+              {item.car.seats}
+            </span>
+          </Stat>
+          <Stat label="City">
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3 w-3 shrink-0 text-primary/70" />
+              <span className="truncate">{getTravelCityName(item.cityId)}</span>
+            </span>
+          </Stat>
+        </div>
+
+        <div className="mt-auto flex items-center gap-2">
+          <Wrench className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-500",
+                getConditionColor(condition),
+              )}
+              style={{ width: `${condition}%` }}
+            />
+          </div>
+          <span
+            className={cn(
+              "w-8 text-right text-xs font-semibold tabular-nums",
+              getConditionTextColor(condition),
+            )}
+          >
+            {condition}%
+          </span>
+        </div>
       </div>
 
-      {/* Action dialogs */}
       {dialogAction && (
         <GarageActionDialog
-          item={item}
+          items={[item]}
           action={dialogAction}
           open={!!dialogAction}
           onOpenChange={(open) => {
@@ -911,23 +822,24 @@ function GarageRow({
 }
 
 // ── Loading skeleton ────────────────────────────────────────────
-function GarageRowSkeleton() {
+function GarageCardSkeleton() {
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-border bg-card p-3 animate-pulse">
-      <div className="h-16 w-24 flex-shrink-0 rounded-md bg-secondary/50" />
-      <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-        <div className="flex flex-col gap-1.5 sm:w-40">
+    <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 animate-pulse">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-1 flex-col gap-1.5">
           <div className="h-4 w-28 rounded bg-secondary/50" />
-          <div className="h-3 w-20 rounded bg-secondary/30" />
+          <div className="h-3 w-full rounded bg-secondary/30" />
         </div>
-        <div className="flex flex-1 gap-4">
-          <div className="h-3 w-12 rounded bg-secondary/30" />
-          <div className="h-3 w-8 rounded bg-secondary/30" />
-          <div className="h-3 w-16 rounded bg-secondary/30" />
-        </div>
-        <div className="h-1.5 w-28 rounded-full bg-secondary/50" />
+        <div className="h-7 w-7 rounded bg-secondary/30" />
       </div>
-      <div className="h-8 w-8 rounded bg-secondary/30" />
+      <div className="h-4 w-16 rounded bg-secondary/40" />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="h-7 rounded bg-secondary/30" />
+        <div className="h-7 rounded bg-secondary/30" />
+        <div className="h-7 rounded bg-secondary/30" />
+        <div className="h-7 rounded bg-secondary/30" />
+      </div>
+      <div className="h-1.5 rounded-full bg-secondary/50" />
     </div>
   );
 }
@@ -942,6 +854,8 @@ export function GarageAction() {
     inventoryScript === "error" ? "Failed to load inventory script" : null;
 
   const [cars, setCars] = useState<CarItem[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = useState<GarageActionType | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{
@@ -980,6 +894,38 @@ export function GarageAction() {
       setProgress(null);
     }
   }, [address, chainConfig.addresses.inventory]);
+
+  useEffect(() => {
+    if (loading) return;
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const live = new Set(cars.map((car) => car.itemId));
+      let changed = false;
+      const next = new Set<number>();
+      for (const id of prev) {
+        if (live.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [cars, loading]);
+
+  const selectedCars = useMemo(
+    () => cars.filter((car) => selectedIds.has(car.itemId)),
+    [cars, selectedIds],
+  );
+  const selectedDamagedCount = selectedCars.filter(
+    (car) => (Number(car.damagePercent) || 0) > 0,
+  ).length;
+
+  function toggleCar(itemId: number, selected: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (selected) next.add(itemId);
+      else next.delete(itemId);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (scriptReady && isConnected && address) {
@@ -1031,9 +977,9 @@ export function GarageAction() {
             )}
           </div>
         </div>
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <GarageRowSkeleton key={i} />
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <GarageCardSkeleton key={i} />
           ))}
         </div>
       </div>
@@ -1106,12 +1052,104 @@ export function GarageAction() {
         </Button>
       </div>
 
-      {/* List */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">
+              {selectedCars.length}
+            </span>{" "}
+            selected
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() =>
+              setSelectedIds(new Set(cars.map((car) => car.itemId)))
+            }
+          >
+            Select all
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setSelectedIds(new Set())}
+            disabled={selectedCars.length === 0}
+          >
+            Clear
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            disabled={selectedCars.length === 0}
+            onClick={() => setBulkAction("ship")}
+          >
+            <Truck className="h-3.5 w-3.5" />
+            Ship
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            disabled={selectedCars.length === 0}
+            onClick={() => setBulkAction("transfer")}
+          >
+            <SendHorizontal className="h-3.5 w-3.5" />
+            Transfer
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            disabled={selectedDamagedCount === 0}
+            onClick={() => setBulkAction("repair")}
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            Repair
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs text-red-400 hover:text-red-400"
+            disabled={selectedCars.length === 0}
+            onClick={() => setBulkAction("sell")}
+          >
+            <Banknote className="h-3.5 w-3.5" />
+            Sell
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {cars.map((car) => (
-          <GarageRow key={car.itemId} item={car} onRefresh={fetchCars} />
+          <GarageCard
+            key={car.itemId}
+            item={car}
+            selected={selectedIds.has(car.itemId)}
+            onSelectedChange={(selected) => toggleCar(car.itemId, selected)}
+            onRefresh={fetchCars}
+          />
         ))}
       </div>
+
+      {bulkAction && (
+        <GarageActionDialog
+          items={selectedCars}
+          action={bulkAction}
+          open={!!bulkAction}
+          onOpenChange={(open) => {
+            if (!open) setBulkAction(null);
+          }}
+          onSuccess={() => {
+            setSelectedIds(new Set());
+            fetchCars();
+          }}
+        />
+      )}
     </div>
   );
 }

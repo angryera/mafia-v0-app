@@ -1713,6 +1713,16 @@ export const INVENTORY_CONTRACT_ABI: Abi = [
         stateMutability: "nonpayable",
         type: "function",
     },
+    {
+        inputs: [
+            { internalType: "address", name: "to", type: "address" },
+            { internalType: "uint256[]", name: "itemIds", type: "uint256[]" },
+        ],
+        name: "transferItems",
+        outputs: [],
+        stateMutability: "nonpayable",
+        type: "function",
+    },
     // --- Garage: Sell Cars ---
     {
         inputs: [
@@ -2515,6 +2525,13 @@ export const SAFEHOUSE_ABI: Abi = [
         type: "function",
         name: "enterSafehouse",
         inputs: [{ name: "hour", type: "uint256", internalType: "uint256" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "exitSafehouse",
+        inputs: [],
         outputs: [],
         stateMutability: "nonpayable",
     },

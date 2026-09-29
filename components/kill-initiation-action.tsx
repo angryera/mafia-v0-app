@@ -729,8 +729,7 @@ export function KillInitiationAction() {
                 You are in the safehouse
               </p>
               <p className="mt-0.5 text-xs text-red-400/80">
-                Leave the safehouse (wait for protection to end) before initiating
-                an attack.
+                Leave the safehouse before initiating an attack.
               </p>
             </div>
           </div>

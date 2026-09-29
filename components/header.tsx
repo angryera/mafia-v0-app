@@ -623,10 +623,7 @@ export function Sidebar({
             <Shield className="h-4 w-4" />
             <span className="absolute inset-x-1 bottom-1 h-px bg-primary/40" />
           </div>
-          <div className="min-w-0">
-            <p className="text-[15px] font-bold tracking-[-0.02em] text-foreground">PLAYMAFIA</p>
-            <p className="text-[9px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Syndicate console</p>
-          </div>
+          <p className="text-[15px] font-bold tracking-[-0.02em] text-foreground">PLAYMAFIA</p>
         </Link>
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-3 sidebar-scroll">
