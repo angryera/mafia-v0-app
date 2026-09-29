@@ -12,6 +12,7 @@ import {
 
 import { useChain } from "@/components/chain-provider";
 import { EXCHANGE_ADDRESSES, type ChainId } from "@/lib/contract";
+import { formatWalletAddress } from "@/lib/format";
 
 export function ExchangeOTCInfo() {
   const { chainConfig, activeChain } = useChain();
@@ -121,7 +122,7 @@ export function ExchangeOTCInfo() {
             rel="noopener noreferrer"
             className="font-mono text-xs text-primary hover:underline"
           >
-            {exchangeAddress.slice(0, 6)}...{exchangeAddress.slice(-4)}
+            {formatWalletAddress(exchangeAddress)}
           </a>
         </div>
       </div>

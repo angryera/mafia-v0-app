@@ -16,6 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { formatEther, isAddress, type Abi } from "viem";
+import { sleep } from "@/lib/utils";
 import {
   BULLET_ABI,
   DETECTIVE_AGENCY_ABI,
@@ -177,10 +178,6 @@ const MOCK_PROFILES: KnownProfile[] = [
   { name: "Carlo Gambino", address: "0x6666666666666666666666666666666666666666" },
   { name: "Vito Genovese", address: "0x7777777777777777777777777777777777777777" },
 ];
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reads
@@ -508,7 +505,7 @@ export async function initiateKill(params: {
   if (!Number.isFinite(bulletAmount) || bulletAmount < 1) {
     throw new Error("Invalid bullet amount");
   }
-  await delay(900);
+  await sleep(900);
 
   if (!MOCK_KILL_INITIATION_ENABLED) {
     return;

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
 import { DEPOSIT_ADDRESSES, type ChainId } from "@/lib/contract";
+import { formatWalletAddress } from "@/lib/format";
 
 export function ExchangeLiquidityInfo() {
   const { chainConfig, activeChain } = useChain();
@@ -123,7 +124,7 @@ export function ExchangeLiquidityInfo() {
             rel="noopener noreferrer"
             className="font-mono text-xs text-primary hover:underline"
           >
-            {depositAddress.slice(0, 6)}...{depositAddress.slice(-4)}
+            {formatWalletAddress(depositAddress)}
           </a>
         </div>
       </div>

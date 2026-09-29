@@ -11,7 +11,7 @@ import { useAuth } from "@/components/auth-provider";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { COOLDOWN_READ_QUERY } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
-import { getErrorMessage } from "@/lib/format";
+import { formatDuration, getErrorMessage } from "@/lib/format";
 import {
   EQUIPMENT_ABI,
   EQUIPMENT_SLOTS,
@@ -805,20 +805,6 @@ export function EquipmentAction() {
   const nextEquipTime = lastEquippedAt + EQUIP_COOLDOWN_SECONDS;
   const canEquipNow = equipLoaded && currentTime >= nextEquipTime;
   const cooldownRemaining = canEquipNow ? 0 : nextEquipTime - currentTime;
-
-  // Format cooldown time
-  const formatCooldown = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    if (hours > 0) {
-      return `${hours}h ${mins}m ${secs}s`;
-    } else if (mins > 0) {
-      return `${mins}m ${secs}s`;
-    }
-    return `${secs}s`;
-  };
-
   // Check if there are changes
   const hasChanges = (() => {
     if (!equipmentInfo) return false;
@@ -1085,7 +1071,7 @@ export function EquipmentAction() {
                   <p className="text-xs text-muted-foreground mt-1">
                     You can equip again in{" "}
                     <span className="font-mono text-yellow-400">
-                      {formatCooldown(cooldownRemaining)}
+                      {formatDuration(cooldownRemaining)}
                     </span>
                   </p>
                 </div>

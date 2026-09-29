@@ -29,6 +29,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatWalletAddress } from "@/lib/format";
 
 type SwapToken = {
   name: string;
@@ -571,7 +572,7 @@ export function PremiumAction() {
                         {selectedToken
                           ? isNativeToken
                             ? "Native token"
-                            : `${selectedToken.tokenAddress.slice(0, 6)}...${selectedToken.tokenAddress.slice(-4)}`
+                            : formatWalletAddress(selectedToken.tokenAddress)
                           : "Choose payment token"}
                       </p>
                     </div>

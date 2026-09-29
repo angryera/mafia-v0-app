@@ -1,6 +1,7 @@
 "use client";
 
-import { getErrorMessage } from "@/lib/format";
+import { parseFamilyStake, type FamilyStakeEntry } from "@/features/families/lib/family-share-stake";
+import { formatLongCooldown, formatWeiDisplay as formatMafiaWei, formatWalletAddress, getErrorMessage } from "@/lib/format";
 import { useChainAddresses } from "@/components/chain-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,12 +37,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  formatUnits,
-  maxUint256,
-  parseEther,
-  zeroAddress,
-} from "viem";
+import { maxUint256, parseEther, zeroAddress } from "viem";
 import {
   useAccount,
   usePublicClient,
@@ -51,16 +47,6 @@ import {
 const STAKE_REFETCH_MS = 15_000;
 /** Rank activation family-share reduction is linear with fill, capped at 40%. */
 const FAMILY_SHARE_REDUCTION_CAP_PERCENT = 40;
-
-type FamilyStakeEntry = {
-  id: bigint;
-  user: `0x${string}`;
-  familyId: bigint;
-  amount: bigint;
-  startedAt: bigint;
-  endedAt: bigint;
-  isActive: boolean;
-};
 
 function parseStakeAmount(raw: string): bigint | null {
   const trimmed = raw.trim();
@@ -74,26 +60,6 @@ function parseStakeAmount(raw: string): bigint | null {
   }
 }
 
-function formatMafiaWei(wei: bigint | undefined, digits = 2): string {
-  if (wei === undefined) return "—";
-  return Number(formatUnits(wei, 18)).toLocaleString(undefined, {
-    maximumFractionDigits: digits,
-  });
-}
-
-function formatLongCooldown(seconds: number): string {
-  if (seconds <= 0) return "Ready";
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  if (days > 0) {
-    return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
-  }
-  if (hours > 0) return `${hours}h ${mins}m`;
-  if (mins > 0) return `${mins}m`;
-  return `${seconds}s`;
-}
-
 function computeRankReductionPercent(
   staked: bigint | undefined,
   maxStake: bigint | undefined,
@@ -104,34 +70,6 @@ function computeRankReductionPercent(
   const ratio = Number(staked) / Number(maxStake);
   if (!Number.isFinite(ratio) || ratio <= 0) return 0;
   return Math.min(FAMILY_SHARE_REDUCTION_CAP_PERCENT, ratio * FAMILY_SHARE_REDUCTION_CAP_PERCENT);
-}
-
-function parseFamilyStake(
-  id: bigint,
-  raw: unknown,
-): FamilyStakeEntry | null {
-  if (raw == null) return null;
-  if (Array.isArray(raw)) {
-    return {
-      id,
-      user: (raw[0] ?? zeroAddress) as `0x${string}`,
-      familyId: BigInt(raw[1] as bigint | string | number),
-      amount: BigInt(raw[2] as bigint | string | number),
-      startedAt: BigInt(raw[3] as bigint | string | number),
-      endedAt: BigInt(raw[4] as bigint | string | number),
-      isActive: Boolean(raw[5]),
-    };
-  }
-  const o = raw as Record<string, unknown>;
-  return {
-    id,
-    user: (o.user ?? zeroAddress) as `0x${string}`,
-    familyId: BigInt((o.familyId as bigint | string | number) ?? 0),
-    amount: BigInt((o.amount as bigint | string | number) ?? 0),
-    startedAt: BigInt((o.startedAt as bigint | string | number) ?? 0),
-    endedAt: BigInt((o.endedAt as bigint | string | number) ?? 0),
-    isActive: Boolean(o.isActive),
-  };
 }
 
 interface FamilyShareStakeProps {
@@ -451,9 +389,6 @@ export function FamilyShareStake({
 
   if (!configured) return null;
 
-  const formatAddr = (addr: string) =>
-    `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-
   return (
     <>
       <Card className="border-border/50 bg-card/50 backdrop-blur">
@@ -586,7 +521,7 @@ export function FamilyShareStake({
                             )}
                             title={stake.user}
                           >
-                            {isMine ? "You" : formatAddr(stake.user)}
+                            {isMine ? "You" : formatWalletAddress(stake.user)}
                           </span>
                         </TableCell>
                         <TableCell className="py-2 font-mono text-sm tabular-nums">

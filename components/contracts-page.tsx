@@ -12,8 +12,7 @@ import {
   type ChainId,
 } from "@/lib/constants/address";
 import { ExternalLink, Copy, Check, FileText } from "lucide-react";
-
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+import { zeroAddress } from "viem";
 
 type AddressKey = keyof ChainConfig["addresses"];
 
@@ -168,7 +167,7 @@ function ContractRow({
   explorerUrl: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const isZero = !address || address === ZERO_ADDRESS;
+  const isZero = !address || address === zeroAddress;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(address);
@@ -249,13 +248,13 @@ export function ContractsPage() {
               chainConfig.id,
               addresses,
               chainConfig.wagmiChainId,
-            ) ?? ZERO_ADDRESS,
+            ) ?? zeroAddress,
         }));
         const activeContracts = resolved.filter(
-          (contract) => contract.address !== ZERO_ADDRESS,
+          (contract) => contract.address !== zeroAddress,
         );
         const inactiveContracts = resolved.filter(
-          (contract) => contract.address === ZERO_ADDRESS,
+          (contract) => contract.address === zeroAddress,
         );
 
         return (
@@ -281,7 +280,7 @@ export function ContractsPage() {
                 <ContractRow
                   key={contract.key}
                   label={contract.label}
-                  address={ZERO_ADDRESS}
+                  address={zeroAddress}
                   explorerUrl={explorerUrl}
                 />
               ))}

@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { formatWalletAddress } from "@/lib/format";
 
 interface BreakdownItem {
   group: string;
@@ -178,7 +179,7 @@ export function WorthInfo() {
           <div>
             <h3 className="text-xl font-bold text-foreground">Player Worth</h3>
             <p className="text-xs text-muted-foreground font-mono">
-              {address?.slice(0, 6)}...{address?.slice(-4)}
+              {formatWalletAddress(address ?? "")}
             </p>
           </div>
         </div>

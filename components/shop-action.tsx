@@ -11,7 +11,7 @@ import {
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { COOLDOWN_READ_QUERY, cooldownSecondsLeft, formatCooldownClock, useCooldownRemaining } from "@/hooks/use-cooldown-remaining";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
-import { getErrorMessage } from "@/lib/format";
+import { getErrorMessage, formatWalletAddress } from "@/lib/format";
 import {
   SHOP_CONTRACT_ABI,
   SHOP_ITEMS,
@@ -969,7 +969,7 @@ export function ShopAction() {
           <div className="mt-1.5 flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Spender</span>
             <span className="font-mono text-[10px] text-foreground">
-              {addresses.shop.slice(0, 6)}...{addresses.shop.slice(-4)}
+              {formatWalletAddress(addresses.shop)}
             </span>
           </div>
           <div className="mt-1.5 flex items-center justify-between">

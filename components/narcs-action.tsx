@@ -33,6 +33,8 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDuration } from "@/lib/format";
+import { countHoldingsByType, type SmugglingGood } from "@/lib/smuggling";
 import { formatEther, parseEther, decodeEventLog } from "viem";
 
 interface ProfileData {
@@ -40,24 +42,6 @@ interface ProfileData {
   username: string;
   cityId: number;
   isActive: boolean;
-}
-
-interface SmugglingGood {
-  id: number;
-  owner: string;
-  categoryId: number;
-  typeId: number;
-  isSold: boolean;
-}
-
-// Count holdings by typeId
-function countHoldingsByType(holdings: SmugglingGood[]): Record<number, number> {
-  const counts: Record<number, number> = {};
-  for (let i = 0; i < 7; i++) counts[i] = 0;
-  for (const good of holdings) {
-    counts[good.typeId] = (counts[good.typeId] || 0) + 1;
-  }
-  return counts;
 }
 
 export function NarcsAction() {
@@ -404,15 +388,8 @@ export function NarcsAction() {
   const cooldownRemaining = cooldownSeconds ?? 0;
 
   // Format cooldown time
-  const formatCooldown = (seconds: number): string => {
-    if (seconds <= 0) return "Now!";
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h > 0) return `${h}h ${m}m ${s}s`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
-  };
+  const formatCooldown = (seconds: number): string =>
+    seconds <= 0 ? "Now!" : formatDuration(seconds);
 
   // ---------- Handlers ----------
   const setBuyAmount = (typeId: number, amount: number) => {

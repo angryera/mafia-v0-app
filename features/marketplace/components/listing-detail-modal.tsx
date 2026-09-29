@@ -37,6 +37,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatUnits, maxUint256, parseUnits } from "viem";
 import { useAccount, useBalance, useReadContract } from "wagmi";
+import { formatWalletAddress } from "@/lib/format";
 
 interface ListingDetailModalProps {
   listing: InventoryMarketplaceListing | null;
@@ -651,7 +652,7 @@ export function ListingDetailModal({
                   .map((bid, i) => (
                     <div key={i} className="flex items-center justify-between text-xs">
                       <span className="font-mono text-muted-foreground">
-                        {bid.buyer.slice(0, 6)}...{bid.buyer.slice(-4)}
+                        {formatWalletAddress(bid.buyer)}
                       </span>
                       <span className="font-mono font-medium text-foreground">
                         {Number(formatUnits(bid.price, tokenInfo.decimal)).toFixed(4)}{" "}

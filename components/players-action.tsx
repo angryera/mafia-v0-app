@@ -35,6 +35,8 @@ import {
   User,
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
+import { getGenderLabel } from "@/lib/contract";
+import { formatWalletAddress as formatAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import "@/types/mafia-globals";
 
@@ -137,17 +139,6 @@ export function PlayersAction() {
       console.error("Failed to copy:", err);
     }
   };
-
-  // Format address for display
-  const formatAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
-
-  // Get gender label
-  const getGenderLabel = (gender: number) => {
-    return gender === 1 ? "Female" : "Male";
-  };
-
   return (
     <div className="space-y-4">
       {/* Header with search and controls */}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { type HELPER_BOTS, type HelperBotInfo } from "@/lib/contract";
 import { Button } from "@/components/ui/button";
+import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type HelperBot = (typeof HELPER_BOTS)[number];
@@ -30,15 +31,6 @@ export function HelperBotListRow({
   const timeLeft = endTimestamp > now ? endTimestamp - now : 0;
   const canFinish = isRunning && timeLeft === 0;
 
-  const formatTime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h > 0) return `${h}h ${m}m ${s}s`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
-  };
-
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 last:border-b-0">
       <div className="min-w-0">
@@ -65,7 +57,7 @@ export function HelperBotListRow({
         </div>
         <p className="truncate text-xs text-muted-foreground">{bot.description}</p>
         {isRunning && !canFinish && (
-          <p className="mt-1 text-[11px] text-chain-accent">Time left: {formatTime(timeLeft)}</p>
+          <p className="mt-1 text-[11px] text-chain-accent">Time left: {formatDuration(timeLeft)}</p>
         )}
       </div>
 

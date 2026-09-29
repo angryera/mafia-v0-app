@@ -1,6 +1,7 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
+import { getPerkDisplay, getToolsDisplayName, type PerkType } from "@/lib/perks";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useReadContract, useAccount } from "wagmi";
 import { decodeEventLog } from "viem";
@@ -57,108 +58,7 @@ interface InventoryItem {
 
 const POLL_INTERVAL = 4000;
 
-// ========== PERK MAPPING ==========
-// Mapping rules from prompt
-const SUCCESS_OPTIONS = ["Crime", "NickCar", "Booze", "Narcotics", "KillSkill", "BustOut"];
-const COOLDOWN_OPTIONS = ["Crime", "NickCar", "Booze", "Narcotics", "KillSkill", "Travel", "BulletBuy", "HealthBuy", "BustOut"];
-const BOOSTER_OPTIONS = ["MapYield", "RaceXp", "KillSkillXp", "BustOutXp", "SalesPriceNarcotics", "SalesPriceBooze", "Worth", "Rewards"];
-const TOOLS_OPTIONS = ["Purchase", "NoJail", "FreeTravel", "BankFee", "CreditCost", "Convert", "CreditSpend"];
-
-const DURATIONS = ["6", "12", "24", "48", "72", "96"];
-const SUCCESS_AMOUNTS = ["100", "75", "50"];
-const COOLDOWN_AMOUNTS = ["90", "75", "50"];
-const BOOSTER_AMOUNTS = ["100", "75", "50", "25"];
-
-interface PerkDisplay {
-  type: "success" | "cooldown" | "booster" | "tools";
-  option: string;
-  amount: string;
-  duration: string;
-  tools: string;
-}
-
-function getPerkDisplay(categoryId: number, typeId: number): PerkDisplay {
-  const D = DURATIONS.length; // 6
-
-  // SUCCESS perks (18-23)
-  if (categoryId >= 18 && categoryId <= 23) {
-    const optionIndex = categoryId - 18;
-    const amountIndex = Math.floor(typeId / D);
-    const durationIndex = typeId % D;
-    return {
-      type: "success",
-      option: SUCCESS_OPTIONS[optionIndex] ?? `Option #${optionIndex}`,
-      amount: SUCCESS_AMOUNTS[amountIndex] ?? "Unknown",
-      duration: DURATIONS[durationIndex] ?? "Unknown",
-      tools: "",
-    };
-  }
-
-  // COOLDOWN perks (24-32)
-  if (categoryId >= 24 && categoryId <= 32) {
-    const optionIndex = categoryId - 24;
-    const amountIndex = Math.floor(typeId / D);
-    const durationIndex = typeId % D;
-    return {
-      type: "cooldown",
-      option: COOLDOWN_OPTIONS[optionIndex] ?? `Option #${optionIndex}`,
-      amount: COOLDOWN_AMOUNTS[amountIndex] ?? "Unknown",
-      duration: DURATIONS[durationIndex] ?? "Unknown",
-      tools: "",
-    };
-  }
-
-  // BOOSTER perks (33-40)
-  if (categoryId >= 33 && categoryId <= 40) {
-    const optionIndex = categoryId - 33;
-    const amountIndex = Math.floor(typeId / D);
-    const durationIndex = typeId % D;
-    return {
-      type: "booster",
-      option: BOOSTER_OPTIONS[optionIndex] ?? `Option #${optionIndex}`,
-      amount: BOOSTER_AMOUNTS[amountIndex] ?? "Unknown",
-      duration: DURATIONS[durationIndex] ?? "Unknown",
-      tools: "",
-    };
-  }
-
-  // TOOLS perks (41-47)
-  if (categoryId >= 41 && categoryId <= 47) {
-    const toolsIndex = categoryId - 41;
-    const durationIndex = typeId % D;
-    return {
-      type: "tools",
-      option: "",
-      amount: "",
-      duration: DURATIONS[durationIndex] ?? "Unknown",
-      tools: TOOLS_OPTIONS[toolsIndex] ?? `Tool #${toolsIndex}`,
-    };
-  }
-
-  // Unknown category
-  return {
-    type: "success",
-    option: `Unknown (Cat ${categoryId})`,
-    amount: "?",
-    duration: "?",
-    tools: "",
-  };
-}
-
-function getToolsDisplayName(toolsId: string): string {
-  const toolsNames: Record<string, string> = {
-    Purchase: "Free Purchase",
-    NoJail: "No Jail",
-    FreeTravel: "Free Travel",
-    BankFee: "No Bank Fee",
-    CreditCost: "Reduced Credit Cost",
-    Convert: "Free Convert",
-    CreditSpend: "Reduced Credit Spend",
-  };
-  return toolsNames[toolsId] ?? toolsId;
-}
-
-function getTypeLabel(type: "success" | "cooldown" | "booster" | "tools"): string {
+function getTypeLabel(type: PerkType): string {
   const labels: Record<string, string> = {
     success: "Success Boost",
     cooldown: "Cooldown Reduction",

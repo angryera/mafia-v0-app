@@ -16,7 +16,7 @@ import {
   INGAME_CURRENCY_APPROVE_AMOUNT,
   USER_PROFILE_CONTRACT_ABI,
 } from "@/lib/contract";
-import { getErrorMessage, getTravelCityName } from "@/lib/format";
+import { getErrorMessage, getTravelCityName, formatWalletAddress } from "@/lib/format";
 import { useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -809,7 +809,7 @@ export function DetectiveAgencyAction() {
           <div className="flex flex-col gap-3">
             {hireList.map((hire) => {
               const info = getHireDisplayInfo(hire);
-              const shortTarget = `${hire.target.slice(0, 6)}...${hire.target.slice(-4)}`;
+              const shortTarget = formatWalletAddress(hire.target);
               const detectiveLabel = Number(hire.detectiveCount) > 1
                 ? `${Number(hire.detectiveCount)} Detectives`
                 : "1 Detective";
@@ -1003,7 +1003,7 @@ function RevealedInfo({ hire, now, explorer }: { hire: DetectiveHire; now: numbe
           rel="noopener noreferrer"
           className="font-mono text-[10px] text-primary underline decoration-primary/30 hover:decoration-primary"
         >
-          {hire.target.slice(0, 6)}...{hire.target.slice(-4)}
+          {formatWalletAddress(hire.target)}
         </a>
       </div>
     </>

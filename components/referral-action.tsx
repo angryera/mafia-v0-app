@@ -40,9 +40,11 @@ import {
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
+import { getGenderLabel } from "@/lib/contract";
 import { cn } from "@/lib/utils";
 import { formatWalletAddress as formatAddress } from "@/lib/format";
 import "@/types/mafia-globals";
+import { zeroAddress } from "viem";
 import { useAccount } from "wagmi";
 
 // Player data structure from contract (with referrer field)
@@ -65,7 +67,6 @@ interface LeaderboardEntry {
 }
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 export function ReferralAction() {
   const { chainConfig } = useChain();
@@ -135,7 +136,7 @@ export function ReferralAction() {
 
     // Count referrals for each referrer
     allPlayers.forEach((player) => {
-      if (player.referrer && player.referrer !== ZERO_ADDRESS) {
+      if (player.referrer && player.referrer !== zeroAddress) {
         const count = referralCounts.get(player.referrer.toLowerCase()) || 0;
         referralCounts.set(player.referrer.toLowerCase(), count + 1);
       }
@@ -211,11 +212,6 @@ export function ReferralAction() {
     } catch (err) {
       console.error("Failed to copy:", err);
     }
-  };
-
-  // Get gender label
-  const getGenderLabel = (gender: number) => {
-    return gender === 1 ? "Female" : "Male";
   };
 
   // Get rank icon

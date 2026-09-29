@@ -25,7 +25,8 @@ import {
 } from "@/components/ui/select";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
-import { formatWalletAddress, getTravelCityName } from "@/lib/format";
+import { formatTimeAgo, formatWalletAddress, getTravelCityName } from "@/lib/format";
+import { getLobbyStatusColor, parseCrimeLobby, type CrimeLobby, type CrimeLobbyMember } from "@/lib/organized-crime";
 import { useToast } from "@/hooks/use-toast";
 import {
   BULLET_ABI,
@@ -38,9 +39,8 @@ import {
   OC_MAX_BULLETS,
   OC_REWARD_CONFIG,
   OC_ROLE_NAMES,
-  parseOcRewardAmount,
+  getRankName,
   RANK_ABI,
-  RANK_NAMES,
   MARKETPLACE_ITEM_NAMES,
   SHOP_ITEM_STATS,
   USER_PROFILE_CONTRACT_ABI
@@ -70,43 +70,10 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useRef, useState } from "react";
-import { formatEther, maxUint256, parseEther } from "viem";
+import { formatEther, maxUint256, parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 
 // ── Types ───────────────────────────────────────────────────────
-interface Member {
-  user: string;
-  itemIds: number[];
-  impactScore: number;
-  deductedScore: number;
-  assetAddresses: string[];
-  assetAmounts: number[];
-}
-
-interface Reward {
-  typeId: number;
-  amount: number;
-}
-
-interface CrimeLobby {
-  id: number;
-  leader: string;
-  members: Member[];
-  isSuccess: boolean;
-  city: number;
-  failureType: number;
-  assetExpectation: number;
-  minRank: number;
-  impactScore: number;
-  deductedScore: number;
-  status: number;
-  createdAt: number;
-  startBlock: number;
-  isRewardClaimed: boolean;
-  currentRewardIndex: number;
-  rewards: Reward[];
-}
-
 interface InventoryItem {
   itemId: number;
   categoryId: number;
@@ -128,8 +95,6 @@ interface InventoryItem {
 }
 
 // ── Constants ───────────────────────────────────────────────────
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
 // TESTING ONLY:
 // Allows joining Organized Crime lobbies with the same account even if the contract/UI
 // would normally block it (e.g. `wasInLobby` or `isInLobby` checks).
@@ -153,82 +118,13 @@ const ROLE_COLORS: Record<number, string> = {
 };
 
 // ── Helpers ─────────────────────────────────────────────────────
-function parseCrimeLobby(data: unknown): CrimeLobby {
-  const d = data as Record<string, unknown>;
-  return {
-    id: Number(d.id),
-    leader: d.leader as string,
-    members: ((d.members as unknown[]) || []).map((m: unknown) => {
-      const member = m as Record<string, unknown>;
-      return {
-        user: member.user as string,
-        itemIds: ((member.itemIds as unknown[]) || []).map((id) => Number(id)),
-        impactScore: Number(member.impactScore),
-        deductedScore: Number(member.deductedScore),
-        assetAddresses: (member.assetAddresses as string[]) || [],
-        assetAmounts: ((member.assetAmounts as unknown[]) || []).map((amt) =>
-          Number(formatEther(amt as bigint))
-        ),
-      };
-    }),
-    isSuccess: Boolean(d.isSuccess),
-    city: Number(d.city),
-    failureType: Number(d.failureType),
-    assetExpectation: Number(d.assetExpectation),
-    minRank: Number(d.minRank),
-    impactScore: Number(d.impactScore),
-    deductedScore: Number(d.deductedScore),
-    status: Number(d.status),
-    createdAt: Number(d.createdAt),
-    startBlock: Number(d.startBlock),
-    isRewardClaimed: Boolean(d.isRewardClaimed),
-    currentRewardIndex: Number(d.currentRewardIndex),
-    rewards: ((d.rewards as unknown[]) || []).map((r: unknown) => {
-      const reward = r as Record<string, unknown>;
-      const typeId = Number(reward.typeId);
-      return {
-        typeId,
-        amount: parseOcRewardAmount(typeId, reward.amount as bigint),
-      };
-    }),
-  };
-}
-
-function getRankName(rankIndex: number): string {
-  return RANK_NAMES[rankIndex] || `Rank ${rankIndex}`;
-}
-
-function getStatusColor(status: number): string {
-  switch (status) {
-    case OC_LOBBY_STATUS.WAITING:
-      return "bg-amber-500/10 text-amber-500 border-amber-500/30";
-    case OC_LOBBY_STATUS.STARTED:
-      return "bg-blue-500/10 text-blue-500 border-blue-500/30";
-    case OC_LOBBY_STATUS.FINISHED:
-      return "bg-green-500/10 text-green-500 border-green-500/30";
-    case OC_LOBBY_STATUS.CANCELLED:
-      return "bg-red-500/10 text-red-500 border-red-500/30";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-}
-
 function formatAddress(address: string): string {
-  if (address === ZERO_ADDRESS) return "Empty";
+  if (address === zeroAddress) return "Empty";
   return formatWalletAddress(address);
 }
 
-function formatTimeAgo(timestamp: number): string {
-  const now = Math.floor(Date.now() / 1000);
-  const diff = now - timestamp;
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
-function getMemberSubmissionSummary(roleIndex: number, member: Member | null): string[] {
-  if (!member || member.user === ZERO_ADDRESS) return [];
+function getMemberSubmissionSummary(roleIndex: number, member: CrimeLobbyMember | null): string[] {
+  if (!member || member.user === zeroAddress) return [];
   const itemIds = member.itemIds || [];
   const assetParts: string[] = [];
   // `assetAmounts` meaning depends on role:
@@ -862,7 +758,7 @@ function MemberSlotCard({
   isCurrentUser,
 }: {
   roleIndex: number;
-  member: Member | null;
+  member: CrimeLobbyMember | null;
   isLeader: boolean;
   canJoin: boolean;
   canKick: boolean;
@@ -872,7 +768,7 @@ function MemberSlotCard({
   onLeave: () => void;
   isCurrentUser: boolean;
 }) {
-  const isEmpty = !member || member.user === ZERO_ADDRESS;
+  const isEmpty = !member || member.user === zeroAddress;
 
   return (
     <div
@@ -1027,7 +923,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
 
         const neededCategories = new Set<number>();
         lobby.members.forEach((m, idx) => {
-          if (!m || m.user === ZERO_ADDRESS) return;
+          if (!m || m.user === zeroAddress) return;
           if (idx === 1) neededCategories.add(15);
           if (idx === 2 || idx === 3) neededCategories.add(3);
           if (idx === 4) {
@@ -1178,7 +1074,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
     userCity === lobby?.city &&
     userRank >= (lobby?.minRank ?? 0);
 
-  const filledSlots = lobby?.members.filter((m) => m.user !== ZERO_ADDRESS).length ?? 0;
+  const filledSlots = lobby?.members.filter((m) => m.user !== zeroAddress).length ?? 0;
   const allSlotsFilled = filledSlots === 5;
 
   // Actions
@@ -1286,7 +1182,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-foreground">Lobby #{lobby.id}</h1>
-              <Badge className={cn("border", getStatusColor(lobby.status))}>
+              <Badge className={cn("border", getLobbyStatusColor(lobby.status))}>
                 {OC_LOBBY_STATUS_LABELS[lobby.status] || "Unknown"}
               </Badge>
             </div>
@@ -1474,7 +1370,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
             const member = lobby.members[roleIndex] || null;
             const baseLines = getMemberSubmissionSummary(roleIndex, member);
             const submittedItemLines =
-              member && member.user !== ZERO_ADDRESS && member.itemIds?.length
+              member && member.user !== zeroAddress && member.itemIds?.length
                 ? member.itemIds.map((id) => {
                   const item = submissionItemMap.get(Number(id));
                   return item ? getInventoryItemDisplayLabel(item) : `Item #${id}`;
@@ -1489,7 +1385,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
             const showRowLoading =
               submissionDetailsLoading &&
               member &&
-              member.user !== ZERO_ADDRESS &&
+              member.user !== zeroAddress &&
               (member.itemIds?.length ?? 0) > 0 &&
               roleIndex >= 1;
 
@@ -1498,7 +1394,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-medium text-foreground">{OC_ROLE_NAMES[roleIndex]}</div>
                   <div className="text-xs text-muted-foreground">
-                    {member && member.user !== ZERO_ADDRESS ? formatAddress(member.user) : "Empty"}
+                    {member && member.user !== zeroAddress ? formatAddress(member.user) : "Empty"}
                   </div>
                 </div>
                 {showRowLoading ? (

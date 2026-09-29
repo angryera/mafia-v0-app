@@ -28,9 +28,8 @@ import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { USER_PROFILE_CONTRACT_ABI } from "@/lib/contract";
 import { COUNTRIES } from "@/lib/countries";
 import { cn } from "@/lib/utils";
-import { isAddress } from "viem";
+import { isAddress, zeroAddress } from "viem";
 
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const MAX_NAME_LENGTH = 14;
 
 // Format profile name: First letter uppercase, rest lowercase
@@ -167,7 +166,7 @@ export function CreateProfileAction() {
     try {
       const finalReferralAddress = referralAddress && isAddress(referralAddress)
         ? referralAddress
-        : ZERO_ADDRESS;
+        : zeroAddress;
 
       await writeContractAsync({
         address: addresses.userProfile,

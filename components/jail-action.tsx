@@ -5,8 +5,9 @@ import { useAccount, useReadContract } from "wagmi";
 import { formatEther } from "viem";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { COOLDOWN_READ_QUERY } from "@/hooks/use-cooldown-remaining";
-import { formatWalletAddress, getErrorMessage } from "@/lib/format";
+import { formatDuration, formatWalletAddress, getErrorMessage } from "@/lib/format";
 import {
+  calculateJailBuyOutCost,
   JAIL_CONTRACT_ABI,
   INGAME_CURRENCY_ABI,
   INGAME_CURRENCY_APPROVE_AMOUNT,
@@ -26,23 +27,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-const CASH_PER_MINUTE = 1500;
-
 function formatSentence(remainingSeconds: number): string {
-  if (remainingSeconds <= 0) return "Released";
-
-  const hours = Math.floor(remainingSeconds / 3600);
-  const minutes = Math.floor((remainingSeconds % 3600) / 60);
-  const seconds = remainingSeconds % 60;
-
-  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-}
-
-function calculateBuyOutCost(remainingSeconds: number): number {
-  if (remainingSeconds <= 0) return 0;
-  return Math.ceil(remainingSeconds / 60) * CASH_PER_MINUTE;
+  return remainingSeconds <= 0 ? "Released" : formatDuration(remainingSeconds);
 }
 
 export function JailAction() {
@@ -111,7 +97,7 @@ export function JailAction() {
   const isInJail = inJailFlag === true || sentenceActive;
   const sentencePending = !sentenceFetched && !sentenceError && !inJailFetched && !inJailError;
   const username = (profileData as { username?: string } | undefined)?.username?.trim() || null;
-  const buyOutCost = remainingSeconds === null ? 0 : calculateBuyOutCost(remainingSeconds);
+  const buyOutCost = remainingSeconds === null ? 0 : calculateJailBuyOutCost(remainingSeconds);
   const cashBalance =
     cashBalanceRaw !== undefined ? Number(formatEther(cashBalanceRaw as bigint)) : null;
   const allowance = allowanceRaw !== undefined ? Number(formatEther(allowanceRaw as bigint)) : 0;

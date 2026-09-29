@@ -19,7 +19,7 @@ import {
 import { INGAME_CURRENCY_ABI, LOTTERY_HALL_ABI } from "@/lib/contract";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
-import { getErrorMessage } from "@/lib/format";
+import { getErrorMessage, formatEllipsisAddress } from "@/lib/format";
 import {
   useChain,
   useChainAddresses,
@@ -178,7 +178,7 @@ function LotteryHallProfileBoard({
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 font-mono text-sm text-muted-foreground hover:text-primary"
                   >
-                    {`${ownerAddress.slice(0, 6)}…${ownerAddress.slice(-4)}`}
+                    {formatEllipsisAddress(ownerAddress)}
                     <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-60" />
                   </a>
                 )}
@@ -1010,7 +1010,7 @@ export function LotteryHallAction() {
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground hover:text-primary"
                             >
-                              {`${row.addr.slice(0, 6)}…${row.addr.slice(-4)}`}
+                              {formatEllipsisAddress(row.addr)}
                               <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
                             </a>
                           )}
@@ -1176,7 +1176,7 @@ export function LotteryHallAction() {
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground hover:text-primary"
                         >
-                          {`${info.winner.slice(0, 6)}…${info.winner.slice(-4)}`}
+                          {formatEllipsisAddress(info.winner)}
                           <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
                         </a>
                       )}

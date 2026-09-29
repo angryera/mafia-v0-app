@@ -5,6 +5,7 @@ import { CONTRACT_ABI } from "@/lib/contract";
 import { useChain, useChainAddresses } from "@/components/chain-provider";
 import { ExternalLink, Copy, Check } from "lucide-react";
 import { useState } from "react";
+import { formatWalletAddress } from "@/lib/format";
 
 function CopyableAddress({ address, label, explorerUrl }: { address: string; label: string; explorerUrl: string }) {
   const [copied, setCopied] = useState(false);
@@ -15,7 +16,7 @@ function CopyableAddress({ address, label, explorerUrl }: { address: string; lab
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const truncated = `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const truncated = formatWalletAddress(address);
 
   return (
     <div className="flex items-center justify-between rounded-lg bg-background/50 px-3 py-2.5">

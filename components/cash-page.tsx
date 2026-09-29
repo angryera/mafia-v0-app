@@ -12,6 +12,7 @@ import {
   RefreshCw,
   User,
 } from "lucide-react";
+import { formatWalletAddress } from "@/lib/format";
 
 export function CashPage() {
   const { address, isConnected } = useAccount();
@@ -93,7 +94,7 @@ export function CashPage() {
           <div>
             <h3 className="text-xl font-bold text-foreground">Cash Balance</h3>
             <p className="text-xs text-muted-foreground font-mono">
-              {address?.slice(0, 6)}...{address?.slice(-4)}
+              {formatWalletAddress(address ?? "")}
             </p>
           </div>
         </div>
@@ -142,7 +143,7 @@ export function CashPage() {
           rel="noopener noreferrer"
           className="font-mono text-xs text-primary/70 hover:text-primary transition-colors"
         >
-          {addresses.ingameCurrency.slice(0, 6)}...{addresses.ingameCurrency.slice(-4)}
+          {formatWalletAddress(addresses.ingameCurrency)}
         </a>
       </div>
     </div>

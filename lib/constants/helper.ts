@@ -1,5 +1,5 @@
 import { formatEther } from "viem";
-import { EQUIPMENT_SLOTS, OC_REWARD_CASH_TYPE_ID, TravelCities } from "./const";
+import { EQUIPMENT_SLOTS, JAIL_BUYOUT_CASH_PER_MINUTE, OC_REWARD_CASH_TYPE_ID, RANK_NAMES, TravelCities } from "./const";
 import { BODYGUARD_INFO, CRATE_ITEM_CATEGORIES, CrateItemCategory, ItemCategory, LEGACY_BODYGUARD_TYPES } from "./const";
 import { BulletBotPlusInfo, HelperBotInfo } from "./type";
 
@@ -104,6 +104,19 @@ export function parseOcRewardAmount(typeId: number, amountRaw: bigint): number {
         return Number(formatEther(amountRaw));
     }
     return Number(amountRaw);
+}
+
+export function getRankName(rank: number): string {
+    return RANK_NAMES[rank] || `Rank ${rank}`;
+}
+
+/** Profile `gender` field: 1 = female, anything else = male. */
+export function getGenderLabel(gender: number): string {
+    return gender === 1 ? "Female" : "Male";
+}
+
+export function calculateJailBuyOutCost(remainingSeconds: number): number {
+    return Math.ceil(Math.max(0, remainingSeconds) / 60) * JAIL_BUYOUT_CASH_PER_MINUTE;
 }
 
 // Helper to get region for a city

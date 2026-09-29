@@ -51,6 +51,7 @@ import {
   type RebirthReward,
   type RebirthRewardKind,
 } from "@/lib/rebirthContract";
+import { formatWalletAddress } from "@/lib/format";
 
 // ── Reward icon ──────────────────────────────────────────────────────────────
 
@@ -646,7 +647,7 @@ export function RebirthAction() {
                     {selectedToken
                       ? isNativeToken
                         ? "Native token"
-                        : `${selectedToken.tokenAddress.slice(0, 6)}...${selectedToken.tokenAddress.slice(-4)}`
+                        : formatWalletAddress(selectedToken.tokenAddress)
                       : "Choose payment token"}
                   </p>
                 </div>

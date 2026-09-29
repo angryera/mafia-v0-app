@@ -49,7 +49,7 @@ import {
   Trophy
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { decodeEventLog, formatEther, maxUint256, parseEther } from "viem";
+import { decodeEventLog, formatEther, maxUint256, parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -122,7 +122,6 @@ type RawRace = Partial<Record<keyof Race, unknown>> & {
 };
 
 // ── Constants ───────────────────────────────────────────────────
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const RACES_PER_PAGE = 9;
 
 const RACE_FINISHED_EVENT_ABI = [
@@ -220,7 +219,7 @@ function toSafeNumber(value: unknown): number {
 }
 
 function toSafeAddress(value: unknown): string {
-  return typeof value === "string" && value.length > 0 ? value : ZERO_ADDRESS;
+  return typeof value === "string" && value.length > 0 ? value : zeroAddress;
 }
 
 function normalizeRace(raw: RawRace): Race {
@@ -254,7 +253,7 @@ function formatHealthLost(value: bigint): string {
 }
 
 function formatAddress(address: string): string {
-  if (!address || address === ZERO_ADDRESS) return "-";
+  if (!address || address === zeroAddress) return "-";
   return formatWalletAddress(address);
 }
 
@@ -292,7 +291,7 @@ function getWinnerState(race: Race): WinnerState {
   const creator = (race.creator || "").toLowerCase();
   const opponent = (race.opponent || "").toLowerCase();
 
-  if (!winner || winner === ZERO_ADDRESS.toLowerCase()) return "UNSET";
+  if (!winner || winner === zeroAddress.toLowerCase()) return "UNSET";
   if (winner === creator) return "CREATOR";
   if (winner === opponent) return "OPPONENT";
   return "UNKNOWN";
@@ -335,7 +334,7 @@ function getActionAvailability(
       };
     }
     return {
-      canJoin: !isCreator && race.opponent === ZERO_ADDRESS,
+      canJoin: !isCreator && race.opponent === zeroAddress,
       canCancel: isCreator,
     };
   }
@@ -405,7 +404,7 @@ function RaceCard({
         <div className="rounded-lg bg-background/50 p-2">
           <p className="text-[10px] text-muted-foreground">Opponent</p>
           <p className="text-xs font-mono text-foreground truncate">
-            {race.opponent === ZERO_ADDRESS
+            {race.opponent === zeroAddress
               ? "Waiting..."
               : formatAddress(race.opponent)}
           </p>
@@ -521,7 +520,7 @@ function CreateRaceDialog({
     abi: RACE_LOBBY_ABI,
     functionName: "hasActiveLobby",
     args: address ? [address] : undefined,
-    query: { enabled: !!address && addresses.raceLobby !== ZERO_ADDRESS },
+    query: { enabled: !!address && addresses.raceLobby !== zeroAddress },
   });
   const hasActiveLobby = hasActiveLobbyRaw as boolean | undefined;
 
@@ -531,7 +530,7 @@ function CreateRaceDialog({
     abi: INGAME_CURRENCY_ABI,
     functionName: "allowances",
     args: address && addresses.raceLobby ? [address, addresses.raceLobby] : undefined,
-    query: { enabled: !!address && !!addresses.raceLobby && addresses.raceLobby !== ZERO_ADDRESS },
+    query: { enabled: !!address && !!addresses.raceLobby && addresses.raceLobby !== zeroAddress },
   });
   const allowance = allowanceRaw as bigint | undefined;
 
@@ -1492,9 +1491,9 @@ function RaceDetailsDialog({
               <div>
                 <p className="text-[10px] text-muted-foreground">Opponent</p>
                 <p className="text-xs font-mono text-foreground">
-                  {race.opponent === ZERO_ADDRESS ? "None" : formatAddress(race.opponent)}
+                  {race.opponent === zeroAddress ? "None" : formatAddress(race.opponent)}
                 </p>
-                {race.opponent !== ZERO_ADDRESS && (
+                {race.opponent !== zeroAddress && (
                   <p className="text-[10px] text-muted-foreground mt-1">Car #{Number(race.opponentCarId)}</p>
                 )}
               </div>
@@ -1527,7 +1526,7 @@ function RaceDetailsDialog({
                   {winnerState === "UNKNOWN" && formatAddress(race.winner)}
                   {winnerState === "PENDING" && "Pending"}
                 </p>
-                {race.winner && race.winner !== ZERO_ADDRESS && (
+                {race.winner && race.winner !== zeroAddress && (
                   <p className="text-xs font-mono text-muted-foreground mt-1">{race.winner}</p>
                 )}
               </div>
@@ -1697,7 +1696,7 @@ export function RacingAction() {
     functionName: "nextRaceTime",
     args: address ? [address] : undefined,
     query: {
-      enabled: !!address && addresses.raceLobby !== ZERO_ADDRESS,
+      enabled: !!address && addresses.raceLobby !== zeroAddress,
       ...COOLDOWN_READ_QUERY,
     },
   });
@@ -1871,7 +1870,7 @@ export function RacingAction() {
   }
 
   // Zero address check
-  if (addresses.raceLobby === ZERO_ADDRESS) {
+  if (addresses.raceLobby === zeroAddress) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16">
         <AlertCircle className="mb-3 h-10 w-10 text-yellow-400" />

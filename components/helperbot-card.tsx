@@ -1,6 +1,6 @@
 "use client";
 
-import { getErrorMessage } from "@/lib/format";
+import { formatDuration, getErrorMessage } from "@/lib/format";
 import { useState, useEffect, useCallback } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
@@ -172,15 +172,6 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
   const timeLeft = endTimeSec > now ? endTimeSec - now : 0;
   const canWithdraw = isRunning && timeLeft === 0;
 
-  const formatTime = (s: number) => {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    if (h > 0) return `${h}h ${m}m ${sec}s`;
-    if (m > 0) return `${m}m ${sec}s`;
-    return `${sec}s`;
-  };
-
   // Progress bar percentage
   const totalDuration = endTimeSec > startTimeSec ? endTimeSec - startTimeSec : 0;
   const elapsed = now > startTimeSec ? now - startTimeSec : 0;
@@ -290,7 +281,7 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" /> Time Left
                 </span>
-                <span className="text-xs font-mono text-chain-accent">{formatTime(timeLeft)}</span>
+                <span className="text-xs font-mono text-chain-accent">{formatDuration(timeLeft)}</span>
               </div>
               {/* Progress bar */}
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/80">

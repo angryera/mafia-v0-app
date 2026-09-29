@@ -23,6 +23,7 @@ import {
   Swords,
   Star,
 } from "lucide-react";
+import { formatWalletAddress } from "@/lib/format";
 
 
 interface ProfileData {
@@ -199,7 +200,7 @@ export function MyProfile() {
           <div>
             <h3 className="text-xl font-bold text-foreground">My Profile</h3>
             <p className="text-xs text-muted-foreground font-mono">
-              {address?.slice(0, 6)}...{address?.slice(-4)}
+              {formatWalletAddress(address ?? "")}
             </p>
           </div>
         </div>

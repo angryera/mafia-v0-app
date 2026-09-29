@@ -4,7 +4,7 @@ import { getErrorMessage } from "@/lib/format";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
-import { formatUnits, parseUnits, parseEther } from "viem";
+import { formatUnits, parseUnits, parseEther, zeroAddress } from "viem";
 import {
   XP_MARKET_ABI,
   RANK_ABI,
@@ -67,8 +67,6 @@ const DURATION_OPTIONS = [
   { hours: 720, label: "30D" },
 ];
 
-// Zero address for native token
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
 // Max race XP constant
 const MAX_RACE_XP = 5000;
@@ -175,13 +173,13 @@ export function XpMarketAction() {
   // For CREATING listings: only allow native token (BNB/PLS) and MAFIA.
   // These options are always available and are not sourced from swap token list.
   const listingTokens = useMemo<SwapToken[]>(() => {
-    const nativeFromSwap = swapTokenByAddress.get(ZERO_ADDRESS.toLowerCase());
+    const nativeFromSwap = swapTokenByAddress.get(zeroAddress.toLowerCase());
     const mafiaFromSwap = swapTokenByAddress.get(addresses.mafia.toLowerCase());
 
     return [
       nativeFromSwap ?? {
         name: chainConfig.id === "bnb" ? "BNB" : "PLS",
-        tokenAddress: ZERO_ADDRESS,
+        tokenAddress: zeroAddress,
         isStable: false,
         isEnabled: true,
         price: BigInt(0),
@@ -206,7 +204,7 @@ export function XpMarketAction() {
   const purchaseTokens = swapTokens.filter((t) => {
     if (!t.isEnabled) return false;
     // Allow native token (BNB/PLS)
-    if (t.tokenAddress === ZERO_ADDRESS) return true;
+    if (t.tokenAddress === zeroAddress) return true;
     // Allow MAFIA token
     if (t.tokenAddress.toLowerCase() === addresses.mafia.toLowerCase()) return true;
     // Allow stablecoins (USDT, USDC)
@@ -219,7 +217,7 @@ export function XpMarketAction() {
   );
 
   // Listing token quick-select options
-  const nativeToken = listingTokens.find((t) => t.tokenAddress === ZERO_ADDRESS);
+  const nativeToken = listingTokens.find((t) => t.tokenAddress === zeroAddress);
   const mafiaToken = listingTokens.find(
     (t) => t.tokenAddress.toLowerCase() === addresses.mafia.toLowerCase()
   );
@@ -1203,7 +1201,7 @@ function ViewListingsPanel() {
     return swapTokenByAddress.get(biddingListing.listingToken.toLowerCase());
   }, [biddingListing, swapTokenByAddress]);
 
-  const isNativeBidToken = biddingListing?.listingToken === ZERO_ADDRESS;
+  const isNativeBidToken = biddingListing?.listingToken === zeroAddress;
   const bidSwapTokenId =
     biddingListing
       ? isNativeBidToken
@@ -1704,7 +1702,7 @@ function ListingCard({
 
   // Get token name based on listing token
   const getTokenName = () => {
-    if (listing.listingToken === ZERO_ADDRESS) {
+    if (listing.listingToken === zeroAddress) {
       return chainConfig.id === "bnb" ? "BNB" : "PLS";
     }
     if (listing.listingToken.toLowerCase() === mafiaAddress.toLowerCase()) {

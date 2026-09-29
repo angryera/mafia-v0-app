@@ -10,6 +10,8 @@
 // async function signatures and replace the bodies where the TODOs are marked.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { sleep } from "@/lib/utils";
+
 // ── Backfire modes ───────────────────────────────────────────────────────────
 // NOTE: These numeric values MUST match the future contract enum exactly.
 export enum BackfireMode {
@@ -132,10 +134,6 @@ export function normalizeBackfireSettings(
 const STORAGE_KEY = "mafia.backfireSettings.mock";
 const MOCK_LATENCY_MS = 700;
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 // Per-wallet in-memory cache (so reads are instant within a session even if
 // localStorage is unavailable). Keyed by lowercased wallet address.
 const memoryCache = new Map<string, BackfireSettings>();
@@ -184,7 +182,7 @@ function writeToStorage(key: string, settings: BackfireSettings): void {
 export async function loadBackfireSettings(
   wallet?: string | null,
 ): Promise<BackfireSettings> {
-  await delay(MOCK_LATENCY_MS);
+  await sleep(MOCK_LATENCY_MS);
 
   const key = cacheKey(wallet);
   const cached = memoryCache.get(key) ?? readFromStorage(key);
@@ -213,7 +211,7 @@ export async function saveBackfireSettings(
   settings: BackfireSettings,
   wallet?: string | null,
 ): Promise<BackfireSettings> {
-  await delay(MOCK_LATENCY_MS);
+  await sleep(MOCK_LATENCY_MS);
 
   const normalized = normalizeBackfireSettings(settings);
   const key = cacheKey(wallet);

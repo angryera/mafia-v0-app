@@ -1,6 +1,6 @@
 "use client";
 
-import { getErrorMessage } from "@/lib/format";
+import { getErrorMessage, formatWalletAddress } from "@/lib/format";
 import { useAccount } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
@@ -100,7 +100,7 @@ export function TravelApprove() {
               </p>
             )}
             <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-              Contract: {addresses.ingameCurrency.slice(0, 6)}...{addresses.ingameCurrency.slice(-4)}
+              Contract: {formatWalletAddress(addresses.ingameCurrency)}
             </p>
           </div>
         </div>

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useChain } from "@/components/chain-provider";
 import { EXCHANGE_ADDRESSES, DEPOSIT_ADDRESSES, type ChainId } from "@/lib/contract";
+import { formatWalletAddress } from "@/lib/format";
 
 export function ExchangeConvertInfo() {
   const { chainConfig, activeChain } = useChain();
@@ -103,7 +104,7 @@ export function ExchangeConvertInfo() {
               rel="noopener noreferrer"
               className="font-mono text-xs text-primary hover:underline"
             >
-              {exchangeAddress.slice(0, 6)}...{exchangeAddress.slice(-4)}
+              {formatWalletAddress(exchangeAddress)}
             </a>
           </div>
           <div className="flex items-center justify-between">
@@ -114,7 +115,7 @@ export function ExchangeConvertInfo() {
               rel="noopener noreferrer"
               className="font-mono text-xs text-primary hover:underline"
             >
-              {depositAddress.slice(0, 6)}...{depositAddress.slice(-4)}
+              {formatWalletAddress(depositAddress)}
             </a>
           </div>
         </div>

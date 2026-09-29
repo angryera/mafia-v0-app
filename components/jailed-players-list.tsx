@@ -38,6 +38,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import {
+  calculateJailBuyOutCost,
   INGAME_CURRENCY_ABI,
   INGAME_CURRENCY_APPROVE_AMOUNT,
   JAIL_CONTRACT_ABI,
@@ -54,7 +55,6 @@ interface JailedPlayer {
   jailedUntil: number;
 }
 
-const CASH_PER_MINUTE = 1500;
 const ITEMS_PER_PAGE = 25;
 
 function formatTimeRemaining(jailedUntil: number, now: number): string {
@@ -69,10 +69,6 @@ function formatTimeRemaining(jailedUntil: number, now: number): string {
   if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
   if (minutes > 0) return `${minutes}m ${seconds}s`;
   return `${seconds}s`;
-}
-
-function calculateBuyOutCost(jailedUntil: number, now: number): number {
-  return Math.ceil(Math.max(0, jailedUntil - now) / 60) * CASH_PER_MINUTE;
 }
 
 export function JailedPlayersList({ sentencePending = false }: { sentencePending?: boolean }) {
@@ -121,7 +117,7 @@ export function JailedPlayersList({ sentencePending = false }: { sentencePending
   const allowance =
     allowanceRaw !== undefined ? Number(formatEther(allowanceRaw as bigint)) : 0;
   const selectedBuyOutCost = selectedPlayer
-    ? calculateBuyOutCost(selectedPlayer.jailedUntil, now)
+    ? calculateJailBuyOutCost(selectedPlayer.jailedUntil - now)
     : 0;
   const isApproved =
     localApproved || (selectedBuyOutCost > 0 && allowance >= selectedBuyOutCost);
@@ -407,7 +403,7 @@ export function JailedPlayersList({ sentencePending = false }: { sentencePending
                       {formatTimeRemaining(player.jailedUntil, now)}
                     </Badge>
                     <span className="font-mono text-amber-400">
-                      ${calculateBuyOutCost(player.jailedUntil, now).toLocaleString()}
+                      ${calculateJailBuyOutCost(player.jailedUntil - now).toLocaleString()}
                     </span>
                   </div>
                 </div>

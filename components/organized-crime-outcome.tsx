@@ -12,6 +12,7 @@ import {
   OC_REWARD_CONFIG,
 } from "@/lib/contract";
 import { OC_RESULT_DESCRIPTION } from "@/lib/oc-result-description";
+import type { CrimeLobby } from "@/lib/organized-crime";
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
@@ -89,39 +90,6 @@ function getMarketplaceItemName(categoryId: number, typeId: number): string | nu
 }
 
 // ── Types ───────────────────────────────────────────────────────
-interface Member {
-  user: string;
-  itemIds: number[];
-  impactScore: number;
-  deductedScore: number;
-  assetAddresses: string[];
-  assetAmounts: number[];
-}
-
-interface Reward {
-  typeId: number;
-  amount: number;
-}
-
-interface CrimeLobby {
-  id: number;
-  leader: string;
-  members: Member[];
-  isSuccess: boolean;
-  city: number;
-  failureType: number;
-  assetExpectation: number;
-  minRank: number;
-  impactScore: number;
-  deductedScore: number;
-  status: number;
-  createdAt: number;
-  startBlock: number;
-  isRewardClaimed: boolean;
-  currentRewardIndex: number;
-  rewards: Reward[];
-}
-
 type OutcomeType = "SUCCESS" | "INSTANCE_FAILURE" | "FAIL_AWAY";
 
 // ── Helpers ─────────────────────────────────────────────────────

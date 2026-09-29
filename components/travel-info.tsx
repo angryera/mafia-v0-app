@@ -4,6 +4,7 @@ import { useChainAddresses, useChain } from "@/components/chain-provider";
 import { TRAVEL_TYPES } from "@/lib/contract";
 import { ExternalLink, Copy, Check, Train, Car, Plane, Clock, DollarSign } from "lucide-react";
 import { useState } from "react";
+import { formatWalletAddress } from "@/lib/format";
 
 function CopyableAddress({
   address,
@@ -22,7 +23,7 @@ function CopyableAddress({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const truncated = `${address.slice(0, 6)}...${address.slice(-4)}`;
+  const truncated = formatWalletAddress(address);
 
   return (
     <div className="flex items-center justify-between rounded-lg bg-background/50 px-3 py-2.5">

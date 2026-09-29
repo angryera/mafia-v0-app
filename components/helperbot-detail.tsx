@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
-import { getErrorMessage } from "@/lib/format";
+import { formatDuration, getErrorMessage } from "@/lib/format";
+import { getPerkDisplay, getPerkOptionLabel, getToolsDisplayName, type PerkDisplay } from "@/lib/perks";
 import {
   HELPER_BOT_BULLET_PRICE,
   HELPERBOT_CONTRACT_ABI,
@@ -113,14 +114,6 @@ type PerkInventoryItem = {
   owner?: string;
 };
 
-type PerkDisplay = {
-  type: "success" | "cooldown" | "booster" | "tools";
-  option: string;
-  amount: string;
-  duration: string;
-  tools: string;
-};
-
 type SelectedPerkDetail = {
   itemId: number;
   categoryId: number;
@@ -129,92 +122,12 @@ type SelectedPerkDetail = {
   durationHours: number;
 };
 
-const SUCCESS_OPTIONS = ["Crime Success", "NickCar Success", "Booze Success", "Narcotics Success", "KillSkill Success", "BustOut Success"];
-const COOLDOWN_OPTIONS = ["Crime Cooldown", "NickCar Cooldown", "Booze Cooldown", "Narcotics Cooldown", "KillSkill Cooldown", "Travel Cooldown", "BulletBuy Cooldown", "HealthBuy Cooldown", "BustOut Cooldown"];
-const BOOSTER_OPTIONS = ["MapYield Boost", "RaceXp Boost", "KillSkillXp Boost", "BustOutXp Boost", "SalesPriceNarcotics Boost", "SalesPriceBooze Boost", "Worth Boost", "Rewards Boost"];
-const TOOLS_OPTIONS = ["Purchase", "NoJail", "FreeTravel", "BankFee", "CreditCost", "Convert", "CreditSpend"];
-const DURATIONS = ["6", "12", "24", "48", "72", "96"];
-const SUCCESS_AMOUNTS = ["100", "75", "50"];
-const COOLDOWN_AMOUNTS = ["90", "75", "50"];
-const BOOSTER_AMOUNTS = ["100", "75", "50", "25"];
-
-function getPerkDisplay(categoryId: number, typeId: number): PerkDisplay {
-  const D = DURATIONS.length;
-  if (categoryId >= 18 && categoryId <= 23) {
-    const optionIndex = categoryId - 18;
-    const amountIndex = Math.floor(typeId / D);
-    const durationIndex = typeId % D;
-    return {
-      type: "success",
-      option: SUCCESS_OPTIONS[optionIndex] ?? `Option #${optionIndex}`,
-      amount: SUCCESS_AMOUNTS[amountIndex] ?? "Unknown",
-      duration: DURATIONS[durationIndex] ?? "Unknown",
-      tools: "",
-    };
-  }
-  if (categoryId >= 24 && categoryId <= 32) {
-    const optionIndex = categoryId - 24;
-    const amountIndex = Math.floor(typeId / D);
-    const durationIndex = typeId % D;
-    return {
-      type: "cooldown",
-      option: COOLDOWN_OPTIONS[optionIndex] ?? `Option #${optionIndex}`,
-      amount: COOLDOWN_AMOUNTS[amountIndex] ?? "Unknown",
-      duration: DURATIONS[durationIndex] ?? "Unknown",
-      tools: "",
-    };
-  }
-  if (categoryId >= 33 && categoryId <= 40) {
-    const optionIndex = categoryId - 33;
-    const amountIndex = Math.floor(typeId / D);
-    const durationIndex = typeId % D;
-    return {
-      type: "booster",
-      option: BOOSTER_OPTIONS[optionIndex] ?? `Option #${optionIndex}`,
-      amount: BOOSTER_AMOUNTS[amountIndex] ?? "Unknown",
-      duration: DURATIONS[durationIndex] ?? "Unknown",
-      tools: "",
-    };
-  }
-  if (categoryId >= 41 && categoryId <= 47) {
-    const toolsIndex = categoryId - 41;
-    const durationIndex = typeId % D;
-    return {
-      type: "tools",
-      option: "",
-      amount: "",
-      duration: DURATIONS[durationIndex] ?? "Unknown",
-      tools: TOOLS_OPTIONS[toolsIndex] ?? `Tool #${toolsIndex}`,
-    };
-  }
-  return {
-    type: "success",
-    option: `Unknown (Cat ${categoryId})`,
-    amount: "?",
-    duration: "?",
-    tools: "",
-  };
-}
-
-function getToolsDisplayName(toolsId: string): string {
-  const toolsNames: Record<string, string> = {
-    Purchase: "Free Purchase",
-    NoJail: "No Jail",
-    FreeTravel: "Free Travel",
-    BankFee: "No Bank Fee",
-    CreditCost: "Reduced Credit Cost",
-    Convert: "Free Convert",
-    CreditSpend: "Reduced Credit Spend",
-  };
-  return toolsNames[toolsId] ?? toolsId;
-}
-
 function getPerkSummary(display: PerkDisplay): string {
   if (display.type === "tools") {
     return `${getToolsDisplayName(display.tools)} (${display.duration}h)`;
   }
   const amountPrefix = display.type === "cooldown" ? "-" : "+";
-  return `${display.option} ${amountPrefix}${display.amount}% (${display.duration}h)`;
+  return `${getPerkOptionLabel(display)} ${amountPrefix}${display.amount}% (${display.duration}h)`;
 }
 
 function parseDurationHours(display: PerkDisplay): number {
@@ -642,15 +555,6 @@ export function HelperBotDetail({
   const timeLeft = endTimeSec > now ? endTimeSec - now : 0;
   const canWithdraw = isRunning && timeLeft === 0;
 
-  const formatTime = (s: number) => {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = s % 60;
-    if (h > 0) return `${h}h ${m}m ${sec}s`;
-    if (m > 0) return `${m}m ${sec}s`;
-    return `${sec}s`;
-  };
-
   const totalDuration = endTimeSec > startTimeSec ? endTimeSec - startTimeSec : 0;
   const elapsed = now > startTimeSec ? now - startTimeSec : 0;
   const progressPct = totalDuration > 0 ? Math.min(100, (elapsed / totalDuration) * 100) : 0;
@@ -803,7 +707,7 @@ export function HelperBotDetail({
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" /> Time Left
                 </span>
-                <span className="text-xs font-mono text-chain-accent">{formatTime(timeLeft)}</span>
+                <span className="text-xs font-mono text-chain-accent">{formatDuration(timeLeft)}</span>
               </div>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/80">
                 <div

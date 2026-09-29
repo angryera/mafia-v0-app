@@ -30,16 +30,16 @@ import {
   OC_ASSET_EXPECTATION_LABELS,
   OC_JOIN_ABI,
   OC_LOBBY_ABI,
-  OC_LOBBY_STATUS,
   OC_LOBBY_STATUS_LABELS,
   OC_MAX_CASH,
   OC_MIN_HEALTH,
-  parseOcRewardAmount,
+  getRankName,
   RANK_NAMES,
   TRAVEL_DESTINATIONS
 } from "@/lib/contract";
 import { cn } from "@/lib/utils";
-import { formatWalletAddress as formatAddress, getTravelCityName } from "@/lib/format";
+import { formatWalletAddress as formatAddress, formatTimeAgo, getTravelCityName } from "@/lib/format";
+import { getLobbyStatusColor, parseCrimeLobby, type CrimeLobby } from "@/lib/organized-crime";
 import {
   AlertCircle,
   ArrowUpDown,
@@ -57,112 +57,8 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPublicClient, formatEther, http, maxUint256, parseEther } from "viem";
+import { createPublicClient, formatEther, http, maxUint256, parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract } from "wagmi";
-
-// ── Types ───────────────────────────────────────────────────────
-interface Member {
-  user: string;
-  itemIds: number[];
-  impactScore: number;
-  deductedScore: number;
-  assetAddresses: string[];
-  assetAmounts: number[];
-}
-
-interface Reward {
-  typeId: number;
-  amount: number;
-}
-
-interface CrimeLobby {
-  id: number;
-  leader: string;
-  members: Member[];
-  isSuccess: boolean;
-  city: number;
-  failureType: number;
-  assetExpectation: number;
-  minRank: number;
-  impactScore: number;
-  deductedScore: number;
-  status: number;
-  createdAt: number;
-  startBlock: number;
-  isRewardClaimed: boolean;
-  currentRewardIndex: number;
-  rewards: Reward[];
-}
-
-// ── Helpers ─────────────────────────────────────────────────────
-function parseCrimeLobby(data: unknown): CrimeLobby {
-  const d = data as Record<string, unknown>;
-  return {
-    id: Number(d.id),
-    leader: d.leader as string,
-    members: ((d.members as unknown[]) || []).map((m: unknown) => {
-      const member = m as Record<string, unknown>;
-      return {
-        user: member.user as string,
-        itemIds: ((member.itemIds as unknown[]) || []).map((id) => Number(id)),
-        impactScore: Number(member.impactScore),
-        deductedScore: Number(member.deductedScore),
-        assetAddresses: (member.assetAddresses as string[]) || [],
-        assetAmounts: ((member.assetAmounts as unknown[]) || []).map((amt) =>
-          Number(formatEther(amt as bigint))
-        ),
-      };
-    }),
-    isSuccess: Boolean(d.isSuccess),
-    city: Number(d.city),
-    failureType: Number(d.failureType),
-    assetExpectation: Number(d.assetExpectation),
-    minRank: Number(d.minRank),
-    impactScore: Number(d.impactScore),
-    deductedScore: Number(d.deductedScore),
-    status: Number(d.status),
-    createdAt: Number(d.createdAt),
-    startBlock: Number(d.startBlock),
-    isRewardClaimed: Boolean(d.isRewardClaimed),
-    currentRewardIndex: Number(d.currentRewardIndex),
-    rewards: ((d.rewards as unknown[]) || []).map((r: unknown) => {
-      const reward = r as Record<string, unknown>;
-      const typeId = Number(reward.typeId);
-      return {
-        typeId,
-        amount: parseOcRewardAmount(typeId, reward.amount as bigint),
-      };
-    }),
-  };
-}
-
-function getRankName(rankIndex: number): string {
-  return RANK_NAMES[rankIndex] || `Rank ${rankIndex}`;
-}
-
-function getStatusColor(status: number): string {
-  switch (status) {
-    case OC_LOBBY_STATUS.WAITING:
-      return "bg-amber-500/10 text-amber-500 border-amber-500/30";
-    case OC_LOBBY_STATUS.STARTED:
-      return "bg-blue-500/10 text-blue-500 border-blue-500/30";
-    case OC_LOBBY_STATUS.FINISHED:
-      return "bg-green-500/10 text-green-500 border-green-500/30";
-    case OC_LOBBY_STATUS.CANCELLED:
-      return "bg-red-500/10 text-red-500 border-red-500/30";
-    default:
-      return "bg-muted text-muted-foreground";
-  }
-}
-
-function formatTimeAgo(timestamp: number): string {
-  const now = Math.floor(Date.now() / 1000);
-  const diff = now - timestamp;
-  if (diff < 60) return "Just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
 
 // ── Create Lobby Dialog ─────────────────────────────────────────
 function CreateLobbyDialog({
@@ -445,7 +341,7 @@ function LobbyCard({
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          <Badge className={cn("border", getStatusColor(lobby.status))}>
+          <Badge className={cn("border", getLobbyStatusColor(lobby.status))}>
             {OC_LOBBY_STATUS_LABELS[lobby.status] || "Unknown"}
           </Badge>
           <ChevronRight className="h-5 w-5 text-muted-foreground" />
@@ -723,65 +619,14 @@ async function fetchLobby(
       abi: OC_LOBBY_ABI,
       functionName: "getLobby",
       args: [BigInt(lobbyId)],
-    }) as {
-      id: bigint;
-      leader: `0x${string}`;
-      members: Array<{
-        user: `0x${string}`;
-        itemIds: bigint[];
-        impactScore: number;
-        deductedScore: number;
-        assetAddresses: `0x${string}`[];
-        assetAmounts: bigint[];
-      }>;
-      isSuccess: boolean;
-      city: number;
-      failureType: number;
-      assetExpectation: number;
-      minRank: number;
-      impactScore: number;
-      deductedScore: number;
-      status: number;
-      createdAt: bigint;
-      startBlock: bigint;
-      isRewardClaimed: boolean;
-      currentRewardIndex: number;
-      rewards: Array<{ typeId: number; amount: bigint }>;
-    };
+    }) as { id: bigint; leader: `0x${string}` };
 
     // If the lobby doesn't exist (id is 0), return null
-    if (Number(result.id) === 0 && result.leader === "0x0000000000000000000000000000000000000000") {
+    if (Number(result.id) === 0 && result.leader === zeroAddress) {
       return null;
     }
 
-    return {
-      id: Number(result.id),
-      leader: result.leader,
-      members: result.members.map((m) => ({
-        user: m.user,
-        itemIds: m.itemIds.map((id) => Number(id)),
-        impactScore: Number(m.impactScore),
-        deductedScore: Number(m.deductedScore),
-        assetAddresses: m.assetAddresses,
-        assetAmounts: m.assetAmounts.map((a) => Number(formatEther(a))),
-      })),
-      isSuccess: result.isSuccess,
-      city: result.city,
-      failureType: result.failureType,
-      assetExpectation: result.assetExpectation,
-      minRank: result.minRank,
-      impactScore: Number(result.impactScore),
-      deductedScore: Number(result.deductedScore),
-      status: result.status,
-      createdAt: Number(result.createdAt),
-      startBlock: Number(result.startBlock),
-      isRewardClaimed: result.isRewardClaimed,
-      currentRewardIndex: result.currentRewardIndex,
-      rewards: result.rewards.map((r) => ({
-        typeId: r.typeId,
-        amount: parseOcRewardAmount(r.typeId, r.amount),
-      })),
-    };
+    return parseCrimeLobby(result);
   } catch (error) {
     console.error(`Error fetching lobby ${lobbyId}:`, error);
     return null;

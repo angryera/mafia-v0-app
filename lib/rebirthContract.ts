@@ -6,11 +6,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { Abi } from "viem";
-import { formatUnits } from "viem";
+import { formatUnits, zeroAddress } from "viem";
 import { MAFIA_FAMILY_ABI, RANK_ABI, REBIRTH_ABI } from "@/lib/constants/abi";
-
-export const ZERO_ADDRESS =
-  "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
 /** 5% headroom when paying with MAFIA only — stables/native use exact quote. */
 export const REBIRTH_PAYMENT_BUFFER = 1.05;
@@ -30,7 +27,7 @@ type ReadClient = {
 export function isRebirthContractConfigured(
   address: `0x${string}` | undefined,
 ): boolean {
-  return Boolean(address && address.toLowerCase() !== ZERO_ADDRESS);
+  return Boolean(address && address.toLowerCase() !== zeroAddress);
 }
 
 // ── Cost calculation (client-side validation) ────────────────────────────────
