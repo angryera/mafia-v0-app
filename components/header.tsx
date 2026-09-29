@@ -292,16 +292,23 @@ function XpBars() {
     return `${p.toFixed(4)}%`;
   };
 
+  const rankName =
+    rankLevel !== null ? (RANK_NAMES[rankLevel] ?? `Rank ${rankLevel}`) : null;
   const rankBar = bars[0];
+  const rankLabel = rankName ?? rankBar.label;
   return (
     <div className="relative group">
-      {/* Always-visible: Rank XP */}
+      {/* Always-visible: current rank name + progress to the next rank */}
       <div
         className="flex cursor-default items-center gap-1.5 rounded-lg px-2 py-1 transition-colors hover:bg-secondary/50"
-        title={`${rankBar.label} XP: ${fmtPercent(rankBar.percent)} — hover for all XP`}
+        title={
+          rankName
+            ? `${rankName}: ${fmtPercent(rankBar.percent)} to next rank — hover for all XP`
+            : `Rank XP: ${fmtPercent(rankBar.percent)} — hover for all XP`
+        }
       >
-        <span className="text-[10px] font-medium text-muted-foreground/70 w-7 text-right">
-          {rankBar.label}
+        <span className="max-w-[8.5rem] truncate text-left text-[10px] font-semibold text-foreground/85">
+          {rankLabel}
         </span>
         <div className="relative h-1.5 w-16 overflow-hidden rounded-full bg-secondary">
           <div
@@ -317,9 +324,15 @@ function XpBars() {
 
       {/* Dropdown: all 4 XP bars */}
       <div className="pointer-events-none absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-border bg-card p-3 opacity-0 shadow-xl transition-all duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
-        <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className={cn(
+          "text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
+          rankName ? "mb-0.5" : "mb-2",
+        )}>
           Experience Points
         </p>
+        {rankName && (
+          <p className="mb-2 text-xs font-semibold text-foreground">{rankName}</p>
+        )}
         <div className="flex flex-col gap-2">
           {bars.map((bar) => (
             <div
