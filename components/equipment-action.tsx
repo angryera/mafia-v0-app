@@ -20,8 +20,8 @@ import {
   BUILDING_STATS,
   RARITY_AMPLIFIERS,
   RARITY_NAMES,
-  BODYGUARD_INFO,
   BODYGUARD_CATEGORIES,
+  resolveBodyguard,
   City,
   ItemCategory,
   MAX_EQUIPMENT_MAFIA_STAKE,
@@ -100,12 +100,15 @@ const EQUIP_COOLDOWN_SECONDS = 3 * 60 * 60;
 
 // ── Helpers ─────────────────────────────────────────────────────
 function getBodyguardStats(categoryId: number, typeId: number) {
-  const info = BODYGUARD_INFO[categoryId];
-  if (!info) return { offense: 0, defense: 0 };
-  const level = typeId + 1;
+  const resolved = resolveBodyguard(categoryId, typeId);
+  if (!resolved) {
+    return { offense: 0, defense: 0, name: "Bodyguard", level: typeId + 1 };
+  }
   return {
-    offense: info.offensePerLevel * level,
-    defense: info.defensePerLevel * level,
+    offense: resolved.offense,
+    defense: resolved.defense,
+    name: resolved.name,
+    level: resolved.level,
   };
 }
 
@@ -249,14 +252,12 @@ function EquipmentSlotCard({
           equippedItem.categoryId === ItemCategory.BODYGUARD ||
           BODYGUARD_CATEGORIES.includes(equippedItem.categoryId)
         ) {
-          stats = getBodyguardStats(
+          const bgStats = getBodyguardStats(
             equippedItem.categoryId,
             equippedItem.typeId
           );
-          const bgInfo = BODYGUARD_INFO[equippedItem.categoryId];
-          itemName = bgInfo
-            ? `${bgInfo.name} Lvl ${equippedItem.typeId + 1}`
-            : `Bodyguard #${equippedItem.itemId}`;
+          stats = { offense: bgStats.offense, defense: bgStats.defense };
+          itemName = `${bgStats.name} Lvl ${bgStats.level}`;
         }
       }
     }
@@ -513,11 +514,9 @@ function ItemSelectionDialog({
                   item.categoryId === ItemCategory.BODYGUARD ||
                   BODYGUARD_CATEGORIES.includes(item.categoryId)
                 ) {
-                  stats = getBodyguardStats(item.categoryId, item.typeId);
-                  const bgInfo = BODYGUARD_INFO[item.categoryId];
-                  name = bgInfo
-                    ? `${bgInfo.name} Lvl ${item.typeId + 1}`
-                    : `Bodyguard`;
+                  const bgStats = getBodyguardStats(item.categoryId, item.typeId);
+                  stats = { offense: bgStats.offense, defense: bgStats.defense };
+                  name = `${bgStats.name} Lvl ${bgStats.level}`;
                   icon = <User className="h-4 w-4 text-primary" />;
                 }
 

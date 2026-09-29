@@ -1,6 +1,6 @@
 import { formatEther } from "viem";
 import { EQUIPMENT_SLOTS, OC_REWARD_CASH_TYPE_ID, TravelCities } from "./const";
-import { BODYGUARD_INFO, CRATE_ITEM_CATEGORIES, CrateItemCategory } from "./const";
+import { BODYGUARD_INFO, CRATE_ITEM_CATEGORIES, CrateItemCategory, ItemCategory, LEGACY_BODYGUARD_TYPES } from "./const";
 import { BulletBotPlusInfo, HelperBotInfo } from "./type";
 
 // Fast lookup by categoryId
@@ -47,15 +47,47 @@ export const parseBulletBotPlusInfo = (data: any): BulletBotPlusInfo => {
     };
 };
 
-export function getBodyguardTrainingCost(
+export interface ResolvedBodyguard {
+    name: string;
+    level: number;
+    characterCategoryId: number;
+    defense: number;
+    offense: number;
+    defensePerLevel: number;
+    offensePerLevel: number;
+    isMaxLevel: boolean;
+}
+
+/** Resolve a bodyguard item to its character, level, and combat stats.
+ *  Individual categories (48–51) store level as typeId + 1.
+ *  Legacy category 5 stores a fixed name + level in each type id. */
+export function resolveBodyguard(
     categoryId: number,
     typeId: number,
-): number {
-    const newTypeId = typeId + 1;
-    const bodyguardInfo = BODYGUARD_INFO[categoryId];
-    if (!bodyguardInfo) return 0;
-    if (newTypeId <= 0 || newTypeId >= 10) return 0;
-    return bodyguardInfo.basePrice + newTypeId * bodyguardInfo.pricePerTraining;
+): ResolvedBodyguard | null {
+    let characterCategoryId = categoryId;
+    let level = typeId + 1;
+
+    if (categoryId === ItemCategory.BODYGUARD) {
+        const legacy = LEGACY_BODYGUARD_TYPES[typeId];
+        if (!legacy) return null;
+        characterCategoryId = legacy.categoryId;
+        level = legacy.level;
+    }
+
+    const info = BODYGUARD_INFO[characterCategoryId];
+    if (!info) return null;
+
+    return {
+        name: info.name,
+        level,
+        characterCategoryId,
+        defense: info.defensePerLevel * level,
+        offense: info.offensePerLevel * level,
+        defensePerLevel: info.defensePerLevel,
+        offensePerLevel: info.offensePerLevel,
+        isMaxLevel: level >= 10,
+    };
 }
 
 // Get shop item slot category

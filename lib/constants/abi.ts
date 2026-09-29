@@ -984,6 +984,13 @@ export const BULLET_ABI: Abi = [
     },
     {
         type: "function",
+        name: "withdrawTax",
+        inputs: [],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
         name: "decimals",
         inputs: [],
         outputs: [{ name: "", type: "uint8", internalType: "uint8" }],
@@ -3164,6 +3171,16 @@ export const FAMILY_SHARE_STAKE_ABI: Abi = [
 
 // ========== Bodyguard Training Contract ==========
 export const BODYGUARD_TRAINING_ABI: Abi = [
+    {
+        type: "function",
+        name: "getTrainingCost",
+        inputs: [
+            { name: "categoryId", type: "uint256", internalType: "uint256" },
+            { name: "typeId", type: "uint256", internalType: "uint256" },
+        ],
+        outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+        stateMutability: "view",
+    },
     {
         type: "function",
         name: "getTrainingSlots",

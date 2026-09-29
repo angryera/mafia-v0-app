@@ -1150,6 +1150,7 @@ export const RARITY_NAMES: Record<number, string> = {
 };
 
 export const BODYGUARD_CATEGORIES = [
+    ItemCategory.BODYGUARD,
     ItemCategory.BODYGUARD_JOHNNY,
     ItemCategory.BODYGUARD_JIM,
     ItemCategory.BODYGUARD_SAM,
@@ -1171,6 +1172,23 @@ export const EQUIPMENT_SLOTS = {
 } as const;
 
 
+
+/** Category 5 type ids are fixed name + level pairs. They are not a 1–10 level index. */
+export const LEGACY_BODYGUARD_TYPES: ReadonlyArray<{
+    categoryId: number;
+    level: number;
+}> = [
+        { categoryId: ItemCategory.BODYGUARD_JOHNNY, level: 3 },
+        { categoryId: ItemCategory.BODYGUARD_JIM, level: 3 },
+        { categoryId: ItemCategory.BODYGUARD_SAM, level: 3 },
+        { categoryId: ItemCategory.BODYGUARD_JOHNNY, level: 5 },
+        { categoryId: ItemCategory.BODYGUARD_JIM, level: 6 },
+        { categoryId: ItemCategory.BODYGUARD_SAM, level: 6 },
+        { categoryId: ItemCategory.BODYGUARD_FRANK, level: 7 },
+        { categoryId: ItemCategory.BODYGUARD_JOHNNY, level: 8 },
+        { categoryId: ItemCategory.BODYGUARD_SAM, level: 10 },
+        { categoryId: ItemCategory.BODYGUARD_FRANK, level: 10 },
+    ];
 
 export const BODYGUARD_INFO: Record<
     number,

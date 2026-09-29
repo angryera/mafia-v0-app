@@ -8,11 +8,9 @@ import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { getErrorMessage } from "@/lib/format";
 import {
   BODYGUARD_TRAINING_ABI,
-  BODYGUARD_INFO,
   BODYGUARD_CATEGORIES,
   INGAME_CURRENCY_ABI,
-  getBodyguardTrainingCost,
-  ItemCategory,
+  resolveBodyguard,
   type TrainingSlotType,
 } from "@/lib/contract";
 import { parseEther, formatEther, maxUint256 } from "viem";
@@ -50,12 +48,10 @@ interface BodyguardItem {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
-function getBodyguardName(categoryId: number): string {
-  return BODYGUARD_INFO[categoryId]?.name ?? `Bodyguard #${categoryId}`;
-}
-
-function getBodyguardLevel(typeId: number): number {
-  return typeId + 1;
+function isTrainableBodyguard(item: BodyguardItem): boolean {
+  const resolved = resolveBodyguard(item.categoryId, item.typeId);
+  if (!resolved) return item.typeId < 9;
+  return !resolved.isMaxLevel;
 }
 
 function formatTimeRemaining(endTime: number): string {
@@ -144,11 +140,11 @@ function TrainingSlot({
     return () => clearInterval(interval);
   }, [slot.isTraining, slot.endTime]);
 
-  const bgName = getBodyguardName(slot.newCategoryId);
-  // For training slot, the current level is newTypeId (since newTypeId is target)
-  // So old level = newTypeId - 1... but newTypeId is the typeId AFTER training, so current = newTypeId, level = newTypeId + 1
-  const targetLevel = slot.newTypeId + 1;
-  const currentLevel = slot.newTypeId; // old typeId = newTypeId - 1, so old level = newTypeId
+  const trained = resolveBodyguard(slot.newCategoryId, slot.newTypeId);
+  const bgName = trained?.name ?? `Bodyguard #${slot.newCategoryId}`;
+  // newTypeId is the type id after training, so its resolved level is the target.
+  const targetLevel = trained?.level ?? slot.newTypeId + 1;
+  const currentLevel = Math.max(0, targetLevel - 1);
 
   if (!slot.isTraining) {
     // Empty slot
@@ -273,11 +269,31 @@ function TrainingDialog({
   const explorer = useChainExplorer();
   const { toast } = useToast();
 
-  const bgInfo = BODYGUARD_INFO[item.categoryId];
-  const bgName = bgInfo?.name ?? "Unknown";
-  const currentLevel = item.typeId + 1;
+  const resolved = resolveBodyguard(item.categoryId, item.typeId);
+  const bgName = resolved?.name ?? "Unknown";
+  const currentLevel = resolved?.level ?? item.typeId + 1;
   const nextLevel = currentLevel + 1;
-  const cost = getBodyguardTrainingCost(item.categoryId, item.typeId);
+  // trainBodyguard charges getTrainingCost(characterCategory, currentType + 1).
+  // That destination type id is the bodyguard's current level. Legacy category 5
+  // is converted to its character category before the cost is read.
+  const costCategoryId = resolved?.characterCategoryId;
+  const costTypeId = resolved?.level;
+  const canQuoteCost =
+    open &&
+    costCategoryId !== undefined &&
+    costTypeId !== undefined &&
+    !resolved?.isMaxLevel;
+  const { data: trainingCostRaw, isLoading: costLoading } = useReadContract({
+    address: addresses.bodyguardTraining,
+    abi: BODYGUARD_TRAINING_ABI,
+    functionName: "getTrainingCost",
+    args: canQuoteCost ? [BigInt(costCategoryId), BigInt(costTypeId)] : undefined,
+    query: { enabled: canQuoteCost },
+  });
+  const cost =
+    typeof trainingCostRaw === "bigint"
+      ? Number(formatEther(trainingCostRaw))
+      : null;
 
   // Approve cash
   const approveTx = useContractTransaction({
@@ -342,10 +358,10 @@ function TrainingDialog({
     });
   }
 
-  const totalDefense = (bgInfo?.defensePerLevel ?? 0) * nextLevel;
-  const totalOffense = (bgInfo?.offensePerLevel ?? 0) * nextLevel;
-  const currentDefense = (bgInfo?.defensePerLevel ?? 0) * currentLevel;
-  const currentOffense = (bgInfo?.offensePerLevel ?? 0) * currentLevel;
+  const totalDefense = (resolved?.defensePerLevel ?? 0) * nextLevel;
+  const totalOffense = (resolved?.offensePerLevel ?? 0) * nextLevel;
+  const currentDefense = resolved?.defense ?? 0;
+  const currentOffense = resolved?.offense ?? 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -418,8 +434,14 @@ function TrainingDialog({
               <span className="text-sm text-muted-foreground">
                 Training Cost
               </span>
-              <span className="text-sm font-semibold text-foreground">
-                {cost.toLocaleString()} cash
+              <span className="flex items-center text-sm font-semibold text-foreground">
+                {costLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : cost !== null ? (
+                  `${cost.toLocaleString()} cash`
+                ) : (
+                  "—"
+                )}
               </span>
             </div>
           </div>
@@ -605,12 +627,12 @@ function BodyguardCard({
   item: BodyguardItem;
   onSelect: (item: BodyguardItem) => void;
 }) {
-  const bgInfo = BODYGUARD_INFO[item.categoryId];
-  const bgName = bgInfo?.name ?? "Unknown";
-  const level = item.typeId + 1;
-  const isMaxLevel = level >= 10;
-  const defense = (bgInfo?.defensePerLevel ?? 0) * level;
-  const offense = (bgInfo?.offensePerLevel ?? 0) * level;
+  const resolved = resolveBodyguard(item.categoryId, item.typeId);
+  const bgName = resolved?.name ?? "Unknown";
+  const level = resolved?.level ?? item.typeId + 1;
+  const isMaxLevel = resolved?.isMaxLevel ?? level >= 10;
+  const defense = resolved?.defense ?? 0;
+  const offense = resolved?.offense ?? 0;
 
   return (
     <div
@@ -776,7 +798,7 @@ export function BodyguardTrainingAction() {
 
   // Finish training state
   const [finishingSlotId, setFinishingSlotId] = useState<number | null>(null);
-  const resetFinishRef = useRef<() => void>(() => {});
+  const resetFinishRef = useRef<() => void>(() => { });
   const finishTx = useContractTransaction({
     onSuccess: () => {
       toast({
@@ -855,7 +877,7 @@ export function BodyguardTrainingAction() {
 
   function handleSlotSelect(slotId: number) {
     // Only open dialog if we have bodyguards available
-    const trainable = bodyguards.filter((bg) => bg.typeId < 9);
+    const trainable = bodyguards.filter(isTrainableBodyguard);
     if (trainable.length > 0) {
       setSelectedSlotId(slotId);
       // Select the first trainable bodyguard
@@ -952,8 +974,8 @@ export function BodyguardTrainingAction() {
     );
   }
 
-  const trainableBodyguards = bodyguards.filter((bg) => bg.typeId < 9);
-  const maxLevelBodyguards = bodyguards.filter((bg) => bg.typeId >= 9);
+  const trainableBodyguards = bodyguards.filter(isTrainableBodyguard);
+  const maxLevelBodyguards = bodyguards.filter((bg) => !isTrainableBodyguard(bg));
 
   return (
     <div className="flex flex-col gap-6">

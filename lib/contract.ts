@@ -115,7 +115,7 @@ import {
   TRAVEL_TYPES,
   TravelCities
 } from "./constants/const";
-import { getBodyguardTrainingCost, getCityRegion, getCrateCategory, getCrateItemLabel, getShopItemSlotType, parseBulletBotPlusInfo, parseHelperBotInfo, parseOcRewardAmount } from "./constants/helper";
+import { getCityRegion, getCrateCategory, getCrateItemLabel, getShopItemSlotType, parseBulletBotPlusInfo, parseHelperBotInfo, parseOcRewardAmount, resolveBodyguard } from "./constants/helper";
 import { BulletBotPlusInfo, HelperBotInfo, TrainingSlotType } from "./constants/type";
 
 export {
@@ -155,7 +155,7 @@ export {
 };
 
 export {
-  getBodyguardTrainingCost, getCityRegion,
+  resolveBodyguard, getCityRegion,
   getCrateCategory,
   getCrateItemLabel, getShopItemSlotType, parseBulletBotPlusInfo, parseHelperBotInfo, parseOcRewardAmount
 };

@@ -1,8 +1,17 @@
 "use client";
 
+import {
+  formatBulletWithdrawFee,
+  formatBulletWithdrawKept,
+  useBulletWithdrawTax,
+} from "@/hooks/use-bullet-withdraw-tax";
 import { Zap, Info } from "lucide-react";
 
 export function ExchangeBulletInfo() {
+  const { tax, isLoading } = useBulletWithdrawTax();
+  const feeLabel = formatBulletWithdrawFee(tax, isLoading);
+  const keptLabel = formatBulletWithdrawKept(tax, isLoading);
+
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-xl border border-border bg-card p-5">
@@ -27,8 +36,8 @@ export function ExchangeBulletInfo() {
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
             <span>
               <strong className="text-foreground">Withdraw</strong> takes bullets from
-              in-game; the UI shows a 20% fee, so the estimated amount to your wallet is
-              80% of the input.
+              in-game. The contract charges a {feeLabel} fee, so the estimated amount
+              to your wallet is {keptLabel} of the input.
             </span>
           </li>
           <li className="flex gap-2">

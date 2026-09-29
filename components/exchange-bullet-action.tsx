@@ -4,6 +4,11 @@ import { useAuth } from "@/components/auth-provider";
 import { useChain, useChainAddresses } from "@/components/chain-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  applyBulletWithdrawFee,
+  formatBulletWithdrawFee,
+  useBulletWithdrawTax,
+} from "@/hooks/use-bullet-withdraw-tax";
 import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
 import { BULLET_ABI, BULLET_WALLET_TOKEN_ABI, type ChainId } from "@/lib/contract";
 import { cn } from "@/lib/utils";
@@ -62,6 +67,8 @@ export function ExchangeBulletAction() {
   const { authData } = useAuth();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useChainWriteContract();
+  const { tax: withdrawTax, isLoading: withdrawTaxLoading } = useBulletWithdrawTax();
+  const withdrawFeeLabel = formatBulletWithdrawFee(withdrawTax, withdrawTaxLoading);
 
   const [depositIn, setDepositIn] = useState("");
   const [withdrawIn, setWithdrawIn] = useState("");
@@ -127,8 +134,9 @@ export function ExchangeBulletAction() {
   const estDepositOut = depositIn.trim() ? depositIn.trim() : "0";
   const estWithdrawOut = useMemo(() => {
     if (withdrawParsed.wei === null) return "0";
-    return formatUnits((withdrawParsed.wei * BigInt(8)) / BigInt(10), ingameDec);
-  }, [withdrawParsed.wei, ingameDec]);
+    if (withdrawTax === null) return "…";
+    return formatUnits(applyBulletWithdrawFee(withdrawParsed.wei, withdrawTax), ingameDec);
+  }, [withdrawParsed.wei, ingameDec, withdrawTax]);
 
   const openTrade = useCallback(() => {
     const u = getBulletTradeUrl({
@@ -307,7 +315,7 @@ export function ExchangeBulletAction() {
       <div className="mx-auto w-full max-w-md rounded-2xl border border-border bg-card/80 p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Withdraw</h2>
-          <span className="text-xs text-muted-foreground">Fee: 20%</span>
+          <span className="text-xs text-muted-foreground">Fee: {withdrawFeeLabel}</span>
         </div>
         <div className="mb-2 flex w-full min-w-0 items-stretch gap-2">
           <div className="relative flex-1 max-w-md">
@@ -343,7 +351,7 @@ export function ExchangeBulletAction() {
             Balance: {formatBulletAmount(ingameBalWei, ingameDec, iDecL || iBalL)} (in-game)
           </span>
           <span>
-            Estimated output: {estWithdrawOut} (to wallet, after 20% fee)
+            Estimated output: {estWithdrawOut} (to wallet, after {withdrawFeeLabel} fee)
           </span>
         </div>
         {!isConnected && (
