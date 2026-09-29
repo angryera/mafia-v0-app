@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { usePublicClient } from "wagmi";
 
 /** `withdrawTax` is parts per 1,000. 50 means a 5% fee. */
-export const BULLET_WITHDRAW_TAX_DENOMINATOR = 1000n;
+export const BULLET_WITHDRAW_TAX_DENOMINATOR = BigInt(1000);
 
 /**
  * Slot written by `setWithdrawTax`. Pulse exposes this as `withdrawTax()`.
@@ -23,14 +23,15 @@ export function useBulletWithdrawTax() {
     queryKey: ["bullet-withdraw-tax", addresses.bullets, publicClient?.chain?.id],
     enabled: !!publicClient,
     retry: false,
-    queryFn: async () => {
+    queryFn: async (): Promise<bigint | null> => {
       if (!publicClient) return null;
       try {
-        return await publicClient.readContract({
+        const tax = await publicClient.readContract({
           address: addresses.bullets,
           abi: BULLET_ABI,
           functionName: "withdrawTax",
         });
+        return BigInt(tax as bigint);
       } catch {
         const raw = await publicClient.getStorageAt({
           address: addresses.bullets,
@@ -45,9 +46,9 @@ export function useBulletWithdrawTax() {
 }
 
 export function formatBulletPerMillePercent(perMille: bigint): string {
-  const whole = perMille / 10n;
-  const frac = perMille % 10n;
-  if (frac === 0n) return `${whole.toString()}%`;
+  const whole = perMille / BigInt(10);
+  const frac = perMille % BigInt(10);
+  if (frac === BigInt(0)) return `${whole.toString()}%`;
   return `${whole.toString()}.${frac.toString()}%`;
 }
 

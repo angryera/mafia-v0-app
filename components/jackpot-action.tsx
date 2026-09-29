@@ -245,7 +245,7 @@ export function JackpotAction() {
         max: Number(formatEther((betLimitsRaw as any).maxBetUSD ?? (betLimitsRaw as any)[1] ?? BigInt(0))),
       }
     : null;
-  const feePercent = feePercentageRaw ? Number(feePercentageRaw) : null;
+  const feePercent = feePercentageRaw ? Number(feePercentageRaw) / 100 : null;
 
   // ── Countdown ──────────────────────────────────────────────────
   // Countdown only applies when state is LIVE (2) - liveTime is set when round goes LIVE
