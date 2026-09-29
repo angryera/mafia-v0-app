@@ -18,9 +18,12 @@ export function KillSkillInfo() {
         />
 
         <div className="rounded-lg bg-background/50 px-3 py-2.5">
-          <p className="text-xs text-muted-foreground mb-0.5">Function</p>
+          <p className="text-xs text-muted-foreground mb-0.5">Functions</p>
           <p className="font-mono text-sm text-primary break-all">
-            trainSkill(uint256)
+            requestTrainSkill(uint8)
+          </p>
+          <p className="mt-1 font-mono text-sm text-primary break-all">
+            finishTrainSkill()
           </p>
         </div>
 
@@ -42,6 +45,24 @@ export function KillSkillInfo() {
           </p>
           <p className="font-mono text-[11px] text-chain-accent/70">
             approveInGameCurrency()
+          </p>
+        </div>
+
+        <div className="rounded-lg bg-chain-accent/5 border border-chain-accent/20 px-3 py-2.5">
+          <p className="text-xs font-medium text-chain-accent mb-0.5">
+            Step 2: Request
+          </p>
+          <p className="font-mono text-[11px] text-chain-accent/70">
+            requestTrainSkill(trainType)
+          </p>
+        </div>
+
+        <div className="rounded-lg bg-chain-accent/5 border border-chain-accent/20 px-3 py-2.5">
+          <p className="text-xs font-medium text-chain-accent mb-0.5">
+            Step 3: Finish
+          </p>
+          <p className="font-mono text-[11px] text-chain-accent/70">
+            finishTrainSkill()
           </p>
         </div>
 

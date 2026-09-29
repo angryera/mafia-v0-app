@@ -26,6 +26,7 @@ import {
   XCircle
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { decodeEventLog, formatEther, parseEther } from "viem";
 import {
@@ -61,6 +62,7 @@ function countHoldingsByType(holdings: SmugglingGood[]): Record<number, number> 
 
 export function BoozeAction() {
   const { address, isConnected } = useAccount();
+  const router = useRouter();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
   const { authData, isSigning: authSigning, requestSignature } = useAuth();
@@ -343,6 +345,7 @@ export function BoozeAction() {
       toast.error("You were caught and jailed while buying booze!", {
         icon: <Lock className="h-4 w-4 text-red-400" />,
       });
+      router.push("/jail");
     } else {
       // Failed status
       toast.error("Failed to buy booze. The transaction did not succeed.", {
@@ -354,7 +357,7 @@ export function BoozeAction() {
     fetchHoldings();
     fetchPrices();
     refetchNextTime();
-  }, [buyResult, buyHash, fetchHoldings, fetchPrices, refetchNextTime]);
+  }, [buyResult, buyHash, fetchHoldings, fetchPrices, refetchNextTime, router]);
 
   useEffect(() => {
     if (!sellResult || !sellHash || sellToastShownRef.current === sellHash) return;
@@ -366,6 +369,7 @@ export function BoozeAction() {
       toast.error("You were caught and jailed while selling booze!", {
         icon: <Lock className="h-4 w-4 text-red-400" />,
       });
+      router.push("/jail");
     } else {
       // Failed status
       toast.error("Failed to sell booze. The transaction did not succeed.", {
@@ -377,7 +381,7 @@ export function BoozeAction() {
     fetchHoldings();
     fetchPrices();
     refetchNextTime();
-  }, [sellResult, sellHash, fetchHoldings, fetchPrices, refetchNextTime]);
+  }, [sellResult, sellHash, fetchHoldings, fetchPrices, refetchNextTime, router]);
 
   // ---------- Calculations ----------
   const holdingsCounts = countHoldingsByType(holdings);

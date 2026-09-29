@@ -50,8 +50,8 @@ const TAB_CONFIG: Record<
   killskill: {
     title: "Kill Skill",
     description:
-      "Train your kill skills on BNB Smart Chain. Pick a training type and level up your abilities.",
-    codeSample: "trainSkill(uint256)",
+      "Train your kill skills on BNB Smart Chain. Request a training type, then finish once the result is ready.",
+    codeSample: "requestTrainSkill(uint8) / finishTrainSkill()",
     contractAddress: "0xa5dc2cb4dc13f12d8464eaa862fac00f19adc84d",
     contractShort: "0xa5dc...c84d",
   },
@@ -485,6 +485,14 @@ const TAB_CONFIG: Record<
     codeSample: "equipItems(cityId, itemIds, delta)",
     contractAddress: "0xa2AA522B4CCBc95Dec0aFCa2B0c645f9C126cD24",
     contractShort: "0xa2AA...cD24",
+  },
+  fts: {
+    title: "Founders table shares",
+    description:
+      "Auction liquid founder shares, transfer them, and commit them to chain deployments.",
+    codeSample: "list(...) / bid(...) / subscribe(...)",
+    contractAddress: "",
+    contractShort: "",
   },
 };
 

@@ -25,23 +25,56 @@ import { cn } from "@/lib/utils";
 const APPROVE_AMOUNT = parseEther("100000000");
 
 type TrainType = (typeof TRAIN_TYPES)[number];
+type Phase = "idle" | "requesting" | "waiting" | "finishing" | "done";
+
+export type KillSkillTrainRequest = {
+  isPending: boolean;
+  trainType: number;
+  requestBlock: number;
+};
+
+function formatXp(xpPoint: bigint): string {
+  if (xpPoint <= BigInt(Number.MAX_SAFE_INTEGER)) {
+    return Number(xpPoint).toLocaleString();
+  }
+  return xpPoint.toString();
+}
 
 export function KillSkillCard({
   trainType,
   cooldown,
-  onCommitted,
+  pendingRequest,
+  nonceReady,
+  onRequestConfirmed,
+  onFinished,
+  onWaitingChange,
 }: {
   trainType: TrainType;
   cooldown?: { seconds: number; label: string } | null;
-  onCommitted?: () => void;
+  pendingRequest: KillSkillTrainRequest | null;
+  nonceReady: boolean;
+  onRequestConfirmed?: () => void;
+  onFinished?: () => void;
+  onWaitingChange?: (waiting: boolean) => void;
 }) {
   const { isConnected } = useAccount();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
   const [approved, setApproved] = useState(false);
+  const [phase, setPhase] = useState<Phase>("idle");
   const onCooldown = (cooldown?.seconds ?? 0) > 0;
+  const ownsPending = pendingRequest?.isPending === true && pendingRequest.trainType === trainType.id;
+  const blockedByOther = pendingRequest?.isPending === true && pendingRequest.trainType !== trainType.id;
 
-  // Approve transaction
+  const onRequestConfirmedRef = useRef(onRequestConfirmed);
+  const onFinishedRef = useRef(onFinished);
+  const onWaitingChangeRef = useRef(onWaitingChange);
+  useEffect(() => {
+    onRequestConfirmedRef.current = onRequestConfirmed;
+    onFinishedRef.current = onFinished;
+    onWaitingChangeRef.current = onWaitingChange;
+  });
+
   const approveTx = useContractTransaction({
     onSuccess: () => setApproved(true),
   });
@@ -50,29 +83,50 @@ export function KillSkillCard({
   const approveError = approveTx.error;
   const resetApprove = approveTx.reset;
 
-  const trainTx = useContractTransaction();
-  const writeContract = trainTx.writeAsync;
-  const hash = trainTx.hash;
-  const isPending = trainTx.isPending;
-  const error = trainTx.error;
-  const reset = trainTx.reset;
-  const isConfirming = trainTx.isConfirming;
-  const isTxConfirmed = trainTx.isSuccess;
-  const receipt = trainTx.receipt.data;
+  const requestTx = useContractTransaction({
+    onSuccess: () => {
+      setPhase("waiting");
+      onRequestConfirmedRef.current?.();
+    },
+  });
+  const writeRequest = requestTx.writeAsync;
+  const requestHash = requestTx.hash;
+  const isRequestPending = requestTx.isPending;
+  const requestError = requestTx.error;
+  const resetRequest = requestTx.reset;
 
-  // Parse the TrainedSkill event from the receipt logs
+  const finishTx = useContractTransaction({
+    onSuccess: () => {
+      setPhase("done");
+      onFinishedRef.current?.();
+    },
+  });
+  const writeFinish = finishTx.writeAsync;
+  const finishHash = finishTx.hash;
+  const isFinishPending = finishTx.isPending;
+  const finishError = finishTx.error;
+  const resetFinish = finishTx.reset;
+  const isFinishSuccess = finishTx.isSuccess;
+  const finishReceipt = finishTx.receipt.data;
+
   const trainResult = useMemo(() => {
-    if (!receipt?.logs) return null;
-    for (const log of receipt.logs) {
+    if (!finishReceipt?.logs) return null;
+    for (const log of finishReceipt.logs) {
       try {
         const decoded = decodeEventLog({
           abi: KILLSKILL_CONTRACT_ABI,
           data: log.data,
           topics: log.topics,
+          strict: false,
         });
         if (decoded.eventName === "TrainedSkill") {
+          const args = decoded.args as unknown as {
+            isSuccess: boolean;
+            xpPoint?: bigint;
+          };
           return {
-            isSuccess: (decoded.args as unknown as { isSuccess: boolean }).isSuccess,
+            isSuccess: args.isSuccess,
+            xpPoint: args.xpPoint ?? BigInt(0),
           };
         }
       } catch {
@@ -80,7 +134,22 @@ export function KillSkillCard({
       }
     }
     return null;
-  }, [receipt]);
+  }, [finishReceipt]);
+
+  useEffect(() => {
+    if (!ownsPending || phase !== "idle") return;
+    setPhase("waiting");
+  }, [ownsPending, phase]);
+
+  useEffect(() => {
+    if (phase !== "requesting" || requestTx.isLoading || !requestError) return;
+    setPhase("idle");
+  }, [phase, requestError, requestTx.isLoading]);
+
+  useEffect(() => {
+    if (phase !== "finishing" || finishTx.isLoading || !finishError) return;
+    setPhase("waiting");
+  }, [phase, finishError, finishTx.isLoading]);
 
   const handleApprove = () => {
     resetApprove();
@@ -92,38 +161,51 @@ export function KillSkillCard({
     });
   };
 
-  const handleExecute = () => {
-    reset();
-    writeContract({
+  const handleRequest = () => {
+    resetRequest();
+    resetFinish();
+    setPhase("requesting");
+    void writeRequest({
       address: addresses.killskill,
       abi: KILLSKILL_CONTRACT_ABI,
-      functionName: "trainSkill",
+      functionName: "requestTrainSkill",
       args: [trainType.id],
-    });
+    }).catch(() => undefined);
   };
 
-  const committedRef = useRef(false);
+  const handleFinish = () => {
+    resetFinish();
+    setPhase("finishing");
+    void writeFinish({
+      address: addresses.killskill,
+      abi: KILLSKILL_CONTRACT_ABI,
+      functionName: "finishTrainSkill",
+    }).catch(() => undefined);
+  };
+
+  const waitingForResult = phase === "waiting" || phase === "finishing";
   useEffect(() => {
-    if (!isTxConfirmed || committedRef.current) return;
-    committedRef.current = true;
-    onCommitted?.();
-  }, [isTxConfirmed, onCommitted]);
+    onWaitingChangeRef.current?.(waitingForResult);
+    return () => onWaitingChangeRef.current?.(false);
+  }, [waitingForResult]);
 
   const isApproveLoading = approveTx.isLoading;
-  const isTrainLoading = trainTx.isLoading;
-  const isLoading = isApproveLoading || isTrainLoading;
+  const isRequestLoading = requestTx.isLoading;
+  const isFinishLoading = finishTx.isLoading;
+  const isLoading = isApproveLoading || isRequestLoading || isFinishLoading;
+  const showFinishFlow = phase === "waiting" || phase === "finishing" || (ownsPending && phase !== "done");
+  const canFinish = isConnected && nonceReady && !isFinishLoading;
 
   return (
     <div
       className={cn(
         "group relative flex flex-col rounded-xl border border-border bg-card p-5 transition-all duration-300",
         "hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5",
-        isTxConfirmed && trainResult?.isSuccess && "border-green-400/30",
-        isTxConfirmed && trainResult && !trainResult.isSuccess && "border-chain-accent/30",
-        error && "border-red-400/30"
+        isFinishSuccess && trainResult?.isSuccess && "border-green-400/30",
+        isFinishSuccess && trainResult && !trainResult.isSuccess && "border-chain-accent/30",
+        (requestError || finishError) && "border-red-400/30"
       )}
     >
-      {/* Header */}
       <div className="mb-3 flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-foreground">
@@ -135,7 +217,6 @@ export function KillSkillCard({
         </div>
       </div>
 
-      {/* Info */}
       <div className="mb-4 rounded-md bg-background/50 px-3 py-2">
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">trainType</span>
@@ -144,15 +225,20 @@ export function KillSkillCard({
           </span>
         </div>
         <div className="mt-1.5 flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">Function</span>
+          <span className="text-xs text-muted-foreground">Step 1</span>
           <span className="font-mono text-[10px] text-primary">
-            trainSkill(int256)
+            requestTrainSkill(uint8)
+          </span>
+        </div>
+        <div className="mt-1.5 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Step 2</span>
+          <span className="font-mono text-[10px] text-primary">
+            finishTrainSkill()
           </span>
         </div>
       </div>
 
-      {/* Training Result Feedback */}
-      {isTxConfirmed && trainResult && (
+      {isFinishSuccess && trainResult && (
         <div
           className={cn(
             "mb-3 rounded-lg px-3 py-3",
@@ -185,12 +271,12 @@ export function KillSkillCard({
             )}
           >
             {trainResult.isSuccess
-              ? `Your ${trainType.label.toLowerCase()} skill has improved.`
+              ? `Your ${trainType.label.toLowerCase()} skill has improved.${trainResult.xpPoint > BigInt(0) ? ` +${formatXp(trainResult.xpPoint)} XP.` : ""}`
               : "Better luck next time. Try training again."}
           </p>
-          {hash && (
+          {finishHash && (
             <a
-              href={`${explorer}/tx/${hash}`}
+              href={`${explorer}/tx/${finishHash}`}
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
@@ -198,39 +284,80 @@ export function KillSkillCard({
                 trainResult.isSuccess ? "text-green-400/60" : "text-chain-accent/60"
               )}
             >
-              {hash.slice(0, 10)}...{hash.slice(-8)}
+              {finishHash.slice(0, 10)}...{finishHash.slice(-8)}
             </a>
           )}
         </div>
       )}
 
-      {/* TX confirmed but no event found (fallback) */}
-      {isTxConfirmed && !trainResult && hash && (
+      {isFinishSuccess && !trainResult && finishHash && (
         <div className="mb-3 flex items-center gap-2 rounded-lg bg-green-400/10 px-3 py-2">
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-400" />
           <a
-            href={`${explorer}/tx/${hash}`}
+            href={`${explorer}/tx/${finishHash}`}
             target="_blank"
             rel="noopener noreferrer"
             className="font-mono text-[10px] text-green-400 underline decoration-green-400/30 hover:decoration-green-400"
           >
-            {hash.slice(0, 10)}...{hash.slice(-8)}
+            {finishHash.slice(0, 10)}...{finishHash.slice(-8)}
           </a>
         </div>
       )}
 
-      {error && (
+      {showFinishFlow && !nonceReady && !isFinishSuccess && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-400/10 px-3 py-2">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-amber-400" />
+          <span className="text-xs text-amber-400">
+            Waiting for the training result. This can take a few blocks.
+          </span>
+        </div>
+      )}
+
+      {showFinishFlow && nonceReady && !isFinishSuccess && phase !== "finishing" && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-green-400/10 px-3 py-2">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-400" />
+          <span className="text-xs text-green-400">
+            Result is ready. Finish training to reveal the outcome.
+          </span>
+        </div>
+      )}
+
+      {requestHash && phase !== "idle" && phase !== "done" && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg bg-secondary/60 px-3 py-2">
+          <span className="shrink-0 text-[10px] text-muted-foreground">Request</span>
+          <a
+            href={`${explorer}/tx/${requestHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="truncate font-mono text-[10px] text-primary underline decoration-primary/30 hover:decoration-primary"
+          >
+            {requestHash.slice(0, 10)}...{requestHash.slice(-8)}
+          </a>
+        </div>
+      )}
+
+      {requestError && (
         <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-400/10 px-3 py-2">
           <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
           <p className="line-clamp-2 text-[10px] text-red-400">
-            {error.message.includes("User rejected")
+            {requestError.message.includes("User rejected")
               ? "Transaction rejected by user"
-              : getErrorMessage(error)}
+              : getErrorMessage(requestError)}
           </p>
         </div>
       )}
 
-      {/* Approve Error */}
+      {finishError && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-400/10 px-3 py-2">
+          <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
+          <p className="line-clamp-2 text-[10px] text-red-400">
+            {finishError.message.includes("User rejected")
+              ? "Transaction rejected by user"
+              : getErrorMessage(finishError)}
+          </p>
+        </div>
+      )}
+
       {approveError && (
         <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-400/10 px-3 py-2">
           <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-400" />
@@ -242,59 +369,95 @@ export function KillSkillCard({
         </div>
       )}
 
-      {/* Buttons */}
       <div className="mt-auto flex flex-col gap-2">
-        <button
-          onClick={handleApprove}
-          disabled={!isConnected || isLoading || approved}
-          className={cn(
-            "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200",
-            approved
-              ? "bg-green-400/10 text-green-400 cursor-default"
-              : isConnected
-                ? "bg-secondary text-foreground hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+        {showFinishFlow ? (
+          <button
+            onClick={handleFinish}
+            disabled={!canFinish}
+            className={cn(
+              "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-200",
+              canFinish
+                ? "bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98]"
                 : "bg-secondary text-muted-foreground cursor-not-allowed"
-          )}
-        >
-          {isApproveLoading ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {isApprovePending ? "Approve..." : "Confirming..."}
-            </>
-          ) : approved ? (
-            <>
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Approved
-            </>
-          ) : (
-            <>
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Approve Cash
-            </>
-          )}
-        </button>
-        <button
-          onClick={handleExecute}
-          disabled={!isConnected || isLoading || !approved || onCooldown}
-          className={cn(
-            "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-200",
-            isConnected && approved && !onCooldown
-              ? "bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
-              : "bg-secondary text-muted-foreground cursor-not-allowed"
-          )}
-        >
-          {isTrainLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {isPending ? "Confirm..." : "Confirming..."}
-            </>
-          ) : (
-            <>
-              <Swords className="h-4 w-4" />
-              Train
-            </>
-          )}
-        </button>
+            )}
+          >
+            {isFinishLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {isFinishPending ? "Confirm..." : "Confirming..."}
+              </>
+            ) : nonceReady ? (
+              <>
+                <Swords className="h-4 w-4" />
+                Finish Training
+              </>
+            ) : (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Waiting for result...
+              </>
+            )}
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={handleApprove}
+              disabled={!isConnected || isLoading || approved || blockedByOther || ownsPending}
+              className={cn(
+                "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-all duration-200",
+                approved
+                  ? "bg-green-400/10 text-green-400 cursor-default"
+                  : isConnected && !blockedByOther && !ownsPending
+                    ? "bg-secondary text-foreground hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+                    : "bg-secondary text-muted-foreground cursor-not-allowed"
+              )}
+            >
+              {isApproveLoading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {isApprovePending ? "Approve..." : "Confirming..."}
+                </>
+              ) : approved ? (
+                <>
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Approved
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Approve Cash
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleRequest}
+              disabled={!isConnected || isLoading || !approved || onCooldown || blockedByOther || ownsPending}
+              className={cn(
+                "flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all duration-200",
+                isConnected && approved && !onCooldown && !blockedByOther && !ownsPending
+                  ? "bg-primary text-primary-foreground hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+                  : "bg-secondary text-muted-foreground cursor-not-allowed"
+              )}
+            >
+              {isRequestLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {isRequestPending ? "Confirm..." : "Confirming..."}
+                </>
+              ) : (
+                <>
+                  <Swords className="h-4 w-4" />
+                  Request Training
+                </>
+              )}
+            </button>
+            {blockedByOther && (
+              <p className="text-center text-[10px] text-muted-foreground">
+                Finish the pending training first.
+              </p>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

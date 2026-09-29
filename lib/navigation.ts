@@ -53,6 +53,7 @@ export const TABS = [
   "story-mode",
   "xp-market",
   "marketplace",
+  "fts",
   "racing",
   "create-profile",
   "marketing-dao",

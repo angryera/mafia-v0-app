@@ -2,6 +2,7 @@
 
 import { getErrorMessage } from "@/lib/format";
 import { useMemo, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useReadContract, useAccount } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { decodeEventLog, formatEther } from "viem";
@@ -30,6 +31,7 @@ export function CrimeCard({
   onCommitted?: () => void;
 }) {
   const { address, isConnected } = useAccount();
+  const router = useRouter();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
 
@@ -107,12 +109,13 @@ export function CrimeCard({
 
     if (crimeResult.jailed) {
       toast.error("You were jailed");
+      router.push("/jail");
     } else if (!crimeResult.success) {
       toast.warning("You failed, but got away");
     } else {
       toast.success(`Success - You earned ${crimeResult.cashAmount.toLocaleString()} cash`);
     }
-  }, [crimeResult, hash, onCommitted]);
+  }, [crimeResult, hash, onCommitted, router]);
 
   const handleExecute = async () => {
     reset();

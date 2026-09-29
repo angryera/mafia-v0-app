@@ -19,7 +19,8 @@ const HIGH_GAS_FUNCTIONS = [
   "buyItems",
   // Travel / Skills
   "travel",
-  "trainSkill",
+  "requestTrainSkill",
+  "finishTrainSkill",
   "buyOut",
   "bustOut",
   "buyHealth",

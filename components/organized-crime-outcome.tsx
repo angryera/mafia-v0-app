@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useToast } from "@/hooks/use-toast";
 import {
+  JAIL_CONTRACT_ABI,
   MARKETPLACE_ITEM_NAMES,
   OC_EXECUTION_ABI,
   OC_JAIL_HOURS,
@@ -26,6 +27,7 @@ import {
   XCircle,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatEther } from "viem";
 import { useAccount, useReadContract } from "wagmi";
 
@@ -209,6 +211,7 @@ export function OrganizedCrimeOutcome({
   onRefresh: () => void;
 }) {
   const { address } = useAccount();
+  const router = useRouter();
   const addresses = useChainAddresses();
   const explorer = useChainExplorer();
   const { toast } = useToast();
@@ -273,6 +276,29 @@ export function OrganizedCrimeOutcome({
   const outcomeType = determineOutcomeType(lobby);
   const storyText = getStoryText(outcomeType, lobby.startBlock);
   const isLeader = address?.toLowerCase() === lobby.leader.toLowerCase();
+
+  const { refetch: refetchSentence } = useReadContract({
+    address: addresses.jail,
+    abi: JAIL_CONTRACT_ABI,
+    functionName: "jailedUntil",
+    args: address ? [address] : undefined,
+    query: { enabled: Boolean(address) },
+  });
+
+  useEffect(() => {
+    if (!isRevealed || outcomeType !== "INSTANCE_FAILURE" || !address) return;
+    let cancelled = false;
+    void refetchSentence().then((result) => {
+      if (cancelled) return;
+      const until = result.data !== undefined ? Number(result.data) : 0;
+      if (until > Math.floor(Date.now() / 1000)) {
+        router.push("/jail");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRevealed, outcomeType, address, refetchSentence, router]);
 
   const handleClaimReward = () => {
     claim.write({

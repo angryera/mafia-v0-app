@@ -82,17 +82,6 @@ function NickCarDetailDialog({
         </DialogHeader>
 
         <div className="overflow-hidden rounded-lg border border-border bg-background/40">
-          <div className="flex h-40 items-center justify-center bg-background/60 p-4">
-            {car?.image ? (
-              <img
-                src={car.image}
-                alt={car.carName}
-                className="h-full w-full object-contain"
-              />
-            ) : (
-              <Car className="h-12 w-12 text-muted-foreground/40" />
-            )}
-          </div>
           <div className="space-y-3 p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">

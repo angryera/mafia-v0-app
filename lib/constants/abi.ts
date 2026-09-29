@@ -264,7 +264,7 @@ export const NICKCAR_CONTRACT_ABI: Abi = [
 export const KILLSKILL_CONTRACT_ABI: Abi = [
     {
         type: "function",
-        name: "trainSkill",
+        name: "requestTrainSkill",
         inputs: [
             { name: "trainType", type: "uint8", internalType: "uint8" },
         ],
@@ -272,12 +272,56 @@ export const KILLSKILL_CONTRACT_ABI: Abi = [
         stateMutability: "nonpayable",
     },
     {
+        type: "function",
+        name: "finishTrainSkill",
+        inputs: [],
+        outputs: [],
+        stateMutability: "nonpayable",
+    },
+    {
+        type: "function",
+        name: "trainRequests",
+        inputs: [
+            { name: "", type: "address", internalType: "address" },
+        ],
+        outputs: [
+            { name: "isPending", type: "bool", internalType: "bool" },
+            { name: "trainType", type: "uint8", internalType: "uint8" },
+            { name: "requestBlock", type: "uint256", internalType: "uint256" },
+        ],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "getTrainNonceStatus",
+        inputs: [
+            { name: "account", type: "address", internalType: "address" },
+        ],
+        outputs: [{ name: "", type: "bool", internalType: "bool" }],
+        stateMutability: "view",
+    },
+    {
+        type: "event",
+        name: "TrainSkillRequested",
+        inputs: [
+            { name: "trainer", type: "address", indexed: true, internalType: "address" },
+            { name: "trainType", type: "uint8", indexed: false, internalType: "uint8" },
+            { name: "requestBlock", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "trainCost", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "timestamp", type: "uint256", indexed: false, internalType: "uint256" },
+        ],
+    },
+    {
         type: "event",
         name: "TrainedSkill",
         inputs: [
-            { name: "player", type: "address", indexed: true, internalType: "address" },
+            { name: "trainer", type: "address", indexed: true, internalType: "address" },
             { name: "trainType", type: "uint8", indexed: false, internalType: "uint8" },
             { name: "isSuccess", type: "bool", indexed: false, internalType: "bool" },
+            { name: "trainCost", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "xpPoint", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "nextTrainTime", type: "uint256", indexed: false, internalType: "uint256" },
+            { name: "timestamp", type: "uint256", indexed: false, internalType: "uint256" },
         ],
     },
     {
