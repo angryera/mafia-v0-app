@@ -43,16 +43,15 @@ export function ShellLayout({ children }: ShellLayoutProps) {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="flex h-screen bg-background">
       <JailRedirect />
-      <TopBar activeTab={activeTab} cooldowns={cooldowns} />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_70%_-20%,rgb(var(--chain-accent)/0.07),transparent_32%),linear-gradient(rgba(255,255,255,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.012)_1px,transparent_1px)] bg-[size:auto,64px_64px,64px_64px]" />
 
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(240,185,11,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(240,185,11,0.015)_1px,transparent_1px)] bg-[size:64px_64px]" />
+      <Sidebar activeTab={activeTab} cooldowns={cooldowns} />
 
-      <div className="relative flex flex-1 overflow-hidden">
-        <Sidebar activeTab={activeTab} cooldowns={cooldowns} />
-
-        <main className="flex-1 overflow-y-auto">
+      <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        <TopBar activeTab={activeTab} cooldowns={cooldowns} />
+        <main className="min-h-0 flex-1 overflow-y-auto">
           <ProfileGate>{children}</ProfileGate>
         </main>
       </div>

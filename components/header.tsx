@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -40,6 +40,7 @@ import {
   CreditCard,
   Heart,
   Menu,
+  Wallet,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -95,12 +96,42 @@ function UsernameLabel({ onNavigate }: { onNavigate: () => void }) {
   return (
     <button
       onClick={onNavigate}
-      className="flex items-center gap-2 rounded-lg bg-secondary/60 px-3 py-1.5 transition-colors hover:bg-secondary active:scale-95"
+      className="flex h-8 items-center gap-2 rounded-lg border border-border/60 bg-white/[0.035] px-2.5 text-foreground transition-all hover:border-primary/20 hover:bg-white/[0.07] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       title="View profile"
     >
       <User className="h-4 w-4 text-primary" />
       <span className="text-sm font-medium text-foreground">{username}</span>
     </button>
+  );
+}
+
+function WalletControl() {
+  return (
+    <ConnectButton.Custom>
+      {({ account, mounted, openAccountModal, openConnectModal }) => {
+        const connected = mounted && Boolean(account);
+
+        return (
+          <button
+            type="button"
+            onClick={connected ? openAccountModal : openConnectModal}
+            className="group flex h-8 items-center gap-2 rounded-lg px-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            aria-label={connected ? "Open wallet details" : "Connect wallet"}
+            style={!mounted ? { opacity: 0, pointerEvents: "none", userSelect: "none" } : undefined}
+          >
+            <span className="relative grid h-6 w-6 place-items-center rounded-md bg-primary/[0.08] text-primary transition-colors group-hover:bg-primary/[0.14]">
+              <Wallet className="h-3.5 w-3.5" />
+              {connected && (
+                <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-2 ring-background" />
+              )}
+            </span>
+            <span className="max-w-28 truncate font-mono text-[11px] tracking-tight">
+              {account?.displayName ?? "Connect wallet"}
+            </span>
+          </button>
+        );
+      }}
+    </ConnectButton.Custom>
   );
 }
 
@@ -258,8 +289,6 @@ function XpBars() {
   };
 
   const rankBar = bars[0];
-  const secondaryBars = bars.slice(1);
-
   return (
     <div className="relative group">
       {/* Always-visible: Rank XP */}
@@ -336,7 +365,7 @@ function JailIndicator({ onGoToJail }: { onGoToJail: () => void }) {
     return (
       <button
         onClick={onGoToJail}
-        className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/15 text-red-500 transition-all duration-200 hover:bg-red-500/25 active:scale-95"
+        className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/25 bg-red-500/10 text-red-400 transition-all duration-200 hover:border-red-500/40 hover:bg-red-500/20 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60"
         title="You are in jail! Click to view."
       >
         <ShieldAlert className="h-4 w-4" />
@@ -350,7 +379,7 @@ function JailIndicator({ onGoToJail }: { onGoToJail: () => void }) {
 
   return (
     <div
-      className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/10 text-green-500"
+      className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/[0.08] text-emerald-400"
       title="You are free"
     >
       <CheckCircle2 className="h-4 w-4" />
@@ -408,7 +437,7 @@ function SafehouseIndicator({ onGoToSafehouse }: { onGoToSafehouse: () => void }
   return (
     <button
       onClick={onGoToSafehouse}
-      className="relative flex items-center gap-1.5 rounded-lg bg-cyan-500/15 px-2.5 py-1.5 text-cyan-400 transition-all duration-200 hover:bg-cyan-500/25 active:scale-95"
+      className="relative flex h-8 items-center gap-1.5 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 text-cyan-300 transition-all duration-200 hover:border-cyan-500/40 hover:bg-cyan-500/20 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/60"
       title="You are in the safehouse"
     >
       <Shield className="h-3.5 w-3.5" />
@@ -458,7 +487,7 @@ function RankActivationIndicator({ onGoToRank }: { onGoToRank: () => void }) {
     return (
       <button
         onClick={onGoToRank}
-        className="flex items-center gap-1.5 rounded-lg bg-emerald-500/15 px-2.5 py-1.5 text-emerald-400 transition-all duration-200 hover:bg-emerald-500/25 active:scale-95"
+        className="flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 text-emerald-300 transition-all duration-200 hover:border-emerald-500/40 hover:bg-emerald-500/20 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
         title={`Rank active: ${rankName}`}
       >
         <Shield className="h-3.5 w-3.5" />
@@ -472,7 +501,7 @@ function RankActivationIndicator({ onGoToRank }: { onGoToRank: () => void }) {
   return (
     <button
       onClick={onGoToRank}
-      className="relative flex items-center gap-1.5 rounded-lg bg-red-500/15 px-2.5 py-1.5 text-red-400 transition-all duration-200 hover:bg-red-500/25 active:scale-95"
+      className="relative flex h-8 items-center gap-1.5 rounded-lg border border-red-500/25 bg-red-500/10 px-2.5 text-red-300 transition-all duration-200 hover:border-red-500/40 hover:bg-red-500/20 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/60"
       title={`Rank NOT active: ${rankName} -- Stake to activate!`}
     >
       <ShieldAlert className="h-3.5 w-3.5" />
@@ -493,20 +522,33 @@ function SidebarSection({
   items,
   activeTab,
   cooldowns,
+  isOpen,
+  onToggle,
 }: {
   label: string;
   items: readonly NavItem[];
   activeTab: Tab;
   cooldowns: CooldownMap;
+  isOpen: boolean;
+  onToggle: () => void;
 }) {
   return (
     <div className="mb-1">
-      <div className="px-3 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="group flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.035]"
+        aria-expanded={isOpen}
+      >
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70 transition-colors group-hover:text-foreground/80">
           {label}
         </span>
-      </div>
-      <div className="flex flex-col gap-0.5">
+        <span className="h-px flex-1 bg-border/70" />
+        <ChevronDown className={cn("h-3 w-3 text-muted-foreground/50 transition-transform", isOpen && "rotate-180")} />
+      </button>
+      <div className={cn("grid transition-[grid-template-rows,opacity] duration-200", isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-60")}>
+        <div className="min-h-0 overflow-hidden">
+        <div className="flex flex-col gap-0.5 pb-1">
         {items.map((item) => {
           const cd = cooldowns[item.id];
           return (
@@ -514,13 +556,15 @@ function SidebarSection({
               key={item.id}
               href={getTabUrl(item.id)}
               className={cn(
-                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+                "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150",
                 activeTab === item.id
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
+                  ? "bg-primary/[0.12] text-primary shadow-[inset_0_0_0_1px_rgb(var(--chain-accent)/0.12)]"
+                  : "text-muted-foreground hover:bg-white/[0.045] hover:text-foreground",
               )}
             >
-              {item.icon}
+              <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors", activeTab === item.id ? "bg-primary/15" : "bg-white/[0.025] group-hover:bg-white/[0.06]")}>
+                {item.icon}
+              </span>
               <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>
               {cd ? (
                 <span
@@ -536,6 +580,8 @@ function SidebarSection({
             </Link>
           );
         })}
+        </div>
+        </div>
       </div>
     </div>
   );
@@ -553,10 +599,33 @@ export function Sidebar({
 }) {
   const cityName = useCityName();
   const sections = buildNavigationSections(cityName);
+  const activeSection = sections.find((section) => section.items.some((item) => item.id === activeTab))?.label;
+  const [openSections, setOpenSections] = useState<Set<string>>(() => new Set(activeSection ? [activeSection] : ["Crime"]));
+
+  const toggleSection = (label: string) => {
+    setOpenSections((current) => {
+      const next = new Set(current);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
 
   return (
-    <aside className="hidden lg:flex w-56 shrink-0 flex-col border-r border-border bg-background">
-      <div className="flex-1 overflow-y-auto py-3 px-2 sidebar-scroll">
+    <aside className="relative hidden w-64 shrink-0 flex-col border-r border-border/80 bg-card/45 lg:flex">
+      <div className="flex h-[57px] items-center border-b border-border/70 px-4">
+        <Link href="/" className="group flex items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+          <div className="relative grid h-9 w-9 place-items-center overflow-hidden rounded-lg border border-primary/20 bg-primary/[0.08] text-primary shadow-[0_0_24px_rgb(var(--chain-accent)/0.08)]">
+            <Shield className="h-4 w-4" />
+            <span className="absolute inset-x-1 bottom-1 h-px bg-primary/40" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[15px] font-bold tracking-[-0.02em] text-foreground">PLAYMAFIA</p>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Syndicate console</p>
+          </div>
+        </Link>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 py-3 sidebar-scroll">
         {sections.map((section) => (
           <SidebarSection
             key={section.label}
@@ -564,11 +633,13 @@ export function Sidebar({
             items={section.items}
             activeTab={activeTab}
             cooldowns={cooldowns}
+            isOpen={openSections.has(section.label) || activeSection === section.label}
+            onToggle={() => toggleSection(section.label)}
           />
         ))}
 
         {/* Profile */}
-        <div className="mt-1 px-3 py-2">
+        <div className="mt-2 px-3 py-2">
           <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
             Account
           </span>
@@ -576,15 +647,21 @@ export function Sidebar({
         <Link
           href="/my-profile"
           className={cn(
-            "mx-2 flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150",
             activeTab === "my-profile"
               ? "bg-primary/10 text-primary"
               : "text-muted-foreground hover:bg-secondary/80 hover:text-foreground",
           )}
         >
-          <User className="h-4 w-4" />
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-white/[0.025]"><User className="h-4 w-4" /></span>
           My Profile
         </Link>
+      </div>
+      <div className="border-t border-border/70 px-4 py-3">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground/60">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.65)]" />
+          Network operations online
+        </div>
       </div>
     </aside>
   );
@@ -605,7 +682,6 @@ export function TopBar({
   const addresses = useChainAddresses();
   const [chainOpen, setChainOpen] = useState(false);
   const chainRef = useRef<HTMLDivElement>(null);
-
   const navigateTo = (tab: Tab) => {
     router.push(getTabUrl(tab));
   };
@@ -621,113 +697,80 @@ export function TopBar({
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-border/80 bg-background/85 backdrop-blur-2xl">
       {/* Desktop */}
-      <div className="hidden lg:flex items-center gap-4 px-4 py-2.5">
-        {/* Logo */}
-        <Link href="/" className="flex shrink-0 items-center gap-2.5 mr-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Shield className="h-4.5 w-4.5" />
+      <div className="hidden h-[57px] min-w-0 items-center gap-3 px-4 lg:flex">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="hidden shrink-0 text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/55 2xl:inline">Balances</span>
+          <div className="sidebar-scroll flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+            <AssetBalanceItem label="Cash" icon={<DollarSign className="h-3 w-3" />} contractAddress={addresses.ingameCurrency} href="/cash" />
+            <AssetBalanceItem label="Bullets" icon={<Zap className="h-3 w-3" />} contractAddress={addresses.bullets} contractAbi={BULLET_ABI} fnName="balanceOf" />
+            <AssetBalanceItem label="Health" icon={<Heart className="h-3 w-3" />} contractAddress={addresses.health} contractAbi={HEALTH_ABI} fnName="balanceOf" />
+            <AssetBalanceItem label="Credits" icon={<CreditCard className="h-3 w-3" />} contractAddress={addresses.buyCredit} contractAbi={CREDITS_ABI} fnName="balanceOf" />
+            <AssetBalanceItem label="GI Credits" icon={<Coins className="h-3 w-3" />} contractAddress={addresses.giCredits} contractAbi={GI_CREDITS_ABI} fnName="balanceOf" />
           </div>
-          <h1 className="text-sm font-bold tracking-tight text-foreground">
-            Playmafia
-          </h1>
-        </Link>
-
-        {/* Divider */}
-        <div className="h-6 w-px bg-border" />
-
-        {/* Inline asset balances */}
-        <div className="flex flex-1 items-center gap-1">
-          <AssetBalanceItem
-            label="Cash"
-            icon={<DollarSign className="h-3 w-3" />}
-            contractAddress={addresses.ingameCurrency}
-            href="/cash"
-          />
-          <AssetBalanceItem
-            label="Bullets"
-            icon={<Zap className="h-3 w-3" />}
-            contractAddress={addresses.bullets}
-            contractAbi={BULLET_ABI}
-            fnName="balanceOf"
-          />
-          <AssetBalanceItem
-            label="Health"
-            icon={<Heart className="h-3 w-3" />}
-            contractAddress={addresses.health}
-            contractAbi={HEALTH_ABI}
-            fnName="balanceOf"
-          />
-          <AssetBalanceItem
-            label="Credits"
-            icon={<CreditCard className="h-3 w-3" />}
-            contractAddress={addresses.buyCredit}
-            contractAbi={CREDITS_ABI}
-            fnName="balanceOf"
-          />
-          <AssetBalanceItem
-            label="GI Credits"
-            icon={<Coins className="h-3 w-3" />}
-            contractAddress={addresses.giCredits}
-            contractAbi={GI_CREDITS_ABI}
-            fnName="balanceOf"
-          />
+          <div className="h-6 w-px shrink-0 bg-border/70" />
+          <XpBars />
         </div>
 
-        {/* XP Bars */}
-        <div className="h-6 w-px bg-border" />
-        <XpBars />
+        <div className="h-6 w-px shrink-0 bg-border/70" />
 
-        {/* Right side: jail, username, wallet, chain */}
-        <div className="flex shrink-0 items-center gap-2">
-          <RankActivationIndicator onGoToRank={() => navigateTo("rank-activation")} />
-          <SafehouseIndicator onGoToSafehouse={() => navigateTo("biz-safehouse")} />
-          <JailIndicator onGoToJail={() => navigateTo("jail")} />
-          <UsernameLabel onNavigate={() => navigateTo("my-profile")} />
-          <ConnectButton accountStatus="address" chainStatus="none" showBalance={false} />
+        <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex items-center gap-1" aria-label="Player status">
+              <RankActivationIndicator onGoToRank={() => navigateTo("rank-activation")} />
+              <SafehouseIndicator onGoToSafehouse={() => navigateTo("biz-safehouse")} />
+              <JailIndicator onGoToJail={() => navigateTo("jail")} />
+            </div>
 
-          {/* Chain Switcher */}
-          <div ref={chainRef} className="relative">
-            <button
-              onClick={() => setChainOpen((prev) => !prev)}
-              className={cn(
-                "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all border",
-                activeChain === "bnb"
-                  ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20"
-                  : "border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20",
+            <div className="mx-1 h-5 w-px bg-border/70" />
+
+            <div className="flex items-center gap-1.5" aria-label="Player account">
+              <UsernameLabel onNavigate={() => navigateTo("my-profile")} />
+              <WalletControl />
+            </div>
+
+            <div className="mx-1 h-5 w-px bg-border/70" />
+
+            <div ref={chainRef} className="relative">
+              <button
+                onClick={() => setChainOpen((prev) => !prev)}
+                className={cn(
+                  "flex h-8 items-center gap-2 rounded-lg border border-transparent px-2.5 text-xs font-semibold transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
+                  activeChain === "bnb"
+                    ? "bg-yellow-500/[0.08] text-yellow-500 hover:border-yellow-500/20 hover:bg-yellow-500/15"
+                    : "bg-purple-500/[0.08] text-purple-400 hover:border-purple-500/20 hover:bg-purple-500/15",
+                )}
+              >
+                <span className={cn("h-2 w-2 rounded-full", activeChain === "bnb" ? "bg-yellow-500" : "bg-purple-500")} />
+                {chainConfig.label}
+                <ChevronDown className={cn("h-3 w-3 transition-transform", chainOpen && "rotate-180")} />
+              </button>
+
+              {chainOpen && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-44 rounded-xl border border-border bg-card p-1.5 shadow-xl shadow-black/20">
+                  {(Object.keys(CHAIN_CONFIGS) as ChainId[]).map((chainId) => {
+                    const cfg = CHAIN_CONFIGS[chainId];
+                    const isActive = activeChain === chainId;
+                    return (
+                      <button
+                        key={chainId}
+                        onClick={() => { setActiveChain(chainId); setChainOpen(false); }}
+                        className={cn(
+                          "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all",
+                          isActive
+                            ? chainId === "bnb" ? "bg-yellow-500/10 text-yellow-500" : "bg-purple-500/10 text-purple-400"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                        )}
+                      >
+                        <span className={cn("h-2.5 w-2.5 rounded-full", chainId === "bnb" ? "bg-yellow-500" : "bg-purple-500")} />
+                        {cfg.label}
+                        {isActive && <CheckCircle2 className="ml-auto h-3.5 w-3.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-            >
-              <span className={cn("h-2 w-2 rounded-full", activeChain === "bnb" ? "bg-yellow-500" : "bg-purple-500")} />
-              {chainConfig.label}
-              <ChevronDown className={cn("h-3 w-3 transition-transform", chainOpen && "rotate-180")} />
-            </button>
-
-            {chainOpen && (
-              <div className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-border bg-card p-1.5 shadow-xl shadow-black/20 z-50">
-                {(Object.keys(CHAIN_CONFIGS) as ChainId[]).map((chainId) => {
-                  const cfg = CHAIN_CONFIGS[chainId];
-                  const isActive = activeChain === chainId;
-                  return (
-                    <button
-                      key={chainId}
-                      onClick={() => { setActiveChain(chainId); setChainOpen(false); }}
-                      className={cn(
-                        "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all",
-                        isActive
-                          ? chainId === "bnb" ? "bg-yellow-500/10 text-yellow-500" : "bg-purple-500/10 text-purple-400"
-                          : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-                      )}
-                    >
-                      <span className={cn("h-2.5 w-2.5 rounded-full", chainId === "bnb" ? "bg-yellow-500" : "bg-purple-500")} />
-                      {cfg.label}
-                      {isActive && <CheckCircle2 className="ml-auto h-3.5 w-3.5" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+            </div>
         </div>
       </div>
 
@@ -777,32 +820,39 @@ function MobileHeader({
   return (
     <div className="lg:hidden">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex shrink-0 items-center gap-2">
-          <UsernameLabel onNavigate={() => handleMobileNav("my-profile")} />
-          <RankActivationIndicator onGoToRank={() => handleMobileNav("rank-activation")} />
-          <SafehouseIndicator onGoToSafehouse={() => handleMobileNav("biz-safehouse")} />
-          <JailIndicator onGoToJail={() => handleMobileNav("jail")} />
-        </div>
-        <div className="flex items-center">
-          <ConnectButton accountStatus="address" chainStatus="none" showBalance={false} />
+      <div className="flex h-16 items-center gap-3 px-4">
+        <Link href="/" className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/[0.08] text-primary">
+          <Shield className="h-[18px] w-[18px]" />
+        </Link>
+        <div className="min-w-0 flex-1">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/70">Playmafia</p>
+          <p className="truncate text-sm font-semibold text-foreground">{getActiveLabel()}</p>
         </div>
         <button
           onClick={() => setMobileOpen((prev) => !prev)}
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/60 text-foreground transition-colors hover:bg-secondary active:scale-95"
+          className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-foreground transition-all active:scale-95", mobileOpen ? "border-primary/30 bg-primary/10 text-primary" : "border-border/70 bg-card/70 hover:bg-secondary")}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileOpen}
         >
           {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
+      <div className="sidebar-scroll flex items-center gap-2 overflow-x-auto border-t border-border/60 bg-card/30 px-4 py-2">
+        <UsernameLabel onNavigate={() => handleMobileNav("my-profile")} />
+        <RankActivationIndicator onGoToRank={() => handleMobileNav("rank-activation")} />
+        <SafehouseIndicator onGoToSafehouse={() => handleMobileNav("biz-safehouse")} />
+        <JailIndicator onGoToJail={() => handleMobileNav("jail")} />
+        <div className="ml-auto shrink-0"><WalletControl /></div>
+      </div>
+
       {/* Expandable mobile menu */}
       {mobileOpen && (
-        <div className="border-t border-border bg-background px-4 pb-4">
-          <div className="py-2 mb-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Current: {getActiveLabel()}
-            </span>
+        <div className="max-h-[calc(100dvh-109px)] overflow-y-auto border-t border-border bg-background/98 px-4 pb-5 shadow-2xl sidebar-scroll">
+          <div className="mb-2 flex items-center gap-2 py-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Operations directory</span>
+            <span className="h-px flex-1 bg-border" />
           </div>
 
           {/* Sections */}
