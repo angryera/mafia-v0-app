@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2, Swords } from "lucide-react";
+import { Loader2, Timer } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useCallback, useState } from "react";
 import { useAccount, useReadContract } from "wagmi";
 import { TRAIN_TYPES, KILLSKILL_CONTRACT_ABI } from "@/lib/contract";
@@ -85,54 +86,59 @@ export function KillSkillGrid() {
     void refetchNonce();
   }, [refetchTrainRequest, refetchCooldown, refetchNonce]);
 
+  const timerReady = isConnected && !pendingRequest && !cooldown;
+
   return (
     <div>
-      <div className="mb-5 flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Swords className="h-4 w-4" />
-        </div>
+      <div className="mb-5 flex items-end justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">
-            Training Options
-          </h2>
+          <h2 className="text-lg font-bold text-foreground">Training</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Call{" "}
-            <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs text-primary">
-              requestTrainSkill(trainType)
-            </code>
-            , then{" "}
-            <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs text-primary">
-              finishTrainSkill()
-            </code>{" "}
-            once the result is ready
+            Approve cash, start a session, then finish when the result is ready.
           </p>
         </div>
+        <span className="font-mono text-xs text-muted-foreground">
+          {TRAIN_TYPES.length} types
+        </span>
       </div>
 
-      {cooldown && !pendingRequest && (
-        <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2">
-          <span className="text-xs font-medium text-amber-400">
-            Training cooldown
-          </span>
-          <span className="font-mono text-xs text-amber-400 tabular-nums">
-            {cooldown.label}
-          </span>
+      {isConnected && (
+        <div className="mb-5 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          {pendingRequest && !nonceReady ? (
+            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
+          ) : (
+            <Timer
+              className={cn(
+                "h-5 w-5 shrink-0",
+                timerReady || (pendingRequest && nonceReady) ? "text-green-400" : "text-primary",
+              )}
+            />
+          )}
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+            <span className="truncate text-sm text-muted-foreground">
+              {pendingRequest ? pendingLabel ?? "Training in progress" : "Next training"}
+            </span>
+            {pendingRequest ? (
+              <span
+                className={cn(
+                  "shrink-0 font-mono text-sm font-semibold",
+                  nonceReady ? "text-green-400" : "text-primary",
+                )}
+              >
+                {nonceReady ? "Ready" : "Waiting"}
+              </span>
+            ) : cooldown ? (
+              <span className="shrink-0 font-mono text-sm font-semibold text-primary tabular-nums">
+                {cooldown.label}
+              </span>
+            ) : (
+              <span className="shrink-0 font-mono text-sm font-semibold text-green-400">Now</span>
+            )}
+          </div>
         </div>
       )}
 
-      {pendingRequest && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2">
-          <span className="text-xs font-medium text-amber-400">
-            {pendingLabel ? `${pendingLabel} is in progress` : "Training in progress"}
-          </span>
-          <span className="flex items-center gap-1.5 font-mono text-xs text-amber-400">
-            {!nonceReady && <Loader2 className="h-3 w-3 animate-spin" />}
-            {nonceReady ? "Ready to finish" : "Waiting for result..."}
-          </span>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         {TRAIN_TYPES.map((t) => (
           <KillSkillCard
             key={t.id}

@@ -1,13 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useAccount, usePublicClient } from "wagmi";
-import {
-  HELPERBOT_CONTRACT_ABI,
-  parseHelperBotInfo,
-  type HELPER_BOTS,
-} from "@/lib/contract";
-import { useChainAddresses } from "@/components/chain-provider";
+import { useEffect, useState } from "react";
+import { type HELPER_BOTS, type HelperBotInfo } from "@/lib/contract";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -15,47 +9,24 @@ type HelperBot = (typeof HELPER_BOTS)[number];
 
 export function HelperBotListRow({
   bot,
+  botInfo,
+  isLoading,
   onOpenHire,
 }: {
   bot: HelperBot;
+  botInfo: HelperBotInfo | null;
+  isLoading: boolean;
   onOpenHire: () => void;
 }) {
-  const { address } = useAccount();
-  const publicClient = usePublicClient();
-  const addresses = useChainAddresses();
-
-  const [isRunning, setIsRunning] = useState(false);
-  const [endTimestamp, setEndTimestamp] = useState(0);
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
-
-  const fetchBotInfo = useCallback(async () => {
-    if (!address || !publicClient) return;
-    try {
-      const result = await publicClient.readContract({
-        address: addresses.helperbot,
-        abi: HELPERBOT_CONTRACT_ABI,
-        functionName: bot.infoFn,
-        args: [address],
-      });
-      const info = parseHelperBotInfo(result);
-      setIsRunning(info.isRunning === true);
-      setEndTimestamp(info.endTimestamp);
-    } catch {
-      // silently fail
-    }
-  }, [address, publicClient, addresses.helperbot, bot.infoFn]);
-
-  useEffect(() => {
-    fetchBotInfo();
-    const infoInterval = setInterval(fetchBotInfo, 15000);
-    return () => clearInterval(infoInterval);
-  }, [fetchBotInfo]);
 
   useEffect(() => {
     const clockInterval = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(clockInterval);
   }, []);
 
+  const isRunning = botInfo?.isRunning === true;
+  const endTimestamp = botInfo?.endTimestamp ?? 0;
   const timeLeft = endTimestamp > now ? endTimestamp - now : 0;
   const canFinish = isRunning && timeLeft === 0;
 
@@ -83,7 +54,13 @@ export function HelperBotListRow({
                 : "bg-secondary text-muted-foreground"
             )}
           >
-            {isRunning ? (canFinish ? "Ready" : "Running") : "Idle"}
+            {isLoading && botInfo === null
+              ? "Loading"
+              : isRunning
+                ? canFinish
+                  ? "Finished"
+                  : "Running"
+                : "Idle"}
           </span>
         </div>
         <p className="truncate text-xs text-muted-foreground">{bot.description}</p>
@@ -99,7 +76,13 @@ export function HelperBotListRow({
           </Button>
         )}
 
-        {!canFinish && (
+        {isRunning && !canFinish && (
+          <Button type="button" size="sm" variant="secondary" onClick={onOpenHire}>
+            View
+          </Button>
+        )}
+
+        {!isRunning && (
           <Button type="button" size="sm" onClick={onOpenHire}>
             Hire Now
           </Button>

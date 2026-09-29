@@ -19,13 +19,17 @@ import {
   USER_PROFILE_CONTRACT_ABI,
   RANK_ABI,
   RACE_XP_ABI,
-  RANK_XP,
   RANK_STAKE_ABI,
+} from "@/lib/constants/abi";
+import {
+  RANK_XP,
   RANK_NAMES,
-  CHAIN_CONFIGS,
   TRAVEL_DESTINATIONS,
+} from "@/lib/constants/const";
+import {
+  CHAIN_CONFIGS,
   type ChainId,
-} from "@/lib/contract";
+} from "@/lib/constants/address";
 import { useChain, useChainAddresses } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import {

@@ -7,14 +7,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { formatEther, type Abi } from "viem";
+import { EQUIPMENT_ABI } from "@/lib/constants/abi";
 import {
   City,
   CitySimple,
-  EQUIPMENT_ABI,
   EQUIPMENT_SLOTS,
   ItemCategory,
   SHOP_ITEM_STATS,
-} from "@/lib/contract";
+} from "@/lib/constants/const";
 import "@/types/mafia-globals";
 
 type ReadClient = {

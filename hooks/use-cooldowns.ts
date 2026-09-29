@@ -7,10 +7,9 @@ import { useAuth } from "@/components/auth-provider";
 import { useChainAddresses } from "@/components/chain-provider";
 import {
   BANK_TRANSFER_ABI,
-  BANK_TRANSFER_COOLDOWN_SECONDS,
   BULLET_FACTORY_ABI,
   CAR_CRUSHER_ABI,
-  CONTRACT_ABI,
+  CRIME_CONTRACT_ABI as CONTRACT_ABI,
   EQUIPMENT_ABI,
   HOSPITAL_CONTRACT_ABI,
   JAIL_CONTRACT_ABI,
@@ -23,7 +22,8 @@ import {
   SHOP_CONTRACT_ABI,
   SMUGGLE_MARKET_ABI,
   TRAVEL_CONTRACT_ABI,
-} from "@/lib/contract";
+} from "@/lib/constants/abi";
+import { BANK_TRANSFER_COOLDOWN_SECONDS } from "@/lib/constants/const";
 import { EQUIPMENT_CITY_IDS, REEQUIP_COOLDOWN_SECONDS } from "@/lib/equipmentContract";
 import type { Tab } from "@/lib/navigation";
 
@@ -63,16 +63,16 @@ function readField(
 ): bigint | number | undefined {
   if (result == null) return undefined;
   if (typeof result === "bigint" || typeof result === "number") return result;
-  if (Array.isArray(result)) {
-    const value = result[index];
-    return typeof value === "bigint" || typeof value === "number" ? value : undefined;
-  }
   if (typeof result === "object") {
     const record = result as Record<string, unknown>;
     const named = record[name];
     if (typeof named === "bigint" || typeof named === "number") return named;
     const indexed = record[index];
     if (typeof indexed === "bigint" || typeof indexed === "number") return indexed;
+  }
+  if (Array.isArray(result)) {
+    const value = result[index];
+    return typeof value === "bigint" || typeof value === "number" ? value : undefined;
   }
   return undefined;
 }
@@ -111,7 +111,17 @@ export function useCooldowns(): CooldownMap {
     const next: CooldownCall[] = [
       { key: "crime", call: { address: addresses.crime, abi: CONTRACT_ABI, functionName: "nextCrimeTime", args: [address] } },
       { key: "nickcar", call: { address: addresses.nickcar, abi: NICKCAR_CONTRACT_ABI, functionName: "nextNickTime", args: [address] } },
-      { key: "travel", call: { address: addresses.travel, abi: TRAVEL_CONTRACT_ABI, functionName: "userTravelInfo", args: [address] } },
+      authData
+        ? {
+            key: "travel",
+            call: {
+              address: addresses.travel,
+              abi: TRAVEL_CONTRACT_ABI,
+              functionName: "getUserTravelInfo",
+              args: [address, authData.message, authData.signature],
+            },
+          }
+        : { key: "travel", call: { address: addresses.travel, abi: TRAVEL_CONTRACT_ABI, functionName: "userTravelInfo", args: [address] } },
       { key: "jail", call: { address: addresses.jail, abi: JAIL_CONTRACT_ABI, functionName: "jailedUntil", args: [address] } },
       { key: "killskill", call: { address: addresses.killskill, abi: KILLSKILL_CONTRACT_ABI, functionName: "nextTrainTime", args: [address] } },
       { key: "bullet", call: { address: addresses.bulletFactory, abi: BULLET_FACTORY_ABI, functionName: "nextBuyTime", args: [address] } },
@@ -181,7 +191,7 @@ export function useCooldowns(): CooldownMap {
 
       addCooldown(next, "crime", readField(read("crime"), "nextCrimeTime", 0));
       addCooldown(next, "nickcar", readField(read("nickcar"), "nextNickTime", 0));
-      addCooldown(next, "travel", readField(read("travel"), "travelUntil", 1));
+      addCooldown(next, "travel", readField(read("travel"), "travelUntil", 4));
       addCooldown(next, "jail", readField(read("jail"), "jailedUntil", 0));
       addCooldown(next, "killskill", readField(read("killskill"), "nextTrainTime", 0));
       addCooldown(next, "biz-bulletfactory", readField(read("bullet"), "nextBuyTime", 0));

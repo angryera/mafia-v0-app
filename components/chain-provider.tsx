@@ -12,7 +12,7 @@ import {
   type ChainId,
   type ChainConfig,
   CHAIN_CONFIGS,
-} from "@/lib/contract";
+} from "@/lib/constants/address";
 
 type ChainContextType = {
   activeChain: ChainId;

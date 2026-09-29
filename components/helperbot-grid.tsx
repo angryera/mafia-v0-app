@@ -1,13 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { formatEther } from "viem";
 import { Coins, Loader2, RefreshCw } from "lucide-react";
-import { HELPER_BOTS, CREDITS_ABI } from "@/lib/contract";
+import {
+  HELPER_BOTS,
+  CREDITS_ABI,
+  HELPERBOT_CONTRACT_ABI,
+  parseHelperBotInfo,
+  type HelperBotInfo,
+} from "@/lib/contract";
 import { useChainAddresses } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
-import { HelperBotDetail } from "@/components/helperbot-detail";
+import { HelperBotDetail, type HelperBotDialogMode } from "@/components/helperbot-detail";
 import { HelperBotListRow } from "@/components/helperbot-list-row";
 import {
   Dialog,
@@ -27,6 +33,10 @@ export function HelperBotGrid() {
   const [creditBalance, setCreditBalance] = useState<bigint | null>(null);
   const [creditLoading, setCreditLoading] = useState(false);
   const [selectedBotId, setSelectedBotId] = useState<number | null>(null);
+  const [botInfoById, setBotInfoById] = useState<Record<number, HelperBotInfo>>({});
+  const [botsLoading, setBotsLoading] = useState(false);
+  const [dialogNow, setDialogNow] = useState(() => Math.floor(Date.now() / 1000));
+  const botRequestId = useRef(0);
 
   const fetchCredits = useCallback(async () => {
     if (!address || !publicClient || !authData) return;
@@ -52,8 +62,76 @@ export function HelperBotGrid() {
     return () => clearInterval(interval);
   }, [fetchCredits]);
 
+  const fetchBots = useCallback(async () => {
+    const requestId = ++botRequestId.current;
+    if (!address || !publicClient) {
+      setBotInfoById({});
+      setBotsLoading(false);
+      return;
+    }
+
+    setBotsLoading(true);
+    const requestedAddress = address;
+    const results = await Promise.allSettled(
+      HELPER_BOTS.map(async (bot) => {
+        const result = await publicClient.readContract({
+          address: addresses.helperbot,
+          abi: HELPERBOT_CONTRACT_ABI,
+          functionName: bot.infoFn,
+          args: [requestedAddress],
+        });
+        return [bot.id, parseHelperBotInfo(result)] as const;
+      })
+    );
+
+    if (requestId !== botRequestId.current) return;
+
+    setBotInfoById((previous) => {
+      const next = { ...previous };
+      results.forEach((result) => {
+        if (result.status === "fulfilled") {
+          const [botId, info] = result.value;
+          next[botId] = info;
+        }
+      });
+      return next;
+    });
+    setBotsLoading(false);
+  }, [address, publicClient, addresses.helperbot]);
+
+  useEffect(() => {
+    setBotInfoById({});
+    fetchBots();
+    const interval = setInterval(fetchBots, 15000);
+    return () => clearInterval(interval);
+  }, [fetchBots]);
+
+  useEffect(() => {
+    if (selectedBotId === null) return;
+    setDialogNow(Math.floor(Date.now() / 1000));
+    const interval = setInterval(() => setDialogNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => clearInterval(interval);
+  }, [selectedBotId]);
+
   const creditBalanceNum = creditBalance !== null ? Math.floor(Number(formatEther(creditBalance))) : null;
   const selectedBot = HELPER_BOTS.find((bot) => bot.id === selectedBotId) ?? null;
+  const selectedBotInfo = selectedBot ? botInfoById[selectedBot.id] ?? null : null;
+  const selectedBotMode: HelperBotDialogMode = selectedBotInfo?.isRunning
+    ? selectedBotInfo.endTimestamp <= dialogNow
+      ? "finished"
+      : "running"
+    : "start";
+  const displayedBots = useMemo(() => {
+    const now = Math.floor(Date.now() / 1000);
+    const priority = (botId: number) => {
+      const info = botInfoById[botId];
+      if (!info?.isRunning) return 2;
+      return info.endTimestamp <= now ? 0 : 1;
+    };
+
+    return [...HELPER_BOTS].sort((a, b) => priority(a.id) - priority(b.id) || a.id - b.id);
+  }, [botInfoById]);
+  const activeBotCount = Object.values(botInfoById).filter((info) => info.isRunning).length;
 
   return (
     <div>
@@ -105,33 +183,54 @@ export function HelperBotGrid() {
           </p>
         </div>
         <span className="ml-auto text-xs text-muted-foreground font-mono">
-          {HELPER_BOTS.length} bots
+          {activeBotCount > 0 ? `${activeBotCount} active` : `${HELPER_BOTS.length} bots`}
         </span>
       </div>
       <div className="overflow-hidden rounded-xl border border-border bg-card">
-        {HELPER_BOTS.map((bot) => (
+        {displayedBots.map((bot) => (
           <HelperBotListRow
             key={bot.id}
             bot={bot}
+            botInfo={botInfoById[bot.id] ?? null}
+            isLoading={botsLoading}
             onOpenHire={() => setSelectedBotId(bot.id)}
           />
         ))}
       </div>
 
       <Dialog open={selectedBot !== null} onOpenChange={(open) => !open && setSelectedBotId(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px]">
+        <DialogContent
+          key={selectedBot ? `${selectedBot.id}-${selectedBotMode}` : "closed"}
+          className="max-h-[90vh] overflow-y-auto sm:max-w-[680px]"
+        >
           {selectedBot && (
             <>
               <DialogHeader>
-                <DialogTitle>{selectedBot.label} Details</DialogTitle>
+                <DialogTitle>
+                  {selectedBotMode === "finished"
+                    ? `${selectedBot.label} Results`
+                    : selectedBotMode === "running"
+                      ? `${selectedBot.label} In Progress`
+                      : `Hire ${selectedBot.label}`}
+                </DialogTitle>
                 <DialogDescription>
-                  Review helper bot details and continue with hiring from this popup.
+                  {selectedBotMode === "finished"
+                    ? "Review the completed run and withdraw its results."
+                    : selectedBotMode === "running"
+                      ? "Monitor the current run, attempts, and remaining time."
+                      : "Choose the attempt count and optional perks before starting this bot."}
                 </DialogDescription>
               </DialogHeader>
               <HelperBotDetail
                 bot={selectedBot}
+                mode={selectedBotMode}
+                initialBotInfo={selectedBotInfo}
                 creditBalance={creditBalanceNum}
-                onCreditChange={fetchCredits}
+                onCreditChange={() => {
+                  fetchCredits();
+                  fetchBots();
+                }}
+                onFinished={() => setSelectedBotId(null)}
               />
             </>
           )}

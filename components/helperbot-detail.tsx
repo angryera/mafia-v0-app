@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 type HelperBot = (typeof HELPER_BOTS)[number];
+export type HelperBotDialogMode = "start" | "running" | "finished";
 const BULLET_BOT_ID = 5;
 const BULLET_PER_ATTEMPT_BASE = BigInt(10);
 const HUNDRED = BigInt(100);
@@ -256,12 +257,18 @@ function formatAttemptTime(totalSeconds: number): string {
 
 export function HelperBotDetail({
   bot,
+  mode,
+  initialBotInfo,
   creditBalance,
   onCreditChange,
+  onFinished,
 }: {
   bot: HelperBot;
+  mode: HelperBotDialogMode;
+  initialBotInfo: HelperBotInfo | null;
   creditBalance: number | null;
   onCreditChange?: () => void;
+  onFinished?: () => void;
 }) {
   const { address, isConnected } = useAccount();
   const { chainConfig } = useChain();
@@ -272,7 +279,7 @@ export function HelperBotDetail({
   const authMessage = authData?.message ?? null;
   const signature = authData?.signature ?? null;
 
-  const [botInfo, setBotInfo] = useState<HelperBotInfo | null>(null);
+  const [botInfo, setBotInfo] = useState<HelperBotInfo | null>(initialBotInfo);
   const [bulletBotPlusInfo, setBulletBotPlusInfo] = useState<BulletBotPlusInfo | null>(null);
   const [bulletBotCostLoadError, setBulletBotCostLoadError] = useState<string | null>(null);
   const inventoryReady = useMafiaUtilsScript("MafiaInventory") === "ready";
@@ -282,6 +289,10 @@ export function HelperBotDetail({
   const [perkLoadError, setPerkLoadError] = useState<string | null>(null);
   const isBulletDealerBot = bot.id === BULLET_BOT_ID;
   const allowedPerkCategories = BOT_ALLOWED_PERK_CATEGORIES[bot.id] ?? [];
+
+  useEffect(() => {
+    setBotInfo(initialBotInfo);
+  }, [bot.id, initialBotInfo]);
 
   const fetchBotInfo = useCallback(async () => {
     if (!address || !publicClient) return;
@@ -330,6 +341,10 @@ export function HelperBotDetail({
   }, [fetchBulletBotCostInputs]);
 
   const fetchAvailablePerks = useCallback(async () => {
+    if (mode !== "start") {
+      setAvailablePerkItems([]);
+      return;
+    }
     if (!inventoryReady || !window.MafiaInventory || !addresses.inventory) {
       setAvailablePerkItems([]);
       return;
@@ -365,7 +380,7 @@ export function HelperBotDetail({
     } finally {
       setPerkLoading(false);
     }
-  }, [inventoryReady, addresses.inventory, allowedPerkCategories, chainConfig.id, address]);
+  }, [mode, inventoryReady, addresses.inventory, allowedPerkCategories, chainConfig.id, address]);
 
   useEffect(() => {
     void fetchAvailablePerks();
@@ -386,7 +401,7 @@ export function HelperBotDetail({
     }
   }, [address, publicClient, authMessage, signature, addresses.ingameCurrency]);
 
-  const isRunning = botInfo?.isRunning === true;
+  const isRunning = mode !== "start";
 
   const balanceMax = creditBalance !== null && bot.credits > 0
     ? Math.floor(creditBalance / bot.credits)
@@ -537,6 +552,7 @@ export function HelperBotDetail({
       fetchBotInfo();
       fetchBulletBotCostInputs();
       onCreditChange?.();
+      onFinished?.();
       window.setTimeout(() => {
         fetchBotInfo();
         fetchBulletBotCostInputs();
@@ -675,18 +691,20 @@ export function HelperBotDetail({
           <div
             className={cn(
               "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider",
-              isRunning
+              mode === "finished"
                 ? "bg-green-400/10 text-green-400"
-                : "bg-secondary text-muted-foreground"
+                : mode === "running"
+                  ? "bg-chain-accent/10 text-chain-accent"
+                  : "bg-secondary text-muted-foreground"
             )}
           >
-            <CircleDot className={cn("h-3 w-3", isRunning && "animate-pulse")} />
-            {isRunning ? "Running" : "Idle"}
+            <CircleDot className={cn("h-3 w-3", mode === "running" && "animate-pulse")} />
+            {mode === "finished" ? "Finished" : mode === "running" ? "Running" : "Available"}
           </div>
         )}
       </div>
 
-      <div className="rounded-md bg-background/50 px-3 py-2">
+      {mode === "start" && <div className="rounded-md bg-background/50 px-3 py-2">
         <div className="flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Credit / Attempt</span>
           <span className="text-xs font-medium text-foreground">
@@ -699,17 +717,15 @@ export function HelperBotDetail({
             )}
           </span>
         </div>
-        {!isRunning && (
-          <div className="mt-1.5 flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Total Credits</span>
-            <span className="text-xs font-semibold text-primary">
-              {estimatedCreditCost.toLocaleString(undefined, {
-                minimumFractionDigits: Number.isInteger(estimatedCreditCost) ? 0 : 2,
-                maximumFractionDigits: 2,
-              })}
-            </span>
-          </div>
-        )}
+        <div className="mt-1.5 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Total Credits</span>
+          <span className="text-xs font-semibold text-primary">
+            {estimatedCreditCost.toLocaleString(undefined, {
+              minimumFractionDigits: Number.isInteger(estimatedCreditCost) ? 0 : 2,
+              maximumFractionDigits: 2,
+            })}
+          </span>
+        </div>
         <div className="mt-1.5 flex items-center justify-between">
           <span className="text-xs text-muted-foreground">Time / Attempt</span>
           <span className="text-xs font-medium text-foreground">
@@ -719,15 +735,13 @@ export function HelperBotDetail({
             )}
           </span>
         </div>
-        {!isRunning && (
-          <div className="mt-1.5 flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Estimated Duration</span>
-            <span className="text-xs font-semibold text-chain-accent">
-              {formatDurationFromSeconds(estimatedDurationSeconds)}
-            </span>
-          </div>
-        )}
-        {!isRunning && hasSelectedPerks && (
+        <div className="mt-1.5 flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">Estimated Duration</span>
+          <span className="text-xs font-semibold text-chain-accent">
+            {formatDurationFromSeconds(estimatedDurationSeconds)}
+          </span>
+        </div>
+        {hasSelectedPerks && (
           <div className="mt-1.5 flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Attempts (from perk duration)</span>
             <span className="text-xs font-semibold text-foreground">
@@ -756,10 +770,15 @@ export function HelperBotDetail({
             <span className="text-[10px] font-mono text-chain-accent">Requires signature</span>
           </div>
         )}
-      </div>
+      </div>}
 
-      {isRunning && botInfo && (
-        <div className="rounded-md border border-green-400/20 bg-green-400/5 px-3 py-2.5">
+      {mode !== "start" && botInfo && (
+        <div className={cn(
+          "rounded-md border px-3 py-2.5",
+          mode === "finished"
+            ? "border-green-400/20 bg-green-400/5"
+            : "border-chain-accent/20 bg-chain-accent/5"
+        )}>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1 text-xs text-muted-foreground">
               <Hash className="h-3 w-3" /> Attempts
@@ -778,7 +797,7 @@ export function HelperBotDetail({
               </span>
             </div>
           )}
-          {timeLeft > 0 && (
+          {mode === "running" && timeLeft > 0 && (
             <>
               <div className="mt-2 flex items-center justify-between">
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -794,10 +813,10 @@ export function HelperBotDetail({
               </div>
             </>
           )}
-          {timeLeft === 0 && (
+          {mode === "finished" && (
             <div className="mt-2 flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Status</span>
-              <span className="text-xs font-medium text-green-400">Ready to withdraw</span>
+              <span className="text-xs font-medium text-green-400">Completed — results ready</span>
             </div>
           )}
           {startTimeSec > 0 && (
@@ -810,7 +829,9 @@ export function HelperBotDetail({
           )}
           {endTimeSec > 0 && (
             <div className="mt-1.5 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Ends</span>
+                <span className="text-xs text-muted-foreground">
+                  {mode === "finished" ? "Finished" : "Ends"}
+                </span>
               <span className="text-[10px] font-mono text-muted-foreground">
                 {new Date(endTimeSec * 1000).toLocaleString()}
               </span>
@@ -846,7 +867,7 @@ export function HelperBotDetail({
         </div>
       )}
 
-      {!isRunning && (
+      {mode === "start" && (
         <div>
           <div className="mb-2 flex items-center justify-between">
             <label className="text-xs text-muted-foreground">Attempt Count</label>
@@ -1038,7 +1059,7 @@ export function HelperBotDetail({
         </div>
       )}
 
-      {!isRunning && (
+      {mode === "start" && (
         <button
           onClick={handleStart}
           disabled={!isConnected || isLoading || (creditBalance !== null && estimatedCreditCost > creditBalance)}
@@ -1061,14 +1082,14 @@ export function HelperBotDetail({
         </button>
       )}
 
-      {isRunning && timeLeft > 0 && !endLoading && (
+      {mode === "running" && !endLoading && (
         <div className="flex w-full items-center justify-center gap-2 rounded-lg border border-green-400/20 bg-green-400/5 px-4 py-2.5 text-sm font-semibold text-green-400">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span>Bot is working...</span>
         </div>
       )}
 
-      {isRunning && canWithdraw && !isBulletDealerBot && (
+      {mode === "finished" && canWithdraw && !isBulletDealerBot && (
         <button
           onClick={() => handleEnd()}
           disabled={!isConnected || endLoading}
@@ -1090,7 +1111,7 @@ export function HelperBotDetail({
           )}
         </button>
       )}
-      {isRunning && canWithdraw && isBulletDealerBot && (
+      {mode === "finished" && canWithdraw && isBulletDealerBot && (
         <div className="grid gap-2 sm:grid-cols-2">
           <button
             onClick={() => handleEnd(false)}
@@ -1131,7 +1152,7 @@ export function HelperBotDetail({
           </button>
         </div>
       )}
-      {isRunning && canWithdraw && missingBulletCashInputs && (
+      {mode === "finished" && canWithdraw && missingBulletCashInputs && (
         <p className="text-[11px] text-red-400">
           Unable to load Bullet Dealer cash requirement. Please refresh and try again.
         </p>

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAccount, useReadContract } from "wagmi";
 import { useChainAddresses } from "@/components/chain-provider";
-import { JAIL_CONTRACT_ABI } from "@/lib/contract";
+import { JAIL_CONTRACT_ABI } from "@/lib/constants/abi";
 import { usePlayerDeadState } from "@/hooks/use-player-dead-state";
 
 /** Send a jailed player to the jail page so they can buy themselves out. */

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAccount, useReadContract } from "wagmi";
 import { useAuth } from "@/components/auth-provider";
 import { useChainAddresses } from "@/components/chain-provider";
-import { USER_PROFILE_CONTRACT_ABI } from "@/lib/contract";
+import { USER_PROFILE_CONTRACT_ABI } from "@/lib/constants/abi";
 
 const CREATE_PROFILE_PATH = "/create-profile";
 

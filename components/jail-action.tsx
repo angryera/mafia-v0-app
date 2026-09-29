@@ -5,20 +5,21 @@ import { useAccount, useReadContract } from "wagmi";
 import { formatEther } from "viem";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { COOLDOWN_READ_QUERY } from "@/hooks/use-cooldown-remaining";
-import { getErrorMessage } from "@/lib/format";
+import { formatWalletAddress, getErrorMessage } from "@/lib/format";
 import {
   JAIL_CONTRACT_ABI,
   INGAME_CURRENCY_ABI,
   INGAME_CURRENCY_APPROVE_AMOUNT,
+  USER_PROFILE_CONTRACT_ABI,
 } from "@/lib/contract";
 import { useAuth } from "@/components/auth-provider";
 import { useChainAddresses } from "@/components/chain-provider";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { JailedPlayersList } from "@/components/jailed-players-list";
 import {
   Lock,
-  Unlock,
   Timer,
   DollarSign,
   Loader2,
@@ -51,12 +52,31 @@ export function JailAction() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const [localApproved, setLocalApproved] = useState(false);
 
-  const { data: jailedUntilRaw, refetch: refetchSentence } = useReadContract({
+  const { data: jailedUntilRaw, isFetched: sentenceFetched, isError: sentenceError, refetch: refetchSentence } = useReadContract({
     address: addresses.jail,
     abi: JAIL_CONTRACT_ABI,
     functionName: "jailedUntil",
     args: address ? [address] : undefined,
     query: { enabled: !!address, ...COOLDOWN_READ_QUERY },
+  });
+
+  const { data: inJailFlag, isFetched: inJailFetched, isError: inJailError } = useReadContract({
+    address: addresses.jail,
+    abi: JAIL_CONTRACT_ABI,
+    functionName: "isUserinJail",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address, ...COOLDOWN_READ_QUERY },
+  });
+
+  const { data: profileData } = useReadContract({
+    address: addresses.userProfile,
+    abi: USER_PROFILE_CONTRACT_ABI,
+    functionName: "getUserProfile",
+    args:
+      authData && address
+        ? [address, authData.message, authData.signature]
+        : undefined,
+    query: { enabled: !!authData && !!address },
   });
 
   const { data: cashBalanceRaw } = useReadContract({
@@ -87,7 +107,10 @@ export function JailAction() {
 
   const jailedUntil = jailedUntilRaw !== undefined ? Number(jailedUntilRaw) : null;
   const remainingSeconds = jailedUntil === null ? null : Math.max(0, jailedUntil - now);
-  const isInJail = remainingSeconds !== null && remainingSeconds > 0;
+  const sentenceActive = remainingSeconds !== null && remainingSeconds > 0;
+  const isInJail = inJailFlag === true || sentenceActive;
+  const sentencePending = !sentenceFetched && !sentenceError && !inJailFetched && !inJailError;
+  const username = (profileData as { username?: string } | undefined)?.username?.trim() || null;
   const buyOutCost = remainingSeconds === null ? 0 : calculateBuyOutCost(remainingSeconds);
   const cashBalance =
     cashBalanceRaw !== undefined ? Number(formatEther(cashBalanceRaw as bigint)) : null;
@@ -147,7 +170,7 @@ export function JailAction() {
           <div>
             <h3 className="text-lg font-semibold text-foreground">Connect Your Wallet</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Connect your wallet to see if you are in jail.
+              Connect your wallet to buy out other players, or to see your own sentence.
             </p>
           </div>
         </div>
@@ -155,28 +178,8 @@ export function JailAction() {
     );
   }
 
-  if (jailedUntil === null) {
-    return (
-      <div className="flex items-center justify-center rounded-xl border border-border bg-card py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   if (!isInJail) {
-    return (
-      <div className="rounded-xl border border-green-500/30 bg-card p-8">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-green-500/10 text-green-400">
-            <Unlock className="h-8 w-8" />
-          </div>
-          <h3 className="text-lg font-semibold text-green-400">You are free</h3>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            You are not in jail. If a crime lands you here, you can buy yourself out.
-          </p>
-        </div>
-      </div>
-    );
+    return <JailedPlayersList sentencePending={sentencePending} />;
   }
 
   return (
@@ -187,7 +190,15 @@ export function JailAction() {
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-lg font-semibold text-foreground">You are in jail</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
+          {username && (
+            <p className="mt-1 text-sm font-medium text-foreground">{username}</p>
+          )}
+          {address && (
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              {formatWalletAddress(address)}
+            </p>
+          )}
+          <p className="mt-2 text-sm text-muted-foreground">
             Buy yourself out with cash, or wait for the sentence to end.
           </p>
         </div>

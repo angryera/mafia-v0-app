@@ -58,7 +58,7 @@ const TAB_CONFIG: Record<
   jail: {
     title: "Jail",
     description:
-      "Check if you are in jail, see your remaining sentence, or buy your way out.",
+      "Buy out or bust out other jailed players. If you are in jail, this page shows your sentence so you can buy yourself out.",
     codeSample: "buyOut(address)",
     contractAddress: "0x7371580cd13de739c734ae85062f75194d13fac2",
     contractShort: "0x7371...fac2",

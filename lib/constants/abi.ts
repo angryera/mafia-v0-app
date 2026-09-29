@@ -176,7 +176,10 @@ export const TRAVEL_CONTRACT_ABI: Abi = [
                 internalType: "struct TravelInfo",
                 components: [
                     { name: "travelType", type: "uint8", internalType: "uint8" },
-                    { name: "travelUntil", type: "uint256", internalType: "uint256" },
+                    { name: "startCity", type: "uint8", internalType: "uint8" },
+                    { name: "destinationCity", type: "uint8", internalType: "uint8" },
+                    { name: "isTravelling", type: "bool", internalType: "bool" },
+                    { name: "travelUntil", type: "uint48", internalType: "uint48" },
                     { name: "itemId", type: "uint256", internalType: "uint256" },
                 ],
             },
@@ -189,7 +192,10 @@ export const TRAVEL_CONTRACT_ABI: Abi = [
         inputs: [{ name: "account", type: "address", internalType: "address" }],
         outputs: [
             { name: "travelType", type: "uint8", internalType: "uint8" },
-            { name: "travelUntil", type: "uint256", internalType: "uint256" },
+            { name: "startCity", type: "uint8", internalType: "uint8" },
+            { name: "destinationCity", type: "uint8", internalType: "uint8" },
+            { name: "isTravelling", type: "bool", internalType: "bool" },
+            { name: "travelUntil", type: "uint48", internalType: "uint48" },
             { name: "itemId", type: "uint256", internalType: "uint256" },
         ],
         stateMutability: "view",

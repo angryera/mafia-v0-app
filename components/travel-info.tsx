@@ -128,7 +128,7 @@ export function TravelInfo() {
           <p className="text-xs text-muted-foreground mb-1">Travel Rules</p>
           <ul className="text-xs text-foreground space-y-1">
             <li>- Train: Available for everyone (itemId = 0)</li>
-            <li>- Car/Motorcycle: Requires owned vehicle (typeId 3, 5)</li>
+            <li>- Car/Motorcycle: Requires owned motorcycle or armored car (typeId 5, 8)</li>
             <li>- Airplane: Requires owned plane (typeId 9)</li>
             <li>- Cross-continent travel requires Airplane only</li>
           </ul>

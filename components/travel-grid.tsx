@@ -61,8 +61,8 @@ interface ShopItem {
 
 // Vehicle typeIds for shop items (categoryId 3)
 const VEHICLE_TYPE_IDS = {
-  CAR: [3, 5], // Car/Motorcycle
-  PLANE: [9], // Airplane
+  CAR: [5, 8], // Motorcycle, Armored Car
+  PLANE: [9], // Douglas M-3
 };
 
 const TRAVEL_ICONS: Record<string, React.ElementType> = {
@@ -86,12 +86,12 @@ function formatTimeRemaining(endTime: number): string {
 
 /** Contract tuples come back as arrays or named objects depending on the decoder. */
 function readField(raw: unknown, key: string, index: number): unknown {
-  if (Array.isArray(raw)) return raw[index];
   if (raw && typeof raw === "object") {
     const record = raw as Record<string, unknown>;
     if (record[key] != null) return record[key];
     if (record[index] != null) return record[index];
   }
+  if (Array.isArray(raw)) return raw[index];
   return undefined;
 }
 
@@ -147,8 +147,9 @@ export function TravelGrid() {
   const travelInfo: TravelInfo | null = travelInfoRaw
     ? {
       travelType: Number(readField(travelInfoRaw, "travelType", 0) ?? 0),
-      travelUntil: Number(readField(travelInfoRaw, "travelUntil", 1) ?? 0),
-      itemId: Number(readField(travelInfoRaw, "itemId", 2) ?? 0),
+      // TravelInfo packs two uint8s and a bool ahead of the uint48 deadline.
+      travelUntil: Number(readField(travelInfoRaw, "travelUntil", 4) ?? 0),
+      itemId: Number(readField(travelInfoRaw, "itemId", 5) ?? 0),
     }
     : null;
 
