@@ -50,7 +50,7 @@ function displayName(address: string, directory: ProfileDirectory): string {
   return directory.byAddress[address.toLowerCase()] || formatEllipsisAddress(address);
 }
 
-const LISTING_CARD_WIDTH = 148;
+const LISTING_CARD_WIDTH = 240;
 const LISTING_CARD_GAP = 12;
 
 function useColumnCount() {
@@ -158,10 +158,10 @@ export function ShareMarket({
         </p>
       ) : null}
 
-      <div ref={ref} className="grid gap-3 [grid-template-columns:repeat(auto-fill,148px)]">
+      <div ref={ref} className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
         {loading
           ? Array.from({ length: skeletonCount }, (_, index) => (
-              <Skeleton key={index} className="h-56 w-full" />
+              <Skeleton key={index} className="h-48 w-full" />
             ))
           : shown.map((listing) => (
               <AuctionCard
@@ -242,38 +242,46 @@ function AuctionCard({
   const bidder = listing.highestBidder ? displayName(listing.highestBidder, directory) : null;
   const price = listing.assetType === "native" ? prices.native : prices.mafia;
   const action = cardAction(listing, status);
+  const badge = statusBadge(listing, status);
   const label =
     pending === "settle" ? "Settling…" : pending === "cancel" ? "Cancelling…" : action.label;
 
   return (
-    <article className="flex min-w-0 flex-col gap-2 overflow-hidden rounded-lg border border-border bg-background/40 p-2.5">
-      <p className={cn("truncate text-sm font-medium", listing.isYours && "text-primary")}>
-        {displayName(listing.seller, directory)}
-      </p>
-      <p className="text-xs text-muted-foreground">{statusLine(listing, now, bidder)}</p>
-      <p className="flex items-center gap-1.5 text-sm font-semibold">
-        <FtsMark />
-        <span>{formatFts(listing.amount)} FTS</span>
-      </p>
-      <div className="flex items-center justify-between gap-1 text-xs">
-        <span className="shrink-0 text-muted-foreground">Current bid</span>
-        <span className="inline-flex min-w-0 items-center gap-1 font-medium">
-          <AssetMark asset={listing.assetType} className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{formatBidAmount(listing)} {symbol}</span>
+    <article className="flex h-full min-w-0 flex-col gap-2.5 overflow-hidden rounded-lg border border-border bg-background/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className={cn("min-w-0 truncate text-sm font-medium", listing.isYours && "text-primary")}>
+          {displayName(listing.seller, directory)}
+        </p>
+        <span className={cn("shrink-0 rounded-full border border-border px-2 py-0.5 text-xs font-medium leading-none", badge.className)}>
+          {badge.label}
         </span>
       </div>
-      <div className="flex items-center justify-between gap-1 text-xs">
-        <span className="shrink-0 text-muted-foreground">USD per FTS</span>
-        <span className="truncate font-medium">{usdPerFts(listing, price)}</span>
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
+        <FtsMark />
+        <span className="truncate">{formatFts(listing.amount)} FTS</span>
+      </p>
+      <div className="space-y-1.5 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <span className="shrink-0 text-muted-foreground">Current bid</span>
+          <span className="inline-flex min-w-0 items-center gap-1 font-medium">
+            <AssetMark asset={listing.assetType} className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{formatBidAmount(listing)} {symbol}</span>
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="shrink-0 text-muted-foreground">USD per FTS</span>
+          <span className="truncate font-medium">{usdPerFts(listing, price)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground">Bids</span>
+          <span>{listing.bidCount}</span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-muted-foreground">Ends in</span>
+          <span>{formatCountdown(listing.endTimestamp, now)}</span>
+        </div>
       </div>
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-muted-foreground">Total bids</span>
-        <span>{listing.bidCount}</span>
-      </div>
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-muted-foreground">Ends in</span>
-        <span>{formatCountdown(listing.endTimestamp, now)}</span>
-      </div>
+      <p className="sr-only">{statusLine(listing, now, bidder)}</p>
       <Button
         type="button"
         size="sm"
@@ -290,6 +298,15 @@ function AuctionCard({
       </Button>
     </article>
   );
+}
+
+function statusBadge(listing: FtsListing, status: ReturnType<typeof displayStatus>): { label: string; className: string } {
+  if (status === "completed") return { label: "Done", className: "text-muted-foreground" };
+  if (status === "cancelled") return { label: "Cancelled", className: "text-muted-foreground" };
+  if (status === "expired" && listing.highestBidder) return { label: "Settle", className: "text-amber-500" };
+  if (status === "expired") return { label: "Ended", className: "text-muted-foreground" };
+  if (listing.isYours) return { label: "Yours", className: "text-primary" };
+  return { label: "Open", className: "text-emerald-500" };
 }
 
 function cardAction(listing: FtsListing, status: ReturnType<typeof displayStatus>): {
