@@ -98,6 +98,7 @@ export enum ItemCategory {
     MYSTERY_BOX = 54,
     BOOZE_PACK = 55,
     NARCS_PACK = 56,
+    FOUNDER_TABLE_SHARE = 57,
 }
 
 export const CRATE_ITEM_CATEGORIES: CrateItemCategory[] = [
@@ -233,7 +234,7 @@ export const CRATE_ITEM_CATEGORIES: CrateItemCategory[] = [
         values: ["Lvl 1", "Lvl 2", "Lvl 3", "Lvl 4", "Lvl 5", "Lvl 6", "Lvl 7", "Lvl 8", "Lvl 9", "Lvl 10"]
     },
 
-    // --- Misc (52-56) ---
+    // --- Misc (52-57) ---
     {
         id: ItemCategory.SUBSCRIPTION_ITEM, name: "Subscription",
         values: ["1 Month Player+", "1 Month Unlimited", "1 Month Player+", "1 Month Unlimited",
@@ -248,6 +249,11 @@ export const CRATE_ITEM_CATEGORIES: CrateItemCategory[] = [
     { id: ItemCategory.MYSTERY_BOX, name: "Mystery Box", values: ["Mystery Box"] },
     { id: ItemCategory.BOOZE_PACK, name: "Booze Pack", values: [] },
     { id: ItemCategory.NARCS_PACK, name: "Narcs Pack", values: [] },
+    {
+        id: ItemCategory.FOUNDER_TABLE_SHARE, name: "Founder Table Share",
+        values: ["3 FTS", "5 FTS", "8 FTS", "15 FTS", "20 FTS",
+            "30 FTS", "50 FTS", "100 FTS", "150 FTS", "250 FTS"]
+    },
 ];
 
 // ========== Inventory Marketplace Item Names ==========
@@ -294,6 +300,7 @@ export const MARKETPLACE_CATEGORY_NAMES: Record<number, string> = {
     54: "Mystery Box",
     55: "Booze Pack",
     56: "Narcotics Pack",
+    57: "Founder Table Share",
 };
 
 export const MARKETPLACE_ITEM_NAMES: Record<number, Record<number, string>> = {
@@ -609,6 +616,10 @@ export const MARKETPLACE_ITEM_NAMES: Record<number, Record<number, string>> = {
     },
     56: { // Narcotics Pack
         0: "50 Glue", 1: "50 Marijuana", 2: "50 Amphetamine", 3: "50 Cocaine", 4: "50 Morphine", 5: "50 Opium", 6: "50 Heroin",
+    },
+    57: { // Founder Table Share
+        0: "3 FTS", 1: "5 FTS", 2: "8 FTS", 3: "15 FTS", 4: "20 FTS",
+        5: "30 FTS", 6: "50 FTS", 7: "100 FTS", 8: "150 FTS", 9: "250 FTS",
     },
 };
 

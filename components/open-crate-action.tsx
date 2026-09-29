@@ -80,12 +80,13 @@ const CATEGORY_COLOURS: Record<number, ColourSet> = {
   45: C("amber"), 46: C("amber"), 47: C("amber"),
   // Bodyguards individual (48-51) — blue
   48: C("blue"), 49: C("blue"), 50: C("blue"), 51: C("blue"),
-  // Misc (52-56)
+  // Misc (52-57)
   52: C("rose"),      // Subscription
   53: C("indigo"),    // GI Credit
   54: C("amber"),     // Mystery Box
   55: C("orange"),    // Booze Pack
   56: C("orange"),    // Narcs Pack
+  57: C("violet"),    // Founder Table Share
 };
 
 const FALLBACK_COLOUR: ColourSet = C("zinc");
