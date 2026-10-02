@@ -23,10 +23,14 @@ import {
   NATIVE_ADDRESS,
   NON_LISTABLE_CATEGORIES,
   durationDaysToSeconds,
+  formatLandSlotSubtitle,
+  formatLandSlotTitle,
   getItemName,
   isGameCashToken,
+  isLandSlotCategory,
   type SDKInventoryItem,
 } from "@/features/marketplace/lib/marketplace";
+import { useLandSlotDetails } from "@/features/marketplace/lib/use-land-slot-details";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useToast } from "@/hooks/use-toast";
 import { INVENTORY_MARKETPLACE_ABI, MARKETPLACE_CATEGORY_NAMES } from "@/lib/contract";
@@ -150,25 +154,55 @@ export function CreateListingModal({
 
   const createLoading = createListing.isLoading;
 
+  const landSlotItemIds = useMemo(() => {
+    if (!open) return [];
+    const ids: number[] = [];
+    for (const item of inventoryItems) {
+      if (isLandSlotCategory(item.categoryId)) ids.push(item.itemId);
+    }
+    for (const slot of landSlots) {
+      const itemId = Number(slot.itemId ?? slot.inventoryItemId);
+      if (Number.isFinite(itemId) && itemId > 0) ids.push(itemId);
+    }
+    return ids;
+  }, [open, inventoryItems, landSlots]);
+  const landSlotDetails = useLandSlotDetails(landSlotItemIds);
+
   const allItems = useMemo(() => {
+    const inventoryIds = new Set(inventoryItems.map((item) => item.itemId));
     const inv = inventoryItems.map((item) => {
-      const itemName = getItemName(item.categoryId, item.typeId);
-      const categoryName = MARKETPLACE_CATEGORY_NAMES[item.categoryId] ?? `Category ${item.categoryId}`;
+      const slot = isLandSlotCategory(item.categoryId)
+        ? landSlotDetails.get(item.itemId)
+        : undefined;
+      const itemName = slot
+        ? formatLandSlotTitle(slot)
+        : getItemName(item.categoryId, item.typeId);
+      const categoryName = slot
+        ? formatLandSlotSubtitle(slot)
+        : isLandSlotCategory(item.categoryId)
+          ? "Loading plot..."
+          : (MARKETPLACE_CATEGORY_NAMES[item.categoryId] ?? `Category ${item.categoryId}`);
       return {
         ...item,
         type: "inventory" as const,
-        label: `${itemName}`,
+        label: itemName,
         categoryLabel: categoryName,
       };
     });
-    const land = landSlots.map((item) => ({
-      ...item,
-      type: "land" as const,
-      label: `Land Slot #${item.itemId}`,
-      categoryLabel: "Land",
-    }));
+    const land = landSlots.flatMap((item) => {
+      const itemId = Number(item.itemId ?? item.inventoryItemId);
+      if (!Number.isFinite(itemId) || itemId <= 0 || inventoryIds.has(itemId)) return [];
+      const slot = landSlotDetails.get(itemId);
+      return [{
+        ...item,
+        itemId,
+        type: "land" as const,
+        label: slot ? formatLandSlotTitle(slot) : `Land Slot #${itemId}`,
+        categoryLabel: slot ? formatLandSlotSubtitle(slot) : "Loading plot...",
+      }];
+    });
     return [...inv, ...land];
-  }, [inventoryItems, landSlots]);
+  }, [inventoryItems, landSlots, landSlotDetails]);
 
   const canSubmit =
     isConnected &&

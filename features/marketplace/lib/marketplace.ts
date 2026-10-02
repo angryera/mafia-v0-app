@@ -1,5 +1,6 @@
 import { formatUnits } from "viem";
-import { MARKETPLACE_CATEGORY_NAMES, MARKETPLACE_ITEM_NAMES } from "@/lib/contract";
+import { getSlotBuildingLabel } from "@/lib/city-slot-config";
+import { City, ItemCategory, MARKETPLACE_CATEGORY_NAMES, MARKETPLACE_ITEM_NAMES } from "@/lib/contract";
 
 export interface InventoryMarketplaceBid {
   buyer: `0x${string}`;
@@ -230,4 +231,153 @@ export function parseMarketplaceListings(raw: unknown): InventoryMarketplaceList
       },
     };
   });
+}
+
+/** Matches the city map plot labels. */
+const LAND_SLOT_RARITY_LABELS: Record<number, string> = {
+  0: "Normal",
+  1: "Upper class",
+  2: "Elite",
+  3: "Strategic",
+};
+
+export interface LandSlotDetails {
+  itemId: number;
+  cityId: number;
+  x: number;
+  y: number;
+  slotType: number;
+  slotSubType: number;
+  rarity: number;
+  isOperating: boolean;
+  defensePower: number;
+  originalDefensePower: number;
+  boostPercentage: number;
+  familyId: number;
+  stakingAmount: bigint;
+  yieldPayout: number;
+}
+
+/** Inventory getters that store a land slot item's city and tile. */
+export const ITEM_MAP_LOOKUP_ABI = [
+  {
+    type: "function",
+    name: "itemCity",
+    stateMutability: "view",
+    inputs: [{ name: "itemId", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "itemMapPosition",
+    stateMutability: "view",
+    inputs: [{ name: "itemId", type: "uint256" }],
+    outputs: [
+      { name: "x", type: "uint8" },
+      { name: "y", type: "uint8" },
+    ],
+  },
+] as const;
+
+/** `MafiaMap.getSlots` — pass the city and coordinates for the plots you need. */
+export const GET_SLOTS_ABI = [
+  {
+    type: "function",
+    name: "getSlots",
+    stateMutability: "view",
+    inputs: [
+      { name: "cityIds", type: "uint8[]" },
+      { name: "xs", type: "uint8[]" },
+      { name: "ys", type: "uint8[]" },
+    ],
+    outputs: [
+      {
+        name: "slots",
+        type: "tuple[]",
+        components: [
+          { name: "slotType", type: "uint8" },
+          { name: "slotSubType", type: "uint8" },
+          { name: "variant", type: "uint8" },
+          { name: "rarity", type: "uint8" },
+          { name: "isOwned", type: "bool" },
+          { name: "isOperating", type: "bool" },
+          { name: "originalDefensePower", type: "uint16" },
+          { name: "defensePower", type: "uint16" },
+          { name: "boostPercentage", type: "uint16" },
+          { name: "nextUpgradeAvailableAt", type: "uint48" },
+          { name: "lastOperatingTimestamp", type: "uint48" },
+          { name: "inventoryItemId", type: "uint256" },
+          { name: "familyId", type: "uint256" },
+          { name: "stakingAmount", type: "uint256" },
+          { name: "yieldPayout", type: "uint256" },
+        ],
+      },
+      { name: "owners", type: "address[]" },
+    ],
+  },
+] as const;
+
+export interface LocatedLandSlot {
+  itemId: number;
+  cityId: number;
+  x: number;
+  y: number;
+}
+
+export function isLandSlotCategory(categoryId: number): boolean {
+  return categoryId === ItemCategory.LANDSLOT;
+}
+
+function asSlotRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+/** Maps a `getSlots` result onto the plots that were requested, in the same order. */
+export function parseGetSlotsForItems(
+  located: readonly LocatedLandSlot[],
+  raw: unknown,
+): Map<number, LandSlotDetails> {
+  const tuple = Array.isArray(raw) ? raw : null;
+  const named = (!tuple && raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const slots = (tuple ? tuple[0] : named.slots) as unknown;
+  const slotList = Array.isArray(slots) ? slots : [];
+
+  const details = new Map<number, LandSlotDetails>();
+  located.forEach((plot, index) => {
+    const slot = asSlotRecord(slotList[index]);
+    details.set(plot.itemId, {
+      itemId: plot.itemId,
+      cityId: plot.cityId,
+      x: plot.x,
+      y: plot.y,
+      slotType: Number(slot.slotType ?? 0),
+      slotSubType: Number(slot.slotSubType ?? 0),
+      rarity: Number(slot.rarity ?? 0),
+      isOperating: Boolean(slot.isOperating),
+      defensePower: Number(slot.defensePower ?? 0),
+      originalDefensePower: Number(slot.originalDefensePower ?? 0),
+      boostPercentage: Number(slot.boostPercentage ?? 0),
+      familyId: Number(slot.familyId ?? 0),
+      stakingAmount: BigInt((slot.stakingAmount as bigint | number | string | undefined) ?? 0),
+      yieldPayout: Number(slot.yieldPayout ?? 0),
+    });
+  });
+  return details;
+}
+
+export function getLandSlotRarityLabel(rarity: number): string {
+  return LAND_SLOT_RARITY_LABELS[rarity] ?? `Rarity ${rarity}`;
+}
+
+export function formatLandSlotTitle(slot: LandSlotDetails): string {
+  return getSlotBuildingLabel(slot) || "Land Slot";
+}
+
+export function formatLandSlotLocation(slot: LandSlotDetails): string {
+  const city = City[slot.cityId] ?? `City #${slot.cityId}`;
+  return `${city} (${slot.x}, ${slot.y})`;
+}
+
+export function formatLandSlotSubtitle(slot: LandSlotDetails): string {
+  return `${getLandSlotRarityLabel(slot.rarity)} · ${formatLandSlotLocation(slot)}`;
 }

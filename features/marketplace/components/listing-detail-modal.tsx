@@ -13,34 +13,86 @@ import {
   NATIVE_ADDRESS,
   addressEquals,
   calculateNextBid,
+  formatLandSlotSubtitle,
+  formatLandSlotTitle,
   formatPrice,
   formatTimeRemaining,
   getItemName,
+  getLandSlotRarityLabel,
   isExpired,
   isGameCashToken,
   pow10BigInt,
   LISTING_TYPE_LABELS,
   STATUS_LABELS,
   type InventoryMarketplaceListing,
+  type LandSlotDetails,
   type SwapToken,
 } from "@/features/marketplace/lib/marketplace";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import {
   ERC20_ABI,
   INGAME_CURRENCY_ABI,
+  City,
   INVENTORY_MARKETPLACE_ABI,
   MARKETPLACE_CATEGORY_NAMES,
 } from "@/lib/contract";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Coins, ExternalLink, Gavel, Loader2, Package, ShieldCheck, X } from "lucide-react";
+import { CheckCircle2, Coins, ExternalLink, Gavel, Loader2, MapPin, Package, ShieldCheck, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { formatUnits, maxUint256, parseUnits } from "viem";
 import { useAccount, useBalance, useReadContract } from "wagmi";
 import { formatWalletAddress } from "@/lib/format";
+import { getResidentialGameCashYieldPer24h } from "@/lib/city-slot-config";
+import { formatMafiaStakingFromWei } from "@/lib/city-map-staking-format";
+
+function PlotRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right font-medium text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function LandSlotDetailList({ slot }: { slot: LandSlotDetails }) {
+  const city = City[slot.cityId] ?? `City #${slot.cityId}`;
+  const defense =
+    slot.originalDefensePower !== slot.defensePower
+      ? `${slot.defensePower} (base ${slot.originalDefensePower})`
+      : String(slot.defensePower);
+  const gameCashPer24h = getResidentialGameCashYieldPer24h(slot.slotType, slot.slotSubType);
+
+  return (
+    <div className="space-y-1.5">
+      <PlotRow label="City" value={city} />
+      <PlotRow label="Coordinates" value={`(${slot.x}, ${slot.y})`} />
+      <PlotRow label="Building" value={formatLandSlotTitle(slot)} />
+      <PlotRow label="Rarity" value={getLandSlotRarityLabel(slot.rarity)} />
+      <PlotRow label="Defense" value={defense} />
+      <PlotRow label="Boost" value={`${slot.boostPercentage}%`} />
+      <PlotRow
+        label="Activated"
+        value={slot.isOperating ? "Yes (MAFIA deposited)" : "No"}
+      />
+      <PlotRow
+        label="Staked MAFIA"
+        value={`${formatMafiaStakingFromWei(slot.stakingAmount)} MAFIA`}
+      />
+      <PlotRow label="Yield" value={slot.yieldPayout.toLocaleString()} />
+      {gameCashPer24h != null && (
+        <PlotRow label="Game Cash / 24h" value={`$${gameCashPer24h.toLocaleString()}`} />
+      )}
+      {slot.familyId > 0 && <PlotRow label="Family ID" value={String(slot.familyId)} />}
+      <PlotRow label="Item ID" value={`#${slot.itemId}`} />
+    </div>
+  );
+}
 
 interface ListingDetailModalProps {
   listing: InventoryMarketplaceListing | null;
+  /** Plot details for a land-slot listing. `null` while they are still loading. */
+  landSlot?: LandSlotDetails | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
@@ -50,6 +102,7 @@ interface ListingDetailModalProps {
 
 export function ListingDetailModal({
   listing,
+  landSlot,
   open,
   onOpenChange,
   onSuccess,
@@ -314,8 +367,15 @@ export function ListingDetailModal({
   if (!listing) return null;
 
   const tokenInfo = getTokenInfo(listing.token);
-  const itemName = getItemName(listing.item.categoryId, listing.item.typeId);
-  const categoryName = MARKETPLACE_CATEGORY_NAMES[listing.item.categoryId] ?? "Item";
+  const isLandSlot = landSlot !== undefined;
+  const itemName = landSlot
+    ? formatLandSlotTitle(landSlot)
+    : getItemName(listing.item.categoryId, listing.item.typeId);
+  const categoryName = landSlot
+    ? formatLandSlotSubtitle(landSlot)
+    : isLandSlot
+      ? "Loading plot..."
+      : (MARKETPLACE_CATEGORY_NAMES[listing.item.categoryId] ?? "Item");
   const expired = isExpired(listing.expiresAt);
   const isSeller = addressEquals(listing.seller, address);
   const isOpen = listing.status === 0;
@@ -575,7 +635,11 @@ export function ListingDetailModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Package className="h-5 w-5 text-primary" />
+              {isLandSlot ? (
+                <MapPin className="h-5 w-5 text-primary" />
+              ) : (
+                <Package className="h-5 w-5 text-primary" />
+              )}
             </div>
             <div>
               <p className="text-lg font-bold">{itemName}</p>
@@ -585,6 +649,17 @@ export function ListingDetailModal({
         </DialogHeader>
 
         <div className="mt-4 space-y-4">
+          {isLandSlot && (
+            <div className="rounded-lg bg-background/50 p-3">
+              <p className="mb-2 text-xs text-muted-foreground">Plot</p>
+              {landSlot ? (
+                <LandSlotDetailList slot={landSlot} />
+              ) : (
+                <p className="text-sm text-muted-foreground">Loading plot details...</p>
+              )}
+            </div>
+          )}
+
           {/* Listing Info */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg bg-background/50 p-3">

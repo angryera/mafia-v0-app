@@ -8,18 +8,22 @@ import {
   SORT_OPTIONS,
   TIME_FILTER_OPTIONS,
   addressEquals,
+  formatLandSlotSubtitle,
+  formatLandSlotTitle,
   formatPrice,
   formatTimeRemaining,
   getItemName,
   getMarketplacePaginationItems,
   isExpired,
   isGameCashToken,
+  isLandSlotCategory,
   matchesTimeFilter,
   parseMarketplaceListings,
   type InventoryMarketplaceListing,
   type ListingTimeFilter,
   type SwapToken,
 } from "@/features/marketplace/lib/marketplace";
+import { useLandSlotDetails } from "@/features/marketplace/lib/use-land-slot-details";
 import { INVENTORY_MARKETPLACE_ABI, MARKETPLACE_CATEGORY_NAMES } from "@/lib/contract";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,6 +35,7 @@ import {
   ChevronRight,
   Clock,
   Loader2,
+  MapPin,
   Package,
   Plus,
   RefreshCw,
@@ -205,6 +210,15 @@ export function MarketplaceAction() {
     () => getMarketplacePaginationItems(listingsPage, listingsTotalPages),
     [listingsPage, listingsTotalPages]
   );
+
+  const landSlotItemIds = useMemo(
+    () =>
+      listings
+        .filter((listing) => isLandSlotCategory(listing.item.categoryId))
+        .map((listing) => listing.itemId),
+    [listings]
+  );
+  const landSlotDetails = useLandSlotDetails(landSlotItemIds);
 
   useEffect(() => {
     setListingsPage(1);
@@ -437,8 +451,16 @@ export function MarketplaceAction() {
           <div className="divide-y divide-border">
             {paginatedListings.map((listing) => {
               const tokenInfo = getTokenInfo(listing.token);
-              const itemName = getItemName(listing.item.categoryId, listing.item.typeId);
-              const categoryName = MARKETPLACE_CATEGORY_NAMES[listing.item.categoryId] ?? "Item";
+              const isLandSlot = isLandSlotCategory(listing.item.categoryId);
+              const landSlot = isLandSlot ? landSlotDetails.get(listing.itemId) : undefined;
+              const itemName = landSlot
+                ? formatLandSlotTitle(landSlot)
+                : getItemName(listing.item.categoryId, listing.item.typeId);
+              const categoryName = landSlot
+                ? formatLandSlotSubtitle(landSlot)
+                : isLandSlot
+                  ? "Loading plot..."
+                  : (MARKETPLACE_CATEGORY_NAMES[listing.item.categoryId] ?? "Item");
               const expired = isExpired(listing.expiresAt);
               const isSeller = addressEquals(listing.seller, address);
 
@@ -453,7 +475,11 @@ export function MarketplaceAction() {
                 >
                   {/* Item Info */}
                   <div className="col-span-4 flex items-center gap-2 min-w-0">
-                    <Package className="h-4 w-4 text-primary shrink-0" />
+                    {isLandSlot ? (
+                      <MapPin className="h-4 w-4 text-primary shrink-0" />
+                    ) : (
+                      <Package className="h-4 w-4 text-primary shrink-0" />
+                    )}
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">{itemName}</p>
                       <p className="text-[10px] text-muted-foreground">{categoryName}</p>
@@ -608,6 +634,11 @@ export function MarketplaceAction() {
       {/* Detail Modal */}
       <ListingDetailModal
         listing={selectedListing}
+        landSlot={
+          selectedListing && isLandSlotCategory(selectedListing.item.categoryId)
+            ? (landSlotDetails.get(selectedListing.itemId) ?? null)
+            : undefined
+        }
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onSuccess={() => {
