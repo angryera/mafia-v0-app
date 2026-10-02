@@ -5,7 +5,7 @@ import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { useAccount, usePublicClient } from "wagmi";
+import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { isAddress, getAddress } from "viem";
 import {
   Loader2,
@@ -33,6 +33,7 @@ import {
   computeKillEligibility,
   getEligibilityMessage,
   initiateKill,
+  KILL_INITIATION_CONTRACT_ENABLED,
   MOCK_KILL_INITIATION_ENABLED,
   type KnownProfile,
   type PlayerCity,
@@ -44,6 +45,7 @@ import {
   type EquippedWeaponInfo,
 } from "@/lib/equipmentContract";
 import { useKillOutcome } from "@/components/kill-outcome-provider";
+import { RANK_STAKE_ABI } from "@/lib/contract";
 
 export function KillInitiationAction() {
   const router = useRouter();
@@ -53,6 +55,23 @@ export function KillInitiationAction() {
   const addresses = useChainAddresses();
   const { authData, isSigning, signError, requestSignature } = useAuth();
   const publicClient = usePublicClient();
+
+  // ── Rank activation (must be active to initiate a kill) ────────────────────
+  const {
+    data: isRankActiveRaw,
+    refetch: refetchRankActive,
+  } = useReadContract({
+    address: addresses.rankStake,
+    abi: RANK_STAKE_ABI,
+    functionName: "isUserRankActive",
+    args: address ? [address] : undefined,
+    query: {
+      enabled: isConnected && !!address,
+      refetchInterval: 15000,
+    },
+  });
+  const rankStatusKnown = isRankActiveRaw !== undefined;
+  const isRankActive = isRankActiveRaw === true;
 
   // ── Player reads (bullets + city/profile) ──────────────────────────────────
   const [bulletBalance, setBulletBalance] = useState<number | null>(null);
@@ -406,7 +425,8 @@ export function KillInitiationAction() {
     hiresLoading ||
     detectiveBlocked ||
     weaponChecking ||
-    !hasWeaponEquipped;
+    !hasWeaponEquipped ||
+    (isConnected && !isRankActive);
 
   const handleConfirm = async () => {
     // 1) Wallet connected
@@ -420,7 +440,19 @@ export function KillInitiationAction() {
       requestSignature();
       return;
     }
-    // 3) Weapon equipped in current city — fresh read
+    // 3) Rank must be activated
+    let rankActive = isRankActive;
+    try {
+      const refreshed = await refetchRankActive();
+      rankActive = refreshed.data === true;
+    } catch (e) {
+      console.error("Rank activation re-check failed:", e);
+    }
+    if (!rankActive) {
+      toast.error("Activate your rank before initiating a kill.");
+      return;
+    }
+    // 4) Weapon equipped in current city — fresh read
     let weapon = equippedWeapon;
     try {
       weapon = await loadEquippedWeapon();
@@ -436,23 +468,23 @@ export function KillInitiationAction() {
       );
       return;
     }
-    // 4) Empty victim
+    // 5) Empty victim
     const trimmed = victim.trim();
     if (trimmed.length === 0) {
       toast.error("Please enter a victim name or wallet address.");
       return;
     }
-    // 5) No resolved target
+    // 6) No resolved target
     if (!targetAddress) {
       toast.error("Target not found. Select a valid profile or wallet address.");
       return;
     }
-    // 6) Self-target
+    // 7) Self-target
     if (isSelfTarget) {
       toast.error("You cannot target yourself.");
       return;
     }
-    // 7) Safehouse — attacker must not be protected (fresh read)
+    // 8) Safehouse — attacker must not be protected (fresh read)
     let inSafehouse = attackerInSafehouse;
     if (publicClient) {
       try {
@@ -465,7 +497,7 @@ export function KillInitiationAction() {
       toast.error("You are in the safehouse and cannot initiate an attack.");
       return;
     }
-    // 8) Detective-agency eligibility
+    // 9) Detective-agency eligibility
     const elig = computeKillEligibility({
       hires: hiresWithNames,
       targetAddress,
@@ -477,14 +509,26 @@ export function KillInitiationAction() {
       toast.error(getEligibilityMessage(elig.reason, elig.targetCityName));
       return;
     }
-    // 9) Bullet amount valid
+    // 10) Bullet amount valid
     if (!Number.isFinite(bulletAmount) || bulletAmount < 1) {
       toast.error("Enter a valid bullet amount to spend on this attack.");
       return;
     }
-    // 10) Enough bullets
+    // 11) Enough bullets
     if (bulletBalance !== null && bulletAmount > bulletBalance) {
       toast.error("You don't have enough bullets for this attack.");
+      return;
+    }
+
+    // All checks passed. The initiateKill write stays off until re-enabled.
+    if (!KILL_INITIATION_CONTRACT_ENABLED) {
+      toast.success(
+        "Attack validated. Kill initiation is disabled for now — no contract call was sent.",
+      );
+      setVictim("");
+      setBulletInput("");
+      setTargetAddress(null);
+      setTargetName(null);
       return;
     }
 
@@ -560,6 +604,30 @@ export function KillInitiationAction() {
       </div>
 
       <div className="rounded-xl border border-border bg-card p-6">
+        {/* Rank activation requirement */}
+        {isConnected && !rankStatusKnown && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-400">
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+            <span>Checking rank activation…</span>
+          </div>
+        )}
+        {isConnected && rankStatusKnown && !isRankActive && (
+          <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-400/30 bg-red-400/10 p-3.5">
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+            <div>
+              <p className="text-sm font-semibold text-red-400">
+                Rank not activated
+              </p>
+              <p className="mt-0.5 text-xs text-red-400/80">
+                Activate your rank before initiating a kill.{" "}
+                <Link href="/rank-activation" className="font-medium hover:underline">
+                  Go to Rank Activation
+                </Link>
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Weapon requirement (player readiness) */}
         {authData && playerCity && (
           <div className="mb-4">

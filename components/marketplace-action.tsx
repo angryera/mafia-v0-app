@@ -6,6 +6,7 @@ import {
   LISTINGS_PER_PAGE,
   LISTING_TYPE_LABELS,
   SORT_OPTIONS,
+  TIME_FILTER_OPTIONS,
   addressEquals,
   formatPrice,
   formatTimeRemaining,
@@ -13,8 +14,10 @@ import {
   getMarketplacePaginationItems,
   isExpired,
   isGameCashToken,
+  matchesTimeFilter,
   parseMarketplaceListings,
   type InventoryMarketplaceListing,
+  type ListingTimeFilter,
   type SwapToken,
 } from "@/features/marketplace/lib/marketplace";
 import { INVENTORY_MARKETPLACE_ABI, MARKETPLACE_CATEGORY_NAMES } from "@/lib/contract";
@@ -54,7 +57,7 @@ export function MarketplaceAction() {
   // ── Filters ───────────────────────────────────────────────────
   const [filterCategory, setFilterCategory] = useState<number | null>(null);
   const [filterListingType, setFilterListingType] = useState<number | null>(null);
-  const [filterStatus, setFilterStatus] = useState<number>(0); // Default to open
+  const [timeFilter, setTimeFilter] = useState<ListingTimeFilter>("active");
   const [sortBy, setSortBy] = useState<string>("newest");
   const [showMyListings, setShowMyListings] = useState(false);
   const [listingsPage, setListingsPage] = useState(1);
@@ -141,9 +144,11 @@ export function MarketplaceAction() {
   const filteredListings = useMemo(() => {
     let result = [...listings];
 
-    // Filter by status
-    if (filterStatus !== null) {
-      result = result.filter((l) => l.status === filterStatus);
+    result = result.filter((l) => l.status === 0 && matchesTimeFilter(l.expiresAt, timeFilter));
+
+    // "Ending soon" ranks live listings by time left. Expired clocks sort first otherwise.
+    if (sortBy === "ending_soon" && timeFilter !== "expired") {
+      result = result.filter((l) => !isExpired(l.expiresAt));
     }
 
     // Filter by category
@@ -172,15 +177,19 @@ export function MarketplaceAction() {
           return Number(a.currentPrice - b.currentPrice);
         case "price_desc":
           return Number(b.currentPrice - a.currentPrice);
-        case "ending_soon":
+        case "ending_soon": {
+          const aExpired = isExpired(a.expiresAt) ? 1 : 0;
+          const bExpired = isExpired(b.expiresAt) ? 1 : 0;
+          if (aExpired !== bExpired) return aExpired - bExpired;
           return Number(a.expiresAt - b.expiresAt);
+        }
         default:
           return 0;
       }
     });
 
     return result;
-  }, [listings, filterCategory, filterListingType, filterStatus, sortBy, showMyListings, address]);
+  }, [listings, filterCategory, filterListingType, timeFilter, sortBy, showMyListings, address]);
 
   const listingsTotalPages = Math.max(
     1,
@@ -199,7 +208,7 @@ export function MarketplaceAction() {
 
   useEffect(() => {
     setListingsPage(1);
-  }, [filterCategory, filterListingType, filterStatus, sortBy, showMyListings, address]);
+  }, [filterCategory, filterListingType, timeFilter, sortBy, showMyListings, address]);
 
   useEffect(() => {
     if (listingsPage > listingsTotalPages) {
@@ -272,6 +281,14 @@ export function MarketplaceAction() {
     );
   }
 
+  const emptyListingsMessage = showMyListings
+    ? "You have no listings in this view"
+    : {
+        active: "No active listings",
+        expired: "No expired listings",
+        all: "No listings match your filters",
+      }[timeFilter];
+
   return (
     <div>
       {/* Header */}
@@ -322,6 +339,24 @@ export function MarketplaceAction() {
             My Listings
           </button>
         )}
+
+        <div className="flex items-center rounded-lg border border-border bg-background/50 p-0.5">
+          {TIME_FILTER_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setTimeFilter(option.value)}
+              className={cn(
+                "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                timeFilter === option.value
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
 
         {/* Category Filter */}
         <div className="relative">
@@ -385,11 +420,7 @@ export function MarketplaceAction() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16">
           <Package className="mb-3 h-10 w-10 text-muted-foreground" />
           <p className="text-lg font-semibold text-foreground">No Listings</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {showMyListings
-              ? "You have no active listings"
-              : "No listings match your filters"}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{emptyListingsMessage}</p>
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card overflow-hidden">

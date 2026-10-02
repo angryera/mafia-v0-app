@@ -14,11 +14,16 @@ export function KillInitiationInfo() {
 
       <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
         Before an attack is allowed, you and your target must pass every check
-        below. The on-chain kill contract is not deployed yet — confirming runs a
-        validated preview only.
+        below, including an active rank. Confirming validates the attack only —
+        the initiate-kill contract call is disabled for now.
       </p>
 
       <div className="flex flex-col gap-2.5">
+        <Requirement
+          icon={<ShieldAlert className="h-3.5 w-3.5 text-red-400" />}
+          title="Rank activated"
+          text="Your rank must be active before you can initiate a kill."
+        />
         <Requirement
           icon={<Swords className="h-3.5 w-3.5 text-red-400" />}
           title="Weapon equipped"
@@ -47,12 +52,12 @@ export function KillInitiationInfo() {
       </div>
 
       <div className="mt-4 rounded-lg bg-background/50 px-3 py-2.5">
-        <p className="mb-0.5 text-xs text-muted-foreground">Write (mock)</p>
+        <p className="mb-0.5 text-xs text-muted-foreground">Write (disabled)</p>
         <p className="break-all font-mono text-sm text-primary">
           initiateKill(address,uint256)
         </p>
         <p className="mt-1 text-[10px] text-muted-foreground">
-          Pending deployment of the MafiaKill contract.
+          Contract call is disabled. Confirm validates the attack only.
         </p>
       </div>
     </div>

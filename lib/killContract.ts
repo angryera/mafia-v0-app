@@ -12,7 +12,7 @@
 //   • Attacker safehouse  → DEPLOYED  (real read via getUserInfo; attacker cannot
 //                            initiate while protected)
 //   • Detective hires      → DEPLOYED  (real read via getUserDetectiveHires)
-//   • initiate kill (write)→ NOT DEPLOYED (mock — validates then resolves)
+//   • initiate kill (write)→ DISABLED (validates only; no contract call)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { formatEther, isAddress, type Abi } from "viem";
@@ -465,6 +465,12 @@ import {
 
 /** When true, `initiateKill` builds a mock battle payload for the outcome page. */
 export const MOCK_KILL_INITIATION_ENABLED = true;
+
+/**
+ * When false, the kill initiation page validates the attack but does not call
+ * `initiateKill` (mock or on-chain).
+ */
+export const KILL_INITIATION_CONTRACT_ENABLED: boolean = false;
 
 /**
  * Initiate a kill against `targetAddress`, spending `bulletAmount` bullets.

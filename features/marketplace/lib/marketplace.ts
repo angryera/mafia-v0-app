@@ -93,6 +93,19 @@ export const SORT_OPTIONS = [
   { value: "ending_soon", label: "Ending Soon" },
 ] as const;
 
+/** Clock filter. Open listings stay status 0 after they expire. */
+export const TIME_FILTER_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "expired", label: "Expired" },
+  { value: "all", label: "All" },
+] as const;
+
+export type ListingTimeFilter = (typeof TIME_FILTER_OPTIONS)[number]["value"];
+
+export function secondsRemaining(expiresAt: bigint, nowSeconds = Math.floor(Date.now() / 1000)): number {
+  return Number(expiresAt) - nowSeconds;
+}
+
 export const LISTINGS_PER_PAGE = 10;
 
 export type MarketplacePaginationItem = number | "ellipsis";
@@ -126,7 +139,7 @@ export function pow10BigInt(decimals: number): bigint {
 }
 
 export function formatTimeRemaining(expiresAt: bigint): string {
-  const remainingSeconds = Number(expiresAt) - Math.floor(Date.now() / 1000);
+  const remainingSeconds = secondsRemaining(expiresAt);
   if (remainingSeconds <= 0) return "Expired";
 
   const days = Math.floor(remainingSeconds / 86400);
@@ -138,7 +151,13 @@ export function formatTimeRemaining(expiresAt: bigint): string {
 }
 
 export function isExpired(expiresAt: bigint): boolean {
-  return Number(expiresAt) <= Math.floor(Date.now() / 1000);
+  return secondsRemaining(expiresAt) <= 0;
+}
+
+export function matchesTimeFilter(expiresAt: bigint, filter: ListingTimeFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "expired") return isExpired(expiresAt);
+  return !isExpired(expiresAt);
 }
 
 export function addressEquals(a: string | undefined, b: string | undefined): boolean {
