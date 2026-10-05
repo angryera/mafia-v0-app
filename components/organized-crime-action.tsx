@@ -423,12 +423,19 @@ export function OrganizedCrimeAction() {
       }) as bigint;
 
       const totalLobbies = Number(lobbyCount);
+      if (totalLobbies <= 0) {
+        setLobbies([]);
+        return;
+      }
+
       const maxLobbiesToFetch = 50;
 
-      // Fetch the most recent lobbies (working backwards from totalLobbies)
-      // Lobby IDs are 1-indexed, so we start from totalLobbies and go down
+      // crimeLobbies is a 0-indexed array. getLobbyCount is its length,
+      // so the newest valid id is count - 1 (getLobby(count) reverts).
+      const newestId = totalLobbies - 1;
+      const oldestId = Math.max(0, newestId - maxLobbiesToFetch + 1);
       const promises: Promise<CrimeLobby | null>[] = [];
-      for (let id = totalLobbies; id >= Math.max(1, totalLobbies - maxLobbiesToFetch + 1); id--) {
+      for (let id = newestId; id >= oldestId; id--) {
         promises.push(fetchLobby(id, addresses.ocLobby as `0x${string}`, chainConfig.rpc));
       }
 
