@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useAccount, useReadContract } from "wagmi";
+import { useQuery } from "@tanstack/react-query";
+import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import {
   useChain,
   useChainAddresses,
@@ -26,8 +27,26 @@ import {
   ItemCategory,
   MAX_EQUIPMENT_MAFIA_STAKE,
   ERC20_ABI,
+  MAFIA_MAP_ABI,
 } from "@/lib/contract";
-import { parseEther, formatEther, maxUint256 } from "viem";
+import {
+  CITY_DEVELOPER_BOOST_PERCENT,
+  cityDeveloperBadgeTooltip,
+  cityDeveloperCrownTooltip,
+  cityDeveloperItemBoost,
+  cityDeveloperPowerTooltip,
+  developerAddressFromResult,
+  formatCityDeveloperItemBoost,
+  formatGroupedPower,
+  formatLoadoutEstimate,
+  isCityDeveloperAddress,
+  loadoutEstimateTooltip,
+  projectLoadoutPower,
+  readDevelopedCityIds,
+  splitCityDeveloperPower,
+  type CityDeveloperPower,
+} from "@/lib/city-developer";
+import { parseEther, formatEther, maxUint256, type Abi } from "viem";
 import {
   Shield,
   Swords,
@@ -44,9 +63,16 @@ import {
   Check,
   Plus,
   Minus,
+  Crown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -57,6 +83,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+
+const EQUIPMENT_SCREEN_CITY_IDS = Object.keys(City)
+  .map(Number)
+  .sort((a, b) => a - b);
 
 // ── Types ───────────────────────────────────────────────────────
 interface InventoryItem {
@@ -200,6 +230,77 @@ function canItemFitSlot(
   return false;
 }
 
+function normalizeEquipmentIds(
+  ids: readonly (number | bigint)[] | undefined,
+): number[] {
+  const nums = (ids ?? []).map((id) => Number(id));
+  if (nums.length >= 10) return nums.slice(0, 10);
+  return [...nums, ...Array(10 - nums.length).fill(0)];
+}
+
+function resolveEquippedDisplay(
+  equippedItemId: number | bigint,
+  allItemsGlobal: InventoryItem[],
+  allSlots: SlotInfo[],
+): { name: string; offense: number; defense: number } | null {
+  const equippedIdNum =
+    typeof equippedItemId === "bigint" ? Number(equippedItemId) : equippedItemId;
+  if (!equippedIdNum || equippedIdNum <= 0) return null;
+
+  const slot = allSlots.find((entry) => entry.inventoryItemId === equippedIdNum);
+  if (slot && "slotSubType" in slot) {
+    const buildingStats = getBuildingStats(slot.slotSubType, slot.rarity);
+    return {
+      name: `${BUILDING_STATS[slot.slotSubType]?.name || "Building"} (${RARITY_NAMES[slot.rarity] || "Common"})`,
+      offense: buildingStats.offense,
+      defense: buildingStats.defense,
+    };
+  }
+
+  const item = allItemsGlobal.find((entry) => entry.itemId === equippedIdNum);
+  if (!item) return null;
+
+  if (item.categoryId === ItemCategory.SHOPITEM) {
+    const shopStats = SHOP_ITEM_STATS[item.typeId];
+    if (shopStats) {
+      return {
+        name: shopStats.name,
+        offense: shopStats.offense,
+        defense: shopStats.defense,
+      };
+    }
+  } else if (
+    item.categoryId === ItemCategory.BODYGUARD ||
+    BODYGUARD_CATEGORIES.includes(item.categoryId)
+  ) {
+    const bgStats = getBodyguardStats(item.categoryId, item.typeId);
+    return {
+      name: `${bgStats.name} Lvl ${bgStats.level}`,
+      offense: bgStats.offense,
+      defense: bgStats.defense,
+    };
+  }
+
+  return null;
+}
+
+function sumItemCombatStats(
+  itemIds: readonly number[],
+  allItemsGlobal: InventoryItem[],
+  allSlots: SlotInfo[],
+): { offense: number; defense: number } {
+  return itemIds.reduce(
+    (total, itemId) => {
+      const resolved = resolveEquippedDisplay(itemId, allItemsGlobal, allSlots);
+      return {
+        offense: total.offense + (resolved?.offense ?? 0),
+        defense: total.defense + (resolved?.defense ?? 0),
+      };
+    },
+    { offense: 0, defense: 0 },
+  );
+}
+
 // ── Equipment Slot Card ─────────────────────────────────────────
 function EquipmentSlotCard({
   slotIndex,
@@ -208,6 +309,7 @@ function EquipmentSlotCard({
   allSlots,
   selectedItemId,
   onSelect,
+  isCityDeveloper,
 }: {
   slotIndex: number;
   equippedItemId: number;
@@ -215,57 +317,23 @@ function EquipmentSlotCard({
   allSlots: SlotInfo[];
   selectedItemId: number | null;
   onSelect: (slotIndex: number) => void;
+  isCityDeveloper: boolean;
 }) {
   const label = EQUIPMENT_SLOT_LABELS[slotIndex];
   const isEquipped = equippedItemId > 0;
-
-  // Find the equipped item
-  let equippedItem: InventoryItem | SlotInfo | undefined;
-  let stats = { offense: 0, defense: 0 };
-  let itemName = "Empty";
-
-  if (isEquipped) {
-    // Check if it's a building (slot)
-    // Note: equippedItemId may be BigInt from contract, so convert to Number for comparison
-    const equippedIdNum = typeof equippedItemId === 'bigint' ? Number(equippedItemId) : equippedItemId;
-    equippedItem = allSlots.find(
-      (s) => s.inventoryItemId === equippedIdNum
-    );
-    if (equippedItem && "slotSubType" in equippedItem) {
-      const buildingStats = getBuildingStats(
-        equippedItem.slotSubType,
-        equippedItem.rarity
-      );
-      stats = buildingStats;
-      itemName = `${BUILDING_STATS[equippedItem.slotSubType]?.name || "Building"} (${RARITY_NAMES[equippedItem.rarity] || "Common"})`;
-    } else {
-      // Check inventory items - use allItemsGlobal since equipped items are owned by the contract
-      equippedItem = allItemsGlobal.find((i) => i.itemId === equippedIdNum);
-      if (equippedItem) {
-        if (equippedItem.categoryId === ItemCategory.SHOPITEM) {
-          const shopStats = SHOP_ITEM_STATS[equippedItem.typeId];
-          if (shopStats) {
-            stats = { offense: shopStats.offense, defense: shopStats.defense };
-            itemName = shopStats.name;
-          }
-        } else if (
-          equippedItem.categoryId === ItemCategory.BODYGUARD ||
-          BODYGUARD_CATEGORIES.includes(equippedItem.categoryId)
-        ) {
-          const bgStats = getBodyguardStats(
-            equippedItem.categoryId,
-            equippedItem.typeId
-          );
-          stats = { offense: bgStats.offense, defense: bgStats.defense };
-          itemName = `${bgStats.name} Lvl ${bgStats.level}`;
-        }
-      }
-    }
-  }
+  const display = isEquipped
+    ? resolveEquippedDisplay(equippedItemId, allItemsGlobal, allSlots)
+    : null;
+  const stats = display ?? { offense: 0, defense: 0 };
+  const itemName = display?.name ?? "Empty";
+  const itemBoost =
+    isCityDeveloper && isEquipped
+      ? cityDeveloperItemBoost(stats.offense, stats.defense)
+      : null;
 
   const isSelected = selectedItemId === slotIndex;
 
-  return (
+  const card = (
     <button
       onClick={() => onSelect(slotIndex)}
       className={cn(
@@ -333,6 +401,26 @@ function EquipmentSlotCard({
       )} />
     </button>
   );
+
+  if (!isEquipped) return card;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{card}</TooltipTrigger>
+      <TooltipContent className="max-w-xs text-left">
+        <p className="font-medium">{itemName}</p>
+        <p className="text-xs text-muted-foreground">
+          Offense {formatGroupedPower(stats.offense)} · Defense{" "}
+          {formatGroupedPower(stats.defense)}
+        </p>
+        {itemBoost && (
+          <p className="text-xs text-amber-300">
+            {formatCityDeveloperItemBoost(itemBoost)}
+          </p>
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 // ── City Power Card ─────────────────────────────────────────────
@@ -341,12 +429,14 @@ function CityPowerCard({
   defense,
   offense,
   isSelected,
+  isDeveloper,
   onSelect,
 }: {
   cityId: number;
   defense: number;
   offense: number;
   isSelected: boolean;
+  isDeveloper: boolean;
   onSelect: () => void;
 }) {
   const cityName = City[cityId] || `City #${cityId}`;
@@ -364,6 +454,22 @@ function CityPowerCard({
       <div className="flex items-center gap-2">
         <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-sm font-medium text-foreground">{cityName}</span>
+        {isDeveloper && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-flex">
+                <Crown
+                  className="h-3.5 w-3.5 text-amber-400"
+                  role="img"
+                  aria-label="City Developer"
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">
+              {cityDeveloperCrownTooltip(cityName)}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
       <div className="flex items-center gap-3 text-xs">
         <span className="flex items-center gap-1 text-cyan-400">
@@ -376,6 +482,93 @@ function CityPowerCard({
         </span>
       </div>
     </button>
+  );
+}
+
+function CombatPowerStat({
+  stat,
+  power,
+  isCityDeveloper,
+  projection,
+}: {
+  stat: "offense" | "defense";
+  power: CityDeveloperPower;
+  isCityDeveloper: boolean;
+  projection: number | null;
+}) {
+  const label = stat === "offense" ? "Offense" : "Defense";
+  const Icon = stat === "offense" ? Swords : Shield;
+  const delta = projection === null ? 0 : projection - power.total;
+  const figure = (
+    <div>
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+      </div>
+      <div className="mt-1 flex items-center gap-2">
+        <span
+          className={cn(
+            "font-mono text-2xl font-bold leading-none",
+            isCityDeveloper ? "city-developer-shimmer" : "text-foreground",
+          )}
+        >
+          {formatGroupedPower(power.total)}
+        </span>
+        {isCityDeveloper && (
+          <span className="rounded-full border border-amber-400/50 bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-amber-200">
+            +{CITY_DEVELOPER_BOOST_PERCENT}%
+          </span>
+        )}
+      </div>
+      {isCityDeveloper && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {formatGroupedPower(power.base)}{" "}
+          <span className="font-medium text-amber-300">
+            +{formatGroupedPower(power.bonus)}
+          </span>
+        </p>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="min-w-0">
+      {isCityDeveloper ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="cursor-help text-left">{figure}</div>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            {cityDeveloperPowerTooltip(stat, power)}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        figure
+      )}
+      {projection !== null && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <p
+              className={cn(
+                "mt-1 w-fit cursor-help font-mono text-xs",
+                delta > 0
+                  ? "text-green-400"
+                  : delta < 0
+                    ? "text-red-400"
+                    : "text-muted-foreground",
+              )}
+            >
+              {formatLoadoutEstimate(projection, power.total)}
+            </p>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            {loadoutEstimateTooltip(stat)}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </div>
   );
 }
 
@@ -573,6 +766,7 @@ export function EquipmentAction() {
   const scriptReady = inventoryScript === "ready";
   const scriptError =
     inventoryScript === "error" ? "Failed to load inventory script" : null;
+  const publicClient = usePublicClient({ chainId: chainConfig.wagmiChainId });
 
   // State
   const [selectedCityId, setSelectedCityId] = useState(0);
@@ -659,8 +853,94 @@ export function EquipmentAction() {
     query: { enabled: !!address && !!mafiaTokenAddr },
   });
 
+  // Selected-city total already includes the City Developer boost.
+  const { data: totalPowerRaw, refetch: refetchTotalPower } = useReadContract({
+    address: addresses.equipment,
+    abi: EQUIPMENT_ABI,
+    functionName: "getTotalPower",
+    args:
+      authData && address
+        ? [address, selectedCityId, authData.message, authData.signature]
+        : undefined,
+    query: { enabled: !!authData && !!address && isConnected },
+  });
+
+  const developedCitiesQuery = useQuery({
+    queryKey: [
+      "equipment-city-developers",
+      chainConfig.wagmiChainId,
+      addresses.map,
+      address ?? "",
+    ],
+    enabled: !!address && !!publicClient,
+    retry: false,
+    queryFn: () => {
+      if (!address || !publicClient) {
+        return readDevelopedCityIds({
+          wallet: null,
+          cityIds: EQUIPMENT_SCREEN_CITY_IDS,
+          multicall: async () => {
+            throw new Error("City developer multicall was called without a wallet");
+          },
+        });
+      }
+      return readDevelopedCityIds({
+        wallet: address,
+        cityIds: EQUIPMENT_SCREEN_CITY_IDS,
+        multicall: async (cityIds) => {
+          const results = await publicClient.multicall({
+            allowFailure: true,
+            contracts: cityIds.map((cityId) => ({
+              address: addresses.map,
+              abi: MAFIA_MAP_ABI as Abi,
+              functionName: "cityDevelopers" as const,
+              args: [cityId],
+            })),
+          });
+          return results.map((row) => ({
+            status: row.status,
+            result: row.status === "success" ? row.result : undefined,
+          }));
+        },
+      });
+    },
+  });
+
+  const cityDeveloperQuery = useQuery({
+    queryKey: [
+      "equipment-city-developer",
+      chainConfig.wagmiChainId,
+      addresses.map,
+      address ?? "",
+      selectedCityId,
+    ],
+    enabled: !!address && !!publicClient,
+    retry: false,
+    queryFn: async () => {
+      if (!address || !publicClient) return false;
+      const result = await publicClient.readContract({
+        address: addresses.map,
+        abi: MAFIA_MAP_ABI,
+        functionName: "cityDevelopers",
+        args: [selectedCityId],
+      });
+      return isCityDeveloperAddress(
+        developerAddressFromResult(result),
+        address,
+      );
+    },
+  });
+
   const equipmentInfo = equipmentInfoRaw as EquipmentInfoData | undefined;
   const citiesPower = citiesPowerRaw as [bigint[], bigint[]] | undefined;
+  const totalPower = totalPowerRaw as [bigint, bigint] | undefined;
+  const developedCityIds =
+    address && developedCitiesQuery.isSuccess
+      ? (developedCitiesQuery.data ?? [])
+      : [];
+  // Pending and failed reads stay false so the previous city cannot leave the badge up.
+  const isCityDeveloper =
+    !!address && cityDeveloperQuery.isSuccess && cityDeveloperQuery.data === true;
 
   // Sync edited state when equipment info changes
   useEffect(() => {
@@ -792,6 +1072,22 @@ export function EquipmentAction() {
     setEditedMafiaAmount(clamped);
   };
 
+  const handleDiscardChanges = () => {
+    if (!equipmentInfo) return;
+    setEditedItemIds(
+      equipmentInfo.itemIds.length >= 10
+        ? equipmentInfo.itemIds.slice(0, 10)
+        : [
+            ...equipmentInfo.itemIds,
+            ...Array(10 - equipmentInfo.itemIds.length).fill(0),
+          ],
+    );
+    const mafiaAmt = Number(formatEther(BigInt(equipmentInfo.mafiaAmount)));
+    setEditedMafiaAmount(mafiaAmt);
+    setMafiaInputValue(mafiaAmt.toString());
+    setSelectedSlotIndex(null);
+  };
+
   // Calculate delta for MAFIA staking
   const mafiaCurrentAmount = equipmentInfo
     ? Number(formatEther(BigInt(equipmentInfo.mafiaAmount)))
@@ -830,6 +1126,7 @@ export function EquipmentAction() {
       });
       refetchEquipment();
       refetchCitiesPower();
+      refetchTotalPower();
       refetchBalance();
       refetchAllowance();
     },
@@ -913,11 +1210,59 @@ export function EquipmentAction() {
     );
   }
 
+  const savedItemIds = normalizeEquipmentIds(equipmentInfo?.itemIds);
+  const draftItemIds = normalizeEquipmentIds(editedItemIds);
+  const draftItemsDiffer =
+    !!equipmentInfo &&
+    !isLoading &&
+    !loadError &&
+    savedItemIds.some((id, index) => id !== draftItemIds[index]);
+  const savedItemStats = sumItemCombatStats(
+    savedItemIds,
+    allItemsGlobal,
+    allCitySlotsGlobal,
+  );
+  const draftItemStats = sumItemCombatStats(
+    draftItemIds,
+    allItemsGlobal,
+    allCitySlotsGlobal,
+  );
+  const onChainDefense = totalPower
+    ? Number(totalPower[0])
+    : citiesPower
+      ? Number(citiesPower[0]?.[selectedCityId] ?? 0)
+      : 0;
+  const onChainOffense = totalPower
+    ? Number(totalPower[1])
+    : citiesPower
+      ? Number(citiesPower[1]?.[selectedCityId] ?? 0)
+      : 0;
+  const defensePower = splitCityDeveloperPower(onChainDefense, isCityDeveloper);
+  const offensePower = splitCityDeveloperPower(onChainOffense, isCityDeveloper);
+  const offenseProjection = draftItemsDiffer
+    ? projectLoadoutPower({
+        onChainTotal: onChainOffense,
+        savedItemStat: savedItemStats.offense,
+        draftItemStat: draftItemStats.offense,
+        isCityDeveloper,
+      })
+    : null;
+  const defenseProjection = draftItemsDiffer
+    ? projectLoadoutPower({
+        onChainTotal: onChainDefense,
+        savedItemStat: savedItemStats.defense,
+        draftItemStat: draftItemStats.defense,
+        isCityDeveloper,
+      })
+    : null;
+  const selectedCityName = City[selectedCityId] || `City #${selectedCityId}`;
+
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="flex flex-col gap-6">
       {/* City Power Overview */}
       <div className="rounded-xl border border-border bg-card p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="text-sm font-semibold text-foreground">
             City Power Overview
           </h3>
@@ -927,6 +1272,9 @@ export function EquipmentAction() {
             onClick={() => {
               refetchEquipment();
               refetchCitiesPower();
+              refetchTotalPower();
+              void developedCitiesQuery.refetch();
+              void cityDeveloperQuery.refetch();
               loadInventory();
             }}
             disabled={isLoading}
@@ -954,6 +1302,7 @@ export function EquipmentAction() {
                 defense={defense}
                 offense={offense}
                 isSelected={selectedCityId === cityId}
+                isDeveloper={developedCityIds.includes(cityId)}
                 onSelect={() => setSelectedCityId(cityId)}
               />
             );
@@ -966,12 +1315,55 @@ export function EquipmentAction() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold text-foreground">
-              Equipment for {City[selectedCityId]}
+              Equipment for {selectedCityName}
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               Select slots to equip items
             </p>
+            {isCityDeveloper && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    tabIndex={0}
+                    className="mt-2 inline-flex max-w-full cursor-help items-center gap-2 rounded-full border border-amber-400/60 bg-amber-400/10 px-3 py-1 text-amber-200"
+                  >
+                    <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+                    <span className="text-[10px] font-bold tracking-[0.14em] text-amber-300">
+                      CITY DEVELOPER
+                    </span>
+                    <span className="text-[10px] font-medium">
+                      +{CITY_DEVELOPER_BOOST_PERCENT}% Offense & Defense
+                    </span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  {cityDeveloperBadgeTooltip(selectedCityName)}
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
+        </div>
+
+        <div
+          className={cn(
+            "mb-4 grid grid-cols-2 gap-3 rounded-xl p-3",
+            isCityDeveloper
+              ? "border border-amber-400/80 bg-amber-400/[0.07] shadow-[0_0_28px_rgba(245,196,64,0.32)]"
+              : "border border-border bg-background/40",
+          )}
+        >
+          <CombatPowerStat
+            stat="offense"
+            power={offensePower}
+            isCityDeveloper={isCityDeveloper}
+            projection={offenseProjection}
+          />
+          <CombatPowerStat
+            stat="defense"
+            power={defensePower}
+            isCityDeveloper={isCityDeveloper}
+            projection={defenseProjection}
+          />
         </div>
 
         {isLoading ? (
@@ -1001,6 +1393,7 @@ export function EquipmentAction() {
                   allItemsGlobal={allItemsGlobal}
                   allSlots={allCitySlotsGlobal}
                   selectedItemId={selectedSlotIndex}
+                  isCityDeveloper={isCityDeveloper}
                   onSelect={handleSlotSelect}
                 />
               ))}
@@ -1098,6 +1491,16 @@ export function EquipmentAction() {
               )}
 
               <Button
+                variant="outline"
+                onClick={handleDiscardChanges}
+                disabled={!hasChanges || isLoadingEquip}
+                className="gap-1.5"
+              >
+                <X className="h-4 w-4" />
+                Discard Changes
+              </Button>
+
+              <Button
                 onClick={handleEquip}
                 disabled={
                   !hasChanges ||
@@ -1165,5 +1568,6 @@ export function EquipmentAction() {
         />
       )}
     </div>
+    </TooltipProvider>
   );
 }

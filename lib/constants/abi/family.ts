@@ -1573,6 +1573,21 @@ export const MAFIA_MAP_ABI = [
             { name: "", type: "bool", internalType: "bool" },
         ],
     },
+    /**
+     * City developer for a city. `developer` is the zero address when the city
+     * has no developer. Offense and defense boosts are applied in equipment
+     * `getTotalPower`, not by multiplying this result.
+     */
+    {
+        type: "function",
+        name: "cityDevelopers",
+        stateMutability: "view",
+        inputs: [{ name: "cityId", type: "uint8", internalType: "uint8" }],
+        outputs: [
+            { name: "netWorth", type: "uint256", internalType: "uint256" },
+            { name: "developer", type: "address", internalType: "address" },
+        ],
+    },
     /** Create family on your Family HQ tile (burns OG Crate keys via contract). */
     {
         type: "function",

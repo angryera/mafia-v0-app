@@ -9,7 +9,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "check": "tsc --noEmit && eslint . && next build"
+    "check": "tsc --noEmit && eslint . && next build",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test lib/city-developer.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
