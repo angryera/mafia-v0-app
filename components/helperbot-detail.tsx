@@ -35,7 +35,7 @@ import { toast } from "sonner";
 type HelperBot = (typeof HELPER_BOTS)[number];
 export type HelperBotDialogMode = "start" | "running" | "finished";
 const BULLET_BOT_ID = 5;
-const BULLET_PER_ATTEMPT_BASE = BigInt(10);
+const BULLET_PER_ATTEMPT_BASE = BigInt(3000);
 const HUNDRED = BigInt(100);
 const CREDIT_SPEND_REDUCTION_PERCENT = 25;
 const PERK_HELPER_BOT_ALLOWED = {
@@ -563,7 +563,7 @@ export function HelperBotDetail({
   const generatedBulletAmount =
     isBulletDealerBot && botInfo && bulletBotPlusInfo
       ? BigInt(botInfo.attemptCount) *
-      bulletBotPlusInfo.amountModifiedPercent *
+      bulletBotPlusInfo.amountModifiedPercent / BigInt(100) *
       BULLET_PER_ATTEMPT_BASE *
       (bulletDoublePerk ? BigInt(2) : BigInt(1))
       : null;

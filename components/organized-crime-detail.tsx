@@ -236,6 +236,17 @@ function JoinRoleDialog({
   const [selectedGrenades, setSelectedGrenades] = useState<number[]>([]);
   const [selectedMolotovs, setSelectedMolotovs] = useState<number[]>([]);
   const [needsApproval, setNeedsApproval] = useState(false);
+  const [trackedOpen, setTrackedOpen] = useState(open);
+  if (open !== trackedOpen) {
+    setTrackedOpen(open);
+    if (open) {
+      setIsLoadingItems(true);
+      setItems([]);
+      setSelectedItemId("");
+      setSelectedGrenades([]);
+      setSelectedMolotovs([]);
+    }
+  }
 
   // Write hooks
   const resetJoinRef = useRef<() => void>(() => {});
@@ -298,9 +309,12 @@ function JoinRoleDialog({
 
   // Load items when dialog opens
   useEffect(() => {
-    if (open && inventoryReady && address) {
+    if (!open) return;
+    if (inventoryReady && address) {
       loadItemsForRole();
+      return;
     }
+    if (!address) setIsLoadingItems(false);
   }, [open, inventoryReady, address, roleIndex]);
 
   const loadItemsForRole = async () => {
@@ -518,24 +532,22 @@ function JoinRoleDialog({
               {roleIndex === 1 && (
                 <div className="space-y-2">
                   <Label>Select Car (5+ seats, in {getTravelCityName(lobbyCity)})</Label>
-                  <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a car" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {items.length === 0 ? (
-                        <SelectItem value="" disabled>
-                          No cars available
-                        </SelectItem>
-                      ) : (
-                        items.map((item) => (
+                  {items.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No cars available</p>
+                  ) : (
+                    <Select value={selectedItemId} onValueChange={setSelectedItemId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a car" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {items.map((item) => (
                           <SelectItem key={item.itemId} value={String(item.itemId)}>
                             {getItemLabel(item)}
                           </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               )}
 
@@ -543,24 +555,22 @@ function JoinRoleDialog({
                 <>
                   <div className="space-y-2">
                     <Label>Select Weapon</Label>
-                    <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a weapon" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {items.length === 0 ? (
-                          <SelectItem value="" disabled>
-                            No weapons available
-                          </SelectItem>
-                        ) : (
-                          items.map((item) => (
+                    {items.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No weapons available</p>
+                    ) : (
+                      <Select value={selectedItemId} onValueChange={setSelectedItemId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a weapon" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {items.map((item) => (
                             <SelectItem key={item.itemId} value={String(item.itemId)}>
                               {getItemLabel(item)}
                             </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Bullet Amount</Label>
@@ -582,24 +592,22 @@ function JoinRoleDialog({
                 <>
                   <div className="space-y-2">
                     <Label>Select Armor (Required)</Label>
-                    <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose armor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {armorItems.length === 0 ? (
-                          <SelectItem value="" disabled>
-                            No armor available
-                          </SelectItem>
-                        ) : (
-                          armorItems.map((item) => (
+                    {armorItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No armor available</p>
+                    ) : (
+                      <Select value={selectedItemId} onValueChange={setSelectedItemId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose armor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {armorItems.map((item) => (
                             <SelectItem key={item.itemId} value={String(item.itemId)}>
                               {getItemLabel(item)}
                             </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Grenades (Max 3, Optional)</Label>
@@ -673,24 +681,22 @@ function JoinRoleDialog({
               {roleIndex === 4 && (
                 <div className="space-y-2">
                   <Label>Select Bodyguard</Label>
-                  <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a bodyguard" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {items.length === 0 ? (
-                        <SelectItem value="" disabled>
-                          No bodyguards available
-                        </SelectItem>
-                      ) : (
-                        items.map((item) => (
+                  {items.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No bodyguards available</p>
+                  ) : (
+                    <Select value={selectedItemId} onValueChange={setSelectedItemId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a bodyguard" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {items.map((item) => (
                           <SelectItem key={item.itemId} value={String(item.itemId)}>
                             {getItemLabel(item)}
                           </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               )}
 
