@@ -1,4 +1,4 @@
-import { getAddress } from "viem";
+import { getAddress, zeroAddress } from "viem";
 
 export type ChainId = "bnb" | "pulse";
 
@@ -73,6 +73,11 @@ export type ChainConfig = {
         raceLobby: `0x${string}`;
         /** MafiaRebirth — `initiateRebirth` / `quoteRebirth`; zero until deployed per chain. */
         rebirth: `0x${string}`;
+        /**
+         * MafiaProfileUnbox. Zero address means paid unboxing is not deployed on this chain.
+         * Do not invent an address for a chain that has no deployment.
+         */
+        profileUnbox: `0x${string}`;
     };
 };
 
@@ -137,6 +142,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             inventoryMarketplace: getAddress("0x1fb8C9F810afd99A6FAE3E81aBe0806f8796ba73"),
             raceLobby: getAddress("0xE3a3892fEC9bA9457fEE08Fe3d2E7b32bCeb33Ad"),
             rebirth: getAddress("0x5D20a828693058C5370C6dCb54297f41eC3e2868"),
+            profileUnbox: getAddress("0x62523f9e93432ad4DB2903233B3463Ba64D4D911"),
         },
     },
     pulse: {
@@ -199,6 +205,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             inventoryMarketplace: getAddress("0x321e27aaB7e6F5DE221AE3eAe63306345f3A465d"),
             raceLobby: getAddress("0x10D0D93BD141a76F8cBcA1cd94CAf8081C5d0427"),
             rebirth: getAddress("0x0000000000000000000000000000000000000000"),
+            profileUnbox: zeroAddress,
         },
     },
 };

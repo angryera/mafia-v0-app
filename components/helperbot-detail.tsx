@@ -1,21 +1,30 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
-import { formatDuration, getErrorMessage } from "@/lib/format";
+import { formatDuration, formatWeiDisplay, getErrorMessage } from "@/lib/format";
 import { getPerkDisplay, getPerkOptionLabel, getToolsDisplayName, type PerkDisplay } from "@/lib/perks";
 import {
   HELPER_BOT_BULLET_PRICE,
   HELPERBOT_CONTRACT_ABI,
   INGAME_CURRENCY_ABI,
-  parseBulletBotPlusInfo,
+  parseBulletBotPerkInfo,
   parseHelperBotInfo,
-  type BulletBotPlusInfo,
+  type BulletBotPerkInfo,
   type HelperBotInfo,
   type HELPER_BOTS,
 } from "@/lib/contract";
+import {
+  bulletBotCashForOutputWei,
+  bulletBotOutputForCashWei,
+  bulletBotRefundedCreditsWei,
+  formatBulletCashInput,
+  maxBulletBotOutputWei,
+  parseBulletCashInput,
+  percentOfCashWei,
+} from "@/lib/bullet-bot";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -35,8 +44,6 @@ import { toast } from "sonner";
 type HelperBot = (typeof HELPER_BOTS)[number];
 export type HelperBotDialogMode = "start" | "running" | "finished";
 const BULLET_BOT_ID = 5;
-const BULLET_PER_ATTEMPT_BASE = BigInt(3000);
-const HUNDRED = BigInt(100);
 const CREDIT_SPEND_REDUCTION_PERCENT = 25;
 const PERK_HELPER_BOT_ALLOWED = {
   CRIME_SUCCESS_PERK_CATEGORY: 18,
@@ -193,8 +200,12 @@ export function HelperBotDetail({
   const signature = authData?.signature ?? null;
 
   const [botInfo, setBotInfo] = useState<HelperBotInfo | null>(initialBotInfo);
-  const [bulletBotPlusInfo, setBulletBotPlusInfo] = useState<BulletBotPlusInfo | null>(null);
-  const [bulletBotCostLoadError, setBulletBotCostLoadError] = useState<string | null>(null);
+  const [bulletPerk, setBulletPerk] = useState<BulletBotPerkInfo | null>(null);
+  const [bulletPerkLoadError, setBulletPerkLoadError] = useState<string | null>(null);
+  const [cashBalanceWei, setCashBalanceWei] = useState<bigint | null>(null);
+  const [cashAllowanceWei, setCashAllowanceWei] = useState<bigint | null>(null);
+  const [bulletCashInput, setBulletCashInput] = useState("");
+  const [bulletEndIntent, setBulletEndIntent] = useState<"pay" | "cancel" | null>(null);
   const inventoryReady = useMafiaUtilsScript("MafiaInventory") === "ready";
   const [availablePerkItems, setAvailablePerkItems] = useState<PerkInventoryItem[]>([]);
   const [selectedPerkIds, setSelectedPerkIds] = useState<number[]>([]);
@@ -231,27 +242,56 @@ export function HelperBotDetail({
     return () => clearInterval(interval);
   }, [fetchBotInfo]);
 
-  const fetchBulletBotCostInputs = useCallback(async () => {
+  const fetchIngameCashBalance = useCallback(async (): Promise<bigint | null> => {
+    if (!address || !publicClient || !authMessage || !signature) return null;
+    try {
+      const balanceResult = await publicClient.readContract({
+        address: addresses.ingameCurrency,
+        abi: INGAME_CURRENCY_ABI,
+        functionName: "balanceOfWithSignMsg",
+        args: [address, authMessage, signature],
+      });
+      return balanceResult as bigint;
+    } catch {
+      return null;
+    }
+  }, [address, publicClient, authMessage, signature, addresses.ingameCurrency]);
+
+  const fetchBulletBotInputs = useCallback(async () => {
     if (!isBulletDealerBot || !address || !publicClient) return;
     try {
-      setBulletBotCostLoadError(null);
-      const plusInfoResult = await publicClient.readContract({
+      const perkResult = await publicClient.readContract({
         address: addresses.helperbot,
         abi: HELPERBOT_CONTRACT_ABI,
-        functionName: "userBulletBotPlusInfo",
-        args: [address],
+        functionName: "userBotPerkInfo",
+        args: [BULLET_BOT_ID, address],
       });
-      setBulletBotPlusInfo(parseBulletBotPlusInfo(plusInfoResult));
+      setBulletPerk(parseBulletBotPerkInfo(perkResult));
+      setBulletPerkLoadError(null);
     } catch (e) {
       console.error(e);
-      setBulletBotPlusInfo(null);
-      setBulletBotCostLoadError("Unable to load Bullet Dealer cash requirement.");
+      setBulletPerk(null);
+      setBulletPerkLoadError("Unable to load Bullet Dealer reward details.");
     }
-  }, [isBulletDealerBot, address, publicClient, addresses.helperbot]);
+
+    try {
+      const allowanceResult = await publicClient.readContract({
+        address: addresses.ingameCurrency,
+        abi: INGAME_CURRENCY_ABI,
+        functionName: "allowances",
+        args: [address, addresses.helperbot],
+      });
+      setCashAllowanceWei(allowanceResult as bigint);
+    } catch {
+      setCashAllowanceWei(null);
+    }
+
+    setCashBalanceWei(await fetchIngameCashBalance());
+  }, [isBulletDealerBot, address, publicClient, addresses.helperbot, addresses.ingameCurrency, fetchIngameCashBalance]);
 
   useEffect(() => {
-    fetchBulletBotCostInputs();
-  }, [fetchBulletBotCostInputs]);
+    fetchBulletBotInputs();
+  }, [fetchBulletBotInputs]);
 
   const fetchAvailablePerks = useCallback(async () => {
     if (mode !== "start") {
@@ -298,21 +338,6 @@ export function HelperBotDetail({
   useEffect(() => {
     void fetchAvailablePerks();
   }, [fetchAvailablePerks]);
-
-  const fetchIngameCashBalance = useCallback(async (): Promise<bigint | null> => {
-    if (!address || !publicClient || !authMessage || !signature) return null;
-    try {
-      const balanceResult = await publicClient.readContract({
-        address: addresses.ingameCurrency,
-        abi: INGAME_CURRENCY_ABI,
-        functionName: "balanceOfWithSignMsg",
-        args: [address, authMessage, signature],
-      });
-      return balanceResult as bigint;
-    } catch {
-      return null;
-    }
-  }, [address, publicClient, authMessage, signature, addresses.ingameCurrency]);
 
   const isRunning = mode !== "start";
 
@@ -378,6 +403,7 @@ export function HelperBotDetail({
     setSelectedAttempts(bot.minAttempts);
     setInputMode("dropdown");
     setSelectedPerkIds([]);
+    setBulletCashInput("");
   }, [bot.id, bot.minAttempts]);
 
   useEffect(() => {
@@ -390,11 +416,11 @@ export function HelperBotDetail({
     onSuccess: () => {
       toast.success(`${bot.label} hired successfully`);
       fetchBotInfo();
-      fetchBulletBotCostInputs();
+      fetchBulletBotInputs();
       onCreditChange?.();
       window.setTimeout(() => {
         fetchBotInfo();
-        fetchBulletBotCostInputs();
+        fetchBulletBotInputs();
         onCreditChange?.();
       }, 3000);
     },
@@ -463,12 +489,12 @@ export function HelperBotDetail({
     onSuccess: () => {
       toast.success(`${bot.label} withdrawn successfully`);
       fetchBotInfo();
-      fetchBulletBotCostInputs();
+      fetchBulletBotInputs();
       onCreditChange?.();
       onFinished?.();
       window.setTimeout(() => {
         fetchBotInfo();
-        fetchBulletBotCostInputs();
+        fetchBulletBotInputs();
         onCreditChange?.();
       }, 3000);
     },
@@ -481,7 +507,142 @@ export function HelperBotDetail({
   const endConfirming = endTx.isConfirming;
   const endSuccess = endTx.isSuccess;
 
-  const handleEnd = async (bulletAccepting: boolean = true) => {
+  const maxBulletWei =
+    isBulletDealerBot && botInfo
+      ? maxBulletBotOutputWei(
+          botInfo.attemptCount,
+          botInfo.successRate,
+          bulletPerk?.bulletDoublePerk ?? false,
+        )
+      : BigInt(0);
+  const maxBulletCashWei = bulletBotCashForOutputWei(maxBulletWei);
+  const parsedBulletCashWei = parseBulletCashInput(bulletCashInput.trim());
+  const hasBulletCashInput = bulletCashInput.trim() !== "";
+  const bulletsForSpendWei =
+    parsedBulletCashWei === null ? BigInt(0) : bulletBotOutputForCashWei(parsedBulletCashWei, maxBulletWei);
+  const refundedCreditsWei =
+    isBulletDealerBot && botInfo && parsedBulletCashWei !== null
+      ? bulletBotRefundedCreditsWei(
+          parsedBulletCashWei,
+          maxBulletWei,
+          botInfo.attemptCount,
+          bot.credits,
+          bulletPerk?.creditCostReductionPerk ?? 0,
+        )
+      : BigInt(0);
+  const bulletCashAboveMax = parsedBulletCashWei !== null && parsedBulletCashWei > maxBulletCashWei;
+  const bulletCashAboveBalance =
+    parsedBulletCashWei !== null && cashBalanceWei !== null && parsedBulletCashWei > cashBalanceWei;
+  const bulletCashError = !hasBulletCashInput
+    ? ""
+    : parsedBulletCashWei === null
+      ? "Enter a cash amount with up to 2 decimals."
+      : parsedBulletCashWei <= BigInt(0)
+        ? "Enter an amount greater than zero."
+        : bulletCashAboveMax
+          ? `This bot can spend at most ${formatWeiDisplay(maxBulletCashWei, 2)} cash.`
+          : bulletCashAboveBalance
+            ? `Your cash balance is ${formatWeiDisplay(cashBalanceWei, 2)}.`
+            : "";
+  const bulletCashReady = hasBulletCashInput && bulletCashError === "" && parsedBulletCashWei !== null;
+  const needsBulletApproval =
+    bulletCashReady &&
+    parsedBulletCashWei !== null &&
+    parsedBulletCashWei > BigInt(0) &&
+    cashAllowanceWei !== null &&
+    cashAllowanceWei < parsedBulletCashWei;
+  const availableBulletCashWei =
+    cashBalanceWei === null
+      ? maxBulletCashWei
+      : cashBalanceWei < maxBulletCashWei
+        ? cashBalanceWei
+        : maxBulletCashWei;
+
+  const spendAfterApproveRef = useRef<bigint | null>(null);
+
+  const approveTx = useContractTransaction({
+    onSuccess: () => {
+      const cashWei = spendAfterApproveRef.current;
+      spendAfterApproveRef.current = null;
+      if (cashWei === null || !authMessage || !signature) return;
+      toast.success("Cash spend approved. Confirm the withdrawal.");
+      resetEnd();
+      writeEnd({
+        address: addresses.helperbot,
+        abi: HELPERBOT_CONTRACT_ABI,
+        functionName: bot.endFn,
+        args: [cashWei, authMessage, signature],
+        gas: BigInt(500_000),
+      });
+      void fetchBulletBotInputs();
+    },
+    onWriteError: () => {
+      spendAfterApproveRef.current = null;
+    },
+  });
+  const writeApprove = approveTx.write;
+  const resetApprove = approveTx.reset;
+  const approveError = approveTx.error;
+  const approveLoading = approveTx.isLoading;
+
+  const submitBulletEnd = async (cashWei: bigint) => {
+    resetEnd();
+    resetApprove();
+    setBulletEndIntent(cashWei > BigInt(0) ? "pay" : "cancel");
+    if (!authMessage || !signature) {
+      toast.error("Authentication required. Please sign in first.");
+      return;
+    }
+    if (cashWei > BigInt(0)) {
+      if (bulletPerk === null) {
+        toast.error("Bullet Dealer reward details are still loading.");
+        return;
+      }
+      if (maxBulletWei <= BigInt(0)) {
+        toast.error("This bot has no bullets to buy.");
+        return;
+      }
+      if (cashWei > maxBulletCashWei) {
+        toast.error(`This bot can spend at most ${formatWeiDisplay(maxBulletCashWei, 2)} cash.`);
+        return;
+      }
+      const balance = cashBalanceWei ?? (await fetchIngameCashBalance());
+      if (balance === null) {
+        toast.error("Could not verify in-game cash balance. Please try again.");
+        return;
+      }
+      if (balance < cashWei) {
+        toast.error(
+          `Insufficient in-game cash. Need ${formatWeiDisplay(cashWei, 2)}, have ${formatWeiDisplay(balance, 2)}.`,
+        );
+        return;
+      }
+      if (cashAllowanceWei === null) {
+        toast.error("Cash allowance is still loading. Please try again.");
+        return;
+      }
+      if (cashAllowanceWei < cashWei) {
+        spendAfterApproveRef.current = cashWei;
+        writeApprove({
+          address: addresses.ingameCurrency,
+          abi: INGAME_CURRENCY_ABI,
+          functionName: "approveInGameCurrency",
+          args: [addresses.helperbot, cashWei],
+        });
+        return;
+      }
+      toast.info(`Completing this bot will deduct ${formatWeiDisplay(cashWei, 2)} cash.`);
+    }
+    writeEnd({
+      address: addresses.helperbot,
+      abi: HELPERBOT_CONTRACT_ABI,
+      functionName: bot.endFn,
+      args: [cashWei, authMessage, signature],
+      gas: BigInt(500_000),
+    });
+  };
+
+  const handleEnd = async () => {
     resetEnd();
     if (bot.endType === "none") {
       writeEnd({
@@ -504,43 +665,18 @@ export function HelperBotDetail({
         gas: BigInt(500_000),
       });
     } else if (bot.endType === "bulletSigned") {
-      if (!authMessage || !signature) {
-        toast.error("Authentication required. Please sign in first.");
+      if (!bulletCashReady || parsedBulletCashWei === null) {
+        toast.error(bulletCashError || "Enter the cash amount to spend.");
         return;
       }
-      if (bulletAccepting && requiredBulletCashAmount === null) {
-        toast.error("Unable to load Bullet Dealer completion cash requirement.");
-        return;
-      }
-      if (bulletAccepting && requiredBulletCashAmount !== null && requiredBulletCashAmount > BigInt(0)) {
-        const ingameCashBalance = await fetchIngameCashBalance();
-        if (ingameCashBalance === null) {
-          toast.error("Could not verify in-game cash balance. Please try again.");
-          return;
-        }
-
-        if (ingameCashBalance < requiredBulletCashAmount) {
-          toast.error(
-            `Insufficient in-game cash. Need ${requiredBulletCashAmount.toLocaleString()}, have ${ingameCashBalance.toLocaleString()}.`
-          );
-          return;
-        }
-        toast.info(`Completing this bot will deduct ${requiredBulletCashAmount.toLocaleString()} cash.`);
-      }
-      writeEnd({
-        address: addresses.helperbot,
-        abi: HELPERBOT_CONTRACT_ABI,
-        functionName: bot.endFn,
-        args: [bulletAccepting, authMessage, signature],
-        gas: BigInt(500_000),
-      });
+      await submitBulletEnd(parsedBulletCashWei);
     }
   };
 
   const startLoading = startPending || startConfirming;
-  const endLoading = endPending || endConfirming;
+  const endLoading = endPending || endConfirming || approveLoading;
   const isLoading = startLoading || endLoading;
-  const error = startError || endError;
+  const error = startError || endError || approveError;
   const txHash = startHash || endHash;
   const txSuccess = startSuccess || endSuccess;
 
@@ -558,26 +694,13 @@ export function HelperBotDetail({
   const totalDuration = endTimeSec > startTimeSec ? endTimeSec - startTimeSec : 0;
   const elapsed = now > startTimeSec ? now - startTimeSec : 0;
   const progressPct = totalDuration > 0 ? Math.min(100, (elapsed / totalDuration) * 100) : 0;
-  const bulletDoublePerk = false;
-
-  const generatedBulletAmount =
-    isBulletDealerBot && botInfo && bulletBotPlusInfo
-      ? BigInt(botInfo.attemptCount) *
-      bulletBotPlusInfo.amountModifiedPercent / BigInt(100) *
-      BULLET_PER_ATTEMPT_BASE *
-      (bulletDoublePerk ? BigInt(2) : BigInt(1))
-      : null;
-
-  const requiredBulletCashAmount =
-    isBulletDealerBot && generatedBulletAmount !== null && bulletBotPlusInfo
-      ? (BigInt(HELPER_BOT_BULLET_PRICE) * generatedBulletAmount * bulletBotPlusInfo.priceModifiedPercent) / HUNDRED
-      : null;
-
-  const missingBulletCashInputs =
-    isBulletDealerBot &&
-    isRunning &&
-    canWithdraw &&
-    bulletBotPlusInfo === null;
+  const missingBulletRewardInputs =
+    isBulletDealerBot && isRunning && canWithdraw && bulletPerk === null;
+  const bulletSpendReady =
+    bulletCashReady &&
+    bulletPerk !== null &&
+    cashBalanceWei !== null &&
+    cashAllowanceWei !== null;
 
   return (
     <div
@@ -744,27 +867,26 @@ export function HelperBotDetail({
           {isBulletDealerBot && (
             <div className="mt-2 rounded-md border border-chain-accent/20 bg-chain-accent/5 px-2.5 py-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Generated Bullets</span>
+                <span className="text-xs text-muted-foreground">Max bullets</span>
                 <span className="text-xs font-mono text-foreground">
-                  {generatedBulletAmount !== null ? generatedBulletAmount.toLocaleString() : "-"}
+                  {bulletPerk ? formatWeiDisplay(maxBulletWei, 2) : "-"}
                 </span>
               </div>
               <div className="mt-1 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Cash to complete</span>
+                <span className="text-xs text-muted-foreground">Max cash</span>
                 <span className="text-xs font-mono font-semibold text-chain-accent">
-                  {requiredBulletCashAmount !== null ? requiredBulletCashAmount.toLocaleString() : "-"}
+                  {bulletPerk ? formatWeiDisplay(maxBulletCashWei, 2) : "-"}
                 </span>
               </div>
-              {bulletBotPlusInfo && (
-                <div className="mt-1 flex items-center justify-between">
-                  <span className="text-[10px] text-muted-foreground">Price modifier</span>
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    {bulletBotPlusInfo.priceModifiedPercent.toLocaleString()}%
-                  </span>
-                </div>
-              )}
-              {bulletBotCostLoadError && (
-                <p className="mt-1 text-[10px] text-red-400">{bulletBotCostLoadError}</p>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-[10px] text-muted-foreground">Bullet price</span>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {HELPER_BOT_BULLET_PRICE.toLocaleString()} cash
+                  {bulletPerk?.bulletDoublePerk ? " · 2x purchase" : ""}
+                </span>
+              </div>
+              {bulletPerkLoadError && (
+                <p className="mt-1 text-[10px] text-red-400">{bulletPerkLoadError}</p>
               )}
             </div>
           )}
@@ -1016,49 +1138,101 @@ export function HelperBotDetail({
         </button>
       )}
       {mode === "finished" && canWithdraw && isBulletDealerBot && (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            onClick={() => handleEnd(false)}
-            disabled={!isConnected || endLoading}
-            className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200",
-              "border border-border bg-secondary text-foreground hover:bg-secondary/80 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-            )}
-          >
-            {endLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{endPending ? "Confirm in wallet..." : "Cancelling..."}</span>
-              </>
-            ) : (
-              <span>Cancel Bot</span>
-            )}
-          </button>
-          <button
-            onClick={() => handleEnd(true)}
-            disabled={!isConnected || endLoading || missingBulletCashInputs}
-            className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200",
-              "bg-green-500 text-white hover:bg-green-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-            )}
-          >
-            {endLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{endPending ? "Confirm in wallet..." : "Completing..."}</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Complete & Pay Cash</span>
-              </>
-            )}
-          </button>
+        <div className="space-y-3">
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <label htmlFor="bullet-bot-cash" className="text-xs text-muted-foreground">
+                Cash to spend
+              </label>
+              <span className="text-[10px] text-muted-foreground">
+                Balance {formatWeiDisplay(cashBalanceWei, 2)}
+              </span>
+            </div>
+            <input
+              id="bullet-bot-cash"
+              inputMode="decimal"
+              value={bulletCashInput}
+              onChange={(event) => setBulletCashInput(event.target.value)}
+              placeholder="0.00"
+              className="w-full rounded-lg border border-border bg-background/50 px-3 py-2 text-sm font-mono text-foreground outline-none focus:border-primary"
+            />
+            <p className={cn("mt-1 text-[10px]", bulletCashError ? "text-red-400" : "text-muted-foreground")}>
+              {bulletCashError || "Bullets scale with the cash you pay. Cancel returns the credits and buys nothing."}
+            </p>
+            <div className="mt-2 grid grid-cols-4 gap-1.5">
+              {[25, 50, 75, 100].map((percent) => (
+                <button
+                  key={percent}
+                  type="button"
+                  disabled={availableBulletCashWei <= BigInt(0) || endLoading}
+                  onClick={() => setBulletCashInput(formatBulletCashInput(percentOfCashWei(availableBulletCashWei, percent)))}
+                  className="rounded-md border border-border bg-background/50 px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {percent === 100 ? "Max" : `${percent}%`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-md border border-border/60 bg-background/40 px-3 py-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Bullets you receive</span>
+              <span className="text-xs font-mono font-semibold text-foreground">
+                {bulletCashReady ? formatWeiDisplay(bulletsForSpendWei, 5) : "0"}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Credits returned</span>
+              <span className="text-xs font-mono text-foreground">
+                {bulletCashReady ? formatWeiDisplay(refundedCreditsWei, 2) : "—"}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              onClick={() => submitBulletEnd(BigInt(0))}
+              disabled={!isConnected || endLoading}
+              className={cn(
+                "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200",
+                "border border-border bg-secondary text-foreground hover:bg-secondary/80 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              )}
+            >
+              {endLoading && bulletEndIntent === "cancel" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{endPending ? "Confirm in wallet..." : "Cancelling..."}</span>
+                </>
+              ) : (
+                <span>Cancel Bot</span>
+              )}
+            </button>
+            <button
+              onClick={() => handleEnd()}
+              disabled={!isConnected || endLoading || !bulletSpendReady}
+              className={cn(
+                "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200",
+                "bg-green-500 text-white hover:bg-green-600 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              )}
+            >
+              {endLoading && bulletEndIntent === "pay" ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{approveLoading ? "Approving cash..." : endPending ? "Confirm in wallet..." : "Completing..."}</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>{needsBulletApproval ? "Approve & Pay" : "Complete & Pay"}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
-      {mode === "finished" && canWithdraw && missingBulletCashInputs && (
+      {mode === "finished" && canWithdraw && missingBulletRewardInputs && (
         <p className="text-[11px] text-red-400">
-          Unable to load Bullet Dealer cash requirement. Please refresh and try again.
+          {bulletPerkLoadError ?? "Loading Bullet Dealer reward details..."}
         </p>
       )}
     </div>

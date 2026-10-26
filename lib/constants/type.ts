@@ -12,6 +12,11 @@ export type BulletBotPlusInfo = {
     priceModifiedPercent: bigint;
 };
 
+export type BulletBotPerkInfo = {
+    creditCostReductionPerk: number;
+    bulletDoublePerk: boolean;
+};
+
 // ========== Bodyguard Info ==========
 export type TrainingSlotType = {
     oldItemId: number;

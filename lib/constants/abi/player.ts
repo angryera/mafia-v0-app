@@ -46,6 +46,20 @@ export const USER_PROFILE_CONTRACT_ABI: Abi = [
         outputs: [{ name: "", type: "bool", internalType: "bool" }],
         stateMutability: "view",
     },
+    {
+        type: "function",
+        name: "hasProfile",
+        inputs: [{ name: "user", type: "address", internalType: "address" }],
+        outputs: [{ name: "", type: "bool", internalType: "bool" }],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "isValidUserName",
+        inputs: [{ name: "s", type: "string", internalType: "string" }],
+        outputs: [{ name: "", type: "bool", internalType: "bool" }],
+        stateMutability: "view",
+    },
 ] as const;
 
 // ========== Rebirth Contract ==========

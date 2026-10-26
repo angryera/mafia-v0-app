@@ -138,17 +138,8 @@ export function HelperBotCard({ bot, creditBalance, onCreditChange }: { bot: Hel
         gas: BigInt(500_000),
       });
     } else if (bot.endType === "bulletSigned") {
-      if (!authMessage || !signature) {
-        toast.error("Authentication required. Please sign in first.");
-        return;
-      }
-      end.write({
-        address: addresses.helperbot,
-        abi: HELPERBOT_CONTRACT_ABI,
-        functionName: bot.endFn,
-        args: [true, authMessage, signature],
-        gas: BigInt(500_000),
-      });
+      toast.error("Open the Bullet Dealer bot and choose how much cash to spend.");
+      return;
     }
   };
 

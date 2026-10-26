@@ -1,13 +1,10 @@
-"use client";
-
 import { PageWrapper } from "@/components/page-wrapper";
-import { CreateProfileAction } from "@/components/create-profile-action";
-import { CreateProfileInfo } from "@/components/create-profile-info";
+import { ProfileUnboxPage } from "@/components/profile-unbox/profile-unbox-page";
 
 export default function CreateProfilePage() {
   return (
-    <PageWrapper sidebar={<CreateProfileInfo />}>
-      <CreateProfileAction />
+    <PageWrapper hideHeader fullWidth>
+      <ProfileUnboxPage />
     </PageWrapper>
   );
 }

@@ -119,12 +119,12 @@ export const HELPERBOT_CONTRACT_ABI: Abi = [
         outputs: [],
         stateMutability: "nonpayable",
     },
-    // End bullet bot - takes (bool isAccepting, string message, bytes signature)
+    // End bullet bot - takes (uint256 cashAmount, string message, bytes signature)
     {
         type: "function",
         name: "endBulletBot",
         inputs: [
-            { name: "isAccepting", type: "bool", internalType: "bool" },
+            { name: "cashAmount", type: "uint256", internalType: "uint256" },
             { name: "message", type: "string", internalType: "string" },
             { name: "signature", type: "bytes", internalType: "bytes" },
         ],
@@ -236,6 +236,23 @@ export const HELPERBOT_CONTRACT_ABI: Abi = [
                     { name: "isRunning", type: "bool", internalType: "bool" },
                 ],
             },
+        ],
+        stateMutability: "view",
+    },
+    {
+        type: "function",
+        name: "userBotPerkInfo",
+        inputs: [
+            { name: "botType", type: "uint8", internalType: "uint8" },
+            { name: "user", type: "address", internalType: "address" },
+        ],
+        outputs: [
+            { name: "successRatePerk", type: "uint256", internalType: "uint256" },
+            { name: "cooldownReductionPerk", type: "uint256", internalType: "uint256" },
+            { name: "cashRewardPerk", type: "uint256", internalType: "uint256" },
+            { name: "creditCostReductionPerk", type: "uint256", internalType: "uint256" },
+            { name: "bulletDoublePerk", type: "uint256", internalType: "uint256" },
+            { name: "perkDuration", type: "uint256", internalType: "uint256" },
         ],
         stateMutability: "view",
     },

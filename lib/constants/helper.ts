@@ -1,7 +1,7 @@
 import { formatEther } from "viem";
 import { EQUIPMENT_SLOTS, JAIL_BUYOUT_CASH_PER_MINUTE, OC_REWARD_CASH_TYPE_ID, RANK_NAMES, TravelCities } from "./const";
 import { BODYGUARD_INFO, CRATE_ITEM_CATEGORIES, CrateItemCategory, ItemCategory, LEGACY_BODYGUARD_TYPES } from "./const";
-import { BulletBotPlusInfo, HelperBotInfo } from "./type";
+import { BulletBotPerkInfo, BulletBotPlusInfo, HelperBotInfo } from "./type";
 
 // Fast lookup by categoryId
 const _categoryMap = new Map<number, CrateItemCategory>();
@@ -44,6 +44,15 @@ export const parseBulletBotPlusInfo = (data: any): BulletBotPlusInfo => {
     return {
         amountModifiedPercent: BigInt(data.amountModifiedPercent),
         priceModifiedPercent: BigInt(data.priceModifiedPercent),
+    };
+};
+
+export const parseBulletBotPerkInfo = (data: any): BulletBotPerkInfo => {
+    const creditCostReductionPerk = Number(data.creditCostReductionPerk ?? data[3] ?? 0);
+    const bulletDoublePerk = Number(data.bulletDoublePerk ?? data[4] ?? 0);
+    return {
+        creditCostReductionPerk: Number.isFinite(creditCostReductionPerk) ? creditCostReductionPerk : 0,
+        bulletDoublePerk: bulletDoublePerk !== 0,
     };
 };
 

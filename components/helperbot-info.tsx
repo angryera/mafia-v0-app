@@ -38,7 +38,7 @@ export function HelperBotInfo() {
               {"start{Bot}(uint256, uint256[])"}
             </p>
             <p className="font-mono text-xs text-primary">
-              {"end{Bot}() or end{Bot}(string, bytes)"}
+              {"end{Bot}(), end{Bot}(string, bytes), or endBulletBot(cashAmount, string, bytes)"}
             </p>
             <p className="font-mono text-xs text-muted-foreground">
               {"user{Bot}Info(address)"}

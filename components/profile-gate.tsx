@@ -24,9 +24,9 @@ function isCreateProfileRoute(pathname: string) {
 }
 
 /**
- * When the wallet is connected and the auth signature is available, ensures
- * users without an on-chain profile are sent to create-profile, and users
- * with a profile are not left on the create-profile screen.
+ * When the wallet is connected and the auth signature is available, users
+ * without an on-chain profile are sent to create-profile. Players who already
+ * have a profile stay on that page so they can open a paid upgrade box.
  */
 export function ProfileGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -58,10 +58,6 @@ export function ProfileGate({ children }: { children: ReactNode }) {
 
     if (!hasProfile && !onCreateProfile) {
       router.replace(CREATE_PROFILE_PATH);
-      return;
-    }
-    if (hasProfile && onCreateProfile) {
-      router.replace("/");
     }
   }, [
     queryEnabled,

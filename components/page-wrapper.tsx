@@ -415,10 +415,10 @@ const TAB_CONFIG: Record<
     contractShort: "0x7274...Ba09",
   },
   "create-profile": {
-    title: "Create Profile",
+    title: "Profile unboxing",
     description:
-      "Create your player profile to start playing. Choose a unique name, select your gender and country, and optionally enter a referral address.",
-    codeSample: "createProfile(name, swapTokenId, referrer, gender, country, imageId)",
+      "Create a player profile or open a paid upgrade box. Free creation is one profile transaction. Paid tiers read their prices, reward ranges, and payment tokens from the contracts.",
+    codeSample: "createProfile(...) / requestUnbox(...) / openUnbox()",
     contractAddress: "0xa08D627E071cB4b53C6D0611d77dbCB659902AA4",
     contractShort: "0xa08D...2AA4",
   },
