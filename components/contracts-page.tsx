@@ -114,6 +114,7 @@ const CONTRACT_REGISTRY = [
     section: "Infrastructure",
     contracts: [
       { key: "userProfile", label: "User Profile" },
+      { key: "profileUnbox", label: "Profile Unbox" },
       { key: "swapRouter", label: "Swap Router" },
       { key: "marketingDao", label: "Marketing DAO" },
       { key: "fts", label: "Founders Shares" },
