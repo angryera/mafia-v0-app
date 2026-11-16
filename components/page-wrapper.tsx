@@ -425,8 +425,8 @@ const TAB_CONFIG: Record<
   "backfire-settings": {
     title: "Backfire settings",
     description:
-      "Configure how your account automatically returns fire when another player attacks you. Settings will be stored on-chain once the contract is deployed.",
-    codeSample: "setBackfireSettings(mode, rangeMin, rangeMax)",
+      "Configure how your account automatically returns fire when another player attacks you. Your policy is stored on-chain.",
+    codeSample: "getBackfireSetting(...) / setBackfire(policy, fixedAmount)",
     contractAddress: "",
     contractShort: "",
   },
@@ -524,9 +524,10 @@ interface PageWrapperProps {
   sidebar?: React.ReactNode;
   fullWidth?: boolean;
   hideHeader?: boolean;
+  hideFooter?: boolean;
 }
 
-export function PageWrapper({ children, sidebar, fullWidth = false, hideHeader = false }: PageWrapperProps) {
+export function PageWrapper({ children, sidebar, fullWidth = false, hideHeader = false, hideFooter = false }: PageWrapperProps) {
   const pathname = usePathname();
   const activeTab = getTabFromPath(pathname);
   const { chainConfig } = useChain();
@@ -576,7 +577,7 @@ export function PageWrapper({ children, sidebar, fullWidth = false, hideHeader =
       </div>
 
       {/* Footer */}
-      {!deadMinimalLayout && (
+      {!deadMinimalLayout && !hideFooter && (
       <footer className="border-t border-border py-6 mt-8">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">
           <p className="text-center text-xs text-muted-foreground">

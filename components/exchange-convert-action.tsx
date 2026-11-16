@@ -1,8 +1,8 @@
 "use client";
 
 import { getErrorMessage } from "@/lib/format";
-import React, { useState, useEffect, useCallback } from "react";
-import { useAccount, usePublicClient } from "wagmi";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { useChain, useChainAddresses, useChainExplorer } from "@/components/chain-provider";
 import { useContractTransaction } from "@/hooks/use-contract-transaction";
 import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
@@ -10,9 +10,9 @@ import { useAuth } from "@/components/auth-provider";
 import {
   EXCHANGE_ADDRESSES,
   DEPOSIT_ADDRESSES,
-  MAFIA_PAIR_ADDRESSES,
   EXCHANGE_CONTRACT_ABI,
   DEPOSIT_CONTRACT_ABI,
+  SWAP_ROUTER_ABI,
   CASH_VALUES,
   SHOPITEM_VALUES,
   CREDIT_USD_VALUES,
@@ -178,8 +178,6 @@ export function ExchangeConvertAction() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [mafiaPrice, setMafiaPrice] = useState<number>(0);
-  const [priceLoading, setPriceLoading] = useState(false);
   const [hasConvertPerk, setHasConvertPerk] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<number>>(
     new Set([0, 3, 6, 13])
@@ -203,30 +201,34 @@ export function ExchangeConvertAction() {
 
   const isWorking = convertTx.isLoading;
 
-  // ── Fetch MAFIA price from Dexscreener ────────────────────────
-  const fetchMafiaPrice = useCallback(async () => {
-    setPriceLoading(true);
-    try {
-      const pairAddress = MAFIA_PAIR_ADDRESSES[activeChain as ChainId];
-      const network = activeChain === "bnb" ? "bsc" : "pulse";
-      const res = await fetch(
-        `https://api.dexscreener.com/latest/dex/pairs/${network}/${pairAddress}`
-      );
-      const data = await res.json();
-      if (data.pair?.priceUsd) {
-        setMafiaPrice(parseFloat(data.pair.priceUsd));
-      }
-    } catch (e) {
-      console.error("Failed to fetch MAFIA price:", e);
-    } finally {
-      setPriceLoading(false);
-    }
-  }, [activeChain]);
+  // Read MAFIA's USD quote directly from the on-chain swap router.
+  const { data: swapData, isPending: priceLoading } = useReadContract({
+    address: addresses.swapRouter,
+    abi: SWAP_ROUTER_ABI,
+    functionName: "getSwapTokens",
+    query: { enabled: isConnected, refetchInterval: 30_000 },
+  });
+
+  const mafiaPrice = useMemo((): number | null => {
+    if (!swapData) return null;
+    const [tokens, prices] = swapData as unknown as readonly [
+      readonly { tokenAddress: `0x${string}` }[],
+      readonly bigint[],
+    ];
+    if (!Array.isArray(tokens) || !Array.isArray(prices)) return null;
+    const tokenIndex = tokens.findIndex(
+      (token) => token.tokenAddress.toLowerCase() === addresses.mafia.toLowerCase(),
+    );
+    const rawPrice = prices[tokenIndex];
+    if (tokenIndex < 0 || typeof rawPrice !== "bigint" || rawPrice <= 0n) return null;
+    const price = Number(formatEther(rawPrice));
+    return Number.isFinite(price) && price > 0 ? price : null;
+  }, [swapData, addresses.mafia]);
 
   // ── getCashWithEstimateSwap helper ────────────────────────────
   const getCashWithEstimateSwap = useCallback(
-    async (mafiaAmount: number): Promise<number> => {
-      if (!publicClient || mafiaAmount <= 0) return 0;
+    async (mafiaAmount: number): Promise<number | null> => {
+      if (!publicClient || !Number.isFinite(mafiaAmount) || mafiaAmount <= 0) return null;
       try {
         const depositAddress = DEPOSIT_ADDRESSES[activeChain as ChainId];
         const amountWei = parseEther(mafiaAmount.toString());
@@ -236,10 +238,11 @@ export function ExchangeConvertAction() {
           functionName: "estimateSwap",
           args: [amountWei],
         });
-        return Number(formatEther(result as bigint));
+        const cash = Number(formatEther(result as bigint));
+        return Number.isFinite(cash) ? cash : null;
       } catch (e) {
         console.error("estimateSwap failed:", e);
-        return 0;
+        return null;
       }
     },
     [publicClient, activeChain]
@@ -334,73 +337,60 @@ export function ExchangeConvertAction() {
     if (scriptReady && isConnected && address) {
       setLoading(true);
       fetchItems();
-      fetchMafiaPrice();
     }
-  }, [scriptReady, isConnected, address, fetchItems, fetchMafiaPrice]);
+  }, [scriptReady, isConnected, address, fetchItems]);
 
   // ── Calculate estimated cash ──────────────────────────────────
-  const [estimatedCash, setEstimatedCash] = useState(0);
-  const [estimatedUsdCash, setEstimatedUsdCash] = useState(0);
-  const [volumeBonus, setVolumeBonus] = useState(0);
+  const { baseCash, usdValue } = useMemo(() => {
+    let baseCash = 0;
+    let usdValue = 0;
+    for (const item of items) {
+      if (!selectedIds.has(item.itemId)) continue;
+      if (item.categoryId === 0) baseCash += CASH_VALUES[item.typeId] ?? 0;
+      else if (item.categoryId === 3) baseCash += SHOPITEM_VALUES[item.typeId] ?? 0;
+      else if (item.categoryId === 6) usdValue += CREDIT_USD_VALUES[item.typeId] ?? 0;
+      else if (item.categoryId === 13 && item.rarity) {
+        usdValue += LANDSLOT_USD_VALUES[item.rarity] ?? 0;
+      }
+    }
+    return { baseCash, usdValue };
+  }, [items, selectedIds]);
+
+  const [swapEstimate, setSwapEstimate] = useState<{
+    key: string;
+    cashFor500Usd: number | null;
+  } | null>(null);
+  const quoteKey = `${activeChain}:${mafiaPrice ?? "unavailable"}`;
+  const needsUsdQuote = usdValue > 0;
 
   useEffect(() => {
-    const calculateEstimate = async () => {
-      let totalCash = 0;
-      let usd = 0;
+    if (!needsUsdQuote || mafiaPrice === null) return;
+    let current = true;
+    const mafiaAmount = (500 / mafiaPrice) * (1 - MAFIA_BUY_FEE / 100);
+    void getCashWithEstimateSwap(mafiaAmount).then((cashFor500Usd) => {
+      if (current) setSwapEstimate({ key: quoteKey, cashFor500Usd });
+    });
+    return () => { current = false; };
+  }, [needsUsdQuote, mafiaPrice, quoteKey, getCashWithEstimateSwap]);
 
-      const selectedItems = items.filter((item) => selectedIds.has(item.itemId));
-
-      for (const item of selectedItems) {
-        // A) CASH (categoryId = 0)
-        if (item.categoryId === 0) {
-          totalCash += CASH_VALUES[item.typeId] ?? 0;
-        }
-        // B) SHOPITEM (categoryId = 3)
-        else if (item.categoryId === 3) {
-          totalCash += SHOPITEM_VALUES[item.typeId] ?? 0;
-        }
-        // C) CREDIT (categoryId = 6)
-        else if (item.categoryId === 6) {
-          usd += CREDIT_USD_VALUES[item.typeId] ?? 0;
-        }
-        // D) LANDSLOT (categoryId = 13)
-        else if (item.categoryId === 13 && item.rarity) {
-          usd += LANDSLOT_USD_VALUES[item.rarity] ?? 0;
-        }
-      }
-
-      // USD -> cash conversion
-      let estimatedCashFromUSD = 0;
-      if (usd > 0 && mafiaPrice > 0) {
-        const mafiaAmount = (500 / mafiaPrice) * (1 - MAFIA_BUY_FEE / 100);
-        const estimatedCashFor500USD = await getCashWithEstimateSwap(mafiaAmount);
-        estimatedCashFromUSD = (usd / 500) * estimatedCashFor500USD;
-        totalCash += estimatedCashFromUSD;
-      }
-
-      setEstimatedUsdCash(estimatedCashFromUSD);
-
-      // Apply perk multiplier
-      if (hasConvertPerk) {
-        totalCash = totalCash * 1.2;
-      }
-
-      // Calculate volume bonus
-      let bonus = 0;
-      if (totalCash >= 100_000_000) {
-        bonus = totalCash * 0.08;
-      } else if (totalCash >= 50_000_000) {
-        bonus = totalCash * 0.05;
-      } else if (totalCash >= 15_000_000) {
-        bonus = totalCash * 0.03;
-      }
-
-      setEstimatedCash(totalCash);
-      setVolumeBonus(bonus);
-    };
-
-    calculateEstimate();
-  }, [selectedIds, items, mafiaPrice, hasConvertPerk, getCashWithEstimateSwap]);
+  const matchingEstimate = swapEstimate?.key === quoteKey ? swapEstimate.cashFor500Usd : null;
+  const estimateLoading = usdValue > 0 && (
+    (mafiaPrice === null && priceLoading) ||
+    (mafiaPrice !== null && swapEstimate?.key !== quoteKey)
+  );
+  const estimateUnavailable = usdValue > 0 && !estimateLoading && (
+    mafiaPrice === null || matchingEstimate === null
+  );
+  const estimateReady = !estimateLoading && !estimateUnavailable;
+  const estimatedUsdCash = usdValue > 0 && matchingEstimate !== null
+    ? (usdValue / 500) * matchingEstimate
+    : 0;
+  const estimatedCash = (baseCash + estimatedUsdCash) * (hasConvertPerk ? 1.2 : 1);
+  const volumeBonus = !estimateReady ? 0
+    : estimatedCash >= 100_000_000 ? estimatedCash * 0.08
+      : estimatedCash >= 50_000_000 ? estimatedCash * 0.05
+        : estimatedCash >= 15_000_000 ? estimatedCash * 0.03
+          : 0;
 
   // ── Selection handlers ────────────────────────────────────────
   const toggleSelect = (itemId: number) => {
@@ -545,14 +535,17 @@ export function ExchangeConvertAction() {
       <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
         <TrendingUp className="h-5 w-5 shrink-0 text-primary" />
         <div className="flex flex-1 items-center justify-between">
-          <span className="text-sm text-muted-foreground">MAFIA Price</span>
+          <div>
+            <span className="text-sm text-muted-foreground">MAFIA Price</span>
+            <p className="text-xs text-muted-foreground">On-chain SwapRouter quote</p>
+          </div>
           <span className="text-sm font-semibold text-foreground">
             {priceLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
-            ) : mafiaPrice > 0 ? (
+            ) : mafiaPrice !== null ? (
               `$${mafiaPrice.toFixed(6)}`
             ) : (
-              "N/A"
+              "Unavailable"
             )}
           </span>
         </div>
@@ -729,7 +722,7 @@ export function ExchangeConvertAction() {
             <div>
               <h3 className="text-sm font-semibold text-foreground">Estimated Output</h3>
               <p className="text-xs text-muted-foreground">
-                Based on current MAFIA price and market conditions
+                Based on the current on-chain MAFIA price and swap estimate
               </p>
             </div>
           </div>
@@ -738,17 +731,25 @@ export function ExchangeConvertAction() {
             <div className="flex items-center justify-between rounded-lg bg-background/50 px-3 py-2.5">
               <span className="text-sm text-muted-foreground">Base Cash</span>
               <span className="text-sm font-semibold text-foreground">
-                ${(estimatedCash - estimatedUsdCash * (hasConvertPerk ? 1.2 : 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                ${(baseCash * (hasConvertPerk ? 1.2 : 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </span>
             </div>
 
-            {estimatedUsdCash > 0 && (
+            {usdValue > 0 && (
               <div className="flex items-center justify-between rounded-lg bg-background/50 px-3 py-2.5">
                 <span className="text-sm text-muted-foreground">From Credits/Slots</span>
                 <span className="text-sm font-semibold text-foreground">
-                  +${(estimatedUsdCash * (hasConvertPerk ? 1.2 : 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  {estimateLoading ? "Calculating..." : estimateUnavailable
+                    ? "Unavailable"
+                    : `+$${(estimatedUsdCash * (hasConvertPerk ? 1.2 : 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                 </span>
               </div>
+            )}
+
+            {estimateUnavailable && (
+              <p className="text-xs text-amber-400">
+                The on-chain price or swap estimate is unavailable. The final credit/slot payout is set by the contract.
+              </p>
             )}
 
             {hasConvertPerk && (
@@ -777,7 +778,9 @@ export function ExchangeConvertAction() {
             <div className="mt-2 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
               <span className="text-base font-semibold text-foreground">Total Estimated</span>
               <span className="text-lg font-bold text-primary">
-                ${(estimatedCash + volumeBonus).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                {estimateLoading ? "Calculating..." : estimateUnavailable
+                  ? "Unavailable"
+                  : `$${(estimatedCash + volumeBonus).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
               </span>
             </div>
           </div>

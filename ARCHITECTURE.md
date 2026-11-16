@@ -7,25 +7,17 @@ must be read from and written to those contracts through Wagmi/Viem.
 
 - Do not add an application backend, database, API route, server action, or
   hosted persistence service for game state.
+- Do not call the Mafia backend API from this IPFS app, including for
+  display-only game history. Read game records from chain RPCs and events; when
+  a contract does not expose historical details, show that limitation in the UI.
 - Derive UI state from contract reads, transaction receipts, and contract
   events. Local React state may hold temporary presentation state only.
 - Browser storage must not become an authoritative source for player or game
   data.
-- External HTTP APIs may be used only for non-authoritative display data and
-  must be isolated and clearly documented. Prefer an on-chain read whenever the
-  value is available from a contract.
+- Do not add runtime HTTP API dependencies for game or display data. Chain RPCs
+  and static media URLs are allowed.
 - Contract addresses, ABIs, chain configuration, and numeric conversions should
   stay centralized under `lib/` rather than being duplicated in page modules.
-
-## Current exceptions to remove
-
-1. `lib/backfireContract.ts` is a temporary browser-storage mock because its
-   contract is not deployed. It must be replaced by contract reads and writes;
-   do not extend the mock to other features.
-2. `components/exchange-convert-action.tsx` reads a display price from
-   Dexscreener. Conversion amounts themselves are obtained from the deposit
-   contract's `estimateSwap` view. Replace the display-price request with a
-   contract/oracle read when that interface is available.
 
 ## Module boundaries
 

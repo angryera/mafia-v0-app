@@ -31,7 +31,6 @@ const CONTRACT_REGISTRY = [
       { key: "rankStake", label: "Rank Activation" },
       { key: "bodyguardTraining", label: "Bodyguard Training" },
       { key: "equipment", label: "Equipment" },
-      { key: "kill", label: "Kill" },
       { key: "killInitiator", label: "Kill Initiator" },
       { key: "killRegistry", label: "Kill Registry" },
       { key: "killLootLens", label: "Kill Loot Lens" },
@@ -71,6 +70,7 @@ const CONTRACT_REGISTRY = [
       { key: "buyCredit", label: "Buy Credits" },
       { key: "buyPerkbox", label: "Buy Perk Boxes" },
       { key: "buyKeys", label: "Buy Keys" },
+      { key: "perkBoxClaim", label: "Perk Box Claim" },
       { key: "inventory", label: "Inventory (Open Crate)" },
       { key: "perkOpener", label: "Perk Opener (Open Perk Box)" },
       { key: "playerSubscription", label: "Player Subscription" },
@@ -87,6 +87,8 @@ const CONTRACT_REGISTRY = [
       { key: "rankXp", label: "Rank XP" },
       { key: "raceXp", label: "Race XP" },
       { key: "ogCrate", label: "OG Crate (ERC1155 keys)" },
+      { key: "ogNft", label: "OG NFT" },
+      { key: "ogPremium", label: "OG Premium" },
       { key: "mafia", label: "MAFIA" },
     ],
   },
@@ -95,7 +97,16 @@ const CONTRACT_REGISTRY = [
     contracts: [
       { key: "mafiaFamily", label: "Family" },
       { key: "familyGameCashBank", label: "Family Cash Bank" },
+      { key: "familyBank", label: "Family Bank" },
       { key: "familyShareStake", label: "Family Share Stake" },
+    ],
+  },
+  {
+    section: "Treasury",
+    contracts: [
+      { key: "vault", label: "Vault" },
+      { key: "vault1", label: "Vault 1" },
+      { key: "vaultSplitter", label: "Vault Splitter" },
     ],
   },
   {
@@ -114,12 +125,20 @@ const CONTRACT_REGISTRY = [
     ],
   },
   {
+    section: "Governance",
+    contracts: [
+      { key: "dao", label: "DAO" },
+      { key: "marketingDao", label: "Marketing DAO Proposals" },
+    ],
+  },
+  {
     section: "Infrastructure",
     contracts: [
       { key: "userProfile", label: "User Profile" },
       { key: "profileUnbox", label: "Profile Unbox" },
       { key: "swapRouter", label: "Swap Router" },
-      { key: "marketingDao", label: "Marketing DAO" },
+      { key: "perkManager", label: "Perk Manager" },
+      { key: "giManager", label: "GI Manager" },
       { key: "fts", label: "Founders Shares" },
       { key: "ftsMarket", label: "Founders Market" },
       { key: "ftsSubscription", label: "Founders Subscription" },
@@ -237,7 +256,7 @@ export function ContractsPage() {
             Contract Addresses
           </h2>
           <p className="text-sm text-muted-foreground">
-            All deployed contracts on {chainConfig.label}
+            Contracts on {chainConfig.label}, including those not yet deployed
           </p>
         </div>
       </div>

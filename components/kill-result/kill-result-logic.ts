@@ -87,7 +87,28 @@ export function healthPercent(before: bigint, after: bigint): number {
   return Number((after * 10_000n) / before) / 100;
 }
 
-/** Show all recorded decimals rather than rounding an attack's bullets or HP. */
+/** Limit displayed combat damage to the fighter's starting HP and 1,000 HP. */
+export function capRecordedDamage(value: bigint, healthBefore?: bigint): bigint {
+  const maximum = 1_000n * 10n ** 18n;
+  const healthCap = healthBefore === undefined ? maximum
+    : healthBefore < 0n ? 0n : healthBefore < maximum ? healthBefore : maximum;
+  return value < 0n ? 0n : value > healthCap ? healthCap : value;
+}
+
+/** Compact combat numbers for the game UI without losing bigint precision. */
+export function formatCombatUnits(value: bigint, decimals = 18): string {
+  if (!Number.isSafeInteger(decimals) || decimals < 0) throw new RangeError("Invalid combat decimals");
+  const unit = 10n ** BigInt(decimals);
+  const negative = value < 0n;
+  const absolute = negative ? -value : value;
+  const hundredths = (absolute * 100n + unit / 2n) / unit;
+  if (absolute > 0n && hundredths === 0n) return negative ? ">-0.01" : "<0.01";
+  const whole = (hundredths / 100n).toLocaleString("en-US");
+  const fraction = (hundredths % 100n).toString().padStart(2, "0").replace(/0+$/, "");
+  return `${negative && hundredths > 0n ? "-" : ""}${whole}${fraction ? `.${fraction}` : ""}`;
+}
+
+/** Preserve full precision where asset amounts require exact display. */
 export function formatExactUnits(amount: bigint, decimals = 18): string {
   const [whole, fraction] = formatUnits(amount, decimals).split(".");
   const grouped = BigInt(whole).toLocaleString("en-US");

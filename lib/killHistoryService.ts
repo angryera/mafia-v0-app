@@ -160,11 +160,13 @@ export async function getAttack(params: {
 export async function getAttackCount(params: {
   publicClient: PublicClient;
   chainId: ChainId;
+  blockNumber?: bigint;
 }): Promise<bigint> {
   const raw = await params.publicClient.readContract({
     address: requireKillAddress(params.chainId, "killInitiator"),
     abi: KILL_INITIATOR_ABI,
     functionName: "getAttackCount",
+    blockNumber: params.blockNumber,
   });
   return killBigInt(raw, "attack count");
 }
@@ -175,6 +177,7 @@ export async function getAttacks(params: {
   start: bigint | number;
   length: bigint | number;
   totalCount?: bigint;
+  blockNumber?: bigint;
 }): Promise<KillAttackEntry[]> {
   const start = BigInt(params.start);
   const length = BigInt(params.length);
@@ -186,6 +189,7 @@ export async function getAttacks(params: {
     abi: KILL_INITIATOR_ABI,
     functionName: "getAttacks",
     args: [start, length],
+    blockNumber: params.blockNumber,
   });
   const page = parseAttackPage(raw);
   if (page.length === 0) throw new Error("Attack page is empty before end of history");
@@ -248,7 +252,7 @@ function appendUnique(target: KillAttackEntry[], page: KillAttackEntry[], seen: 
   }
 }
 
-/** The graveyard is intentionally limited to the newest 50 attacks. */
+/** Read a bounded recent attack page for legacy kill-history callers. */
 export async function loadLatestAttacks(params: {
   publicClient: PublicClient;
   chainId: ChainId;
@@ -267,11 +271,12 @@ export async function loadAllAttacks(params: {
 }): Promise<KillAttackEntry[]> {
   const pageSize = params.pageSize ?? 50;
   if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 1000) throw new Error("Invalid page size");
-  const count = await getAttackCount(params);
+  const blockNumber = await params.publicClient.getBlockNumber();
+  const count = await getAttackCount({ ...params, blockNumber });
   const entries: KillAttackEntry[] = [];
   const seen = new Set<string>();
   for (let start = 0n; start < count; start += BigInt(pageSize)) {
-    const page = await getAttacks({ ...params, start, length: pageSize, totalCount: count });
+    const page = await getAttacks({ ...params, start, length: pageSize, totalCount: count, blockNumber });
     appendUnique(entries, page, seen);
   }
   return entries;

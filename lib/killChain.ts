@@ -65,6 +65,20 @@ export const KILL_LOOT_LENS_ABI = [
       { name: "rows", type: "tuple[]", components: lootRowComponents },
     ],
   },
+  {
+    type: "function",
+    name: "getBackfireSetting",
+    stateMutability: "view",
+    inputs: [
+      { name: "user", type: "address" },
+      { name: "message", type: "string" },
+      { name: "signature", type: "bytes" },
+    ],
+    outputs: [
+      { name: "policy", type: "uint8" },
+      { name: "fixedAmount", type: "uint256" },
+    ],
+  },
 ] as const satisfies Abi;
 
 export const AttackResult = {
@@ -84,6 +98,7 @@ export const AttackResult = {
   VictimInHospital: 13,
   AttackPending: 14,
   VictimRankTooHigh: 15,
+  AttackerRankXpListed: 16,
 } as const;
 
 export const AttackStatus = { Pending: 0, Resolved: 1, Voided: 2, Expired: 3 } as const;
@@ -220,8 +235,8 @@ export function decodeAttackInitiationReceipt(
   if (result > AttackResult.VictimRankTooHigh) throw new Error(`Unknown attack result ${result}`);
   const requested = result === AttackResult.Attempted
     ? events.find((event) => event.eventName === "AttackRequested" &&
-        String(event.args.killer).toLowerCase() === killer.toLowerCase() &&
-        String(event.args.victim).toLowerCase() === victim.toLowerCase())
+      String(event.args.killer).toLowerCase() === killer.toLowerCase() &&
+      String(event.args.victim).toLowerCase() === victim.toLowerCase())
     : undefined;
   if (result === AttackResult.Attempted && !requested) {
     throw new Error("Attack transaction confirmed without matching AttackRequested");

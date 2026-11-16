@@ -210,14 +210,18 @@ export async function getKillLootPreview(params: {
     .filter((item) => item.kind === LootKind.Token && isAddress(item.source))
     .map((item) => item.source.toLowerCase() as `0x${string}`))];
   const decimals = await Promise.all(sources.map(async (source) => {
-    const raw = await params.publicClient.readContract({
-      address: source, abi: ERC20_DECIMALS_ABI, functionName: "decimals",
-    });
-    const value = killSafeNumber(raw, "token decimals");
-    if (value > 255) throw new Error(`Invalid token decimals from ${source}`);
-    return [source, value] as const;
+    try {
+      const raw = await params.publicClient.readContract({
+        address: source, abi: ERC20_DECIMALS_ABI, functionName: "decimals",
+      });
+      const value = killSafeNumber(raw, "token decimals");
+      return value <= 255 ? [source, value] as const : null;
+    } catch {
+      // An unknown token can still appear in the loot preview as base units.
+      return null;
+    }
   }));
-  const tokenDecimals = Object.fromEntries(decimals);
+  const tokenDecimals = Object.fromEntries(decimals.filter((entry): entry is readonly [`0x${string}`, number] => entry !== null));
   return {
     ...summary, totalRows, rows,
     ...(Object.keys(tokenDecimals).length ? { tokenDecimals } : {}),

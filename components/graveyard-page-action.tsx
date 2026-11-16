@@ -71,7 +71,7 @@ export function GraveyardPageAction() {
         <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/10 text-red-400"><Skull className="h-6 w-6" /></div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-400">Combat / records</p>
         <h1 className="text-3xl font-bold tracking-tight">Graveyard</h1>
-        <p className="text-sm text-muted-foreground">{tab === "players" ? "Recent confirmed kills and the players involved." : "Families that have died during the protocol."}</p>
+        <p className="text-sm text-muted-foreground">{tab === "players" ? "Confirmed kills and the players involved." : "Families that have died during the protocol."}</p>
       </header>
 
       <Tabs value={tab} onValueChange={changeTab} className="space-y-5">

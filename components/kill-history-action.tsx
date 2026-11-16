@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePublicClient } from "wagmi";
-import { Crosshair, Loader2, RefreshCw, Skull } from "lucide-react";
+import { ChevronLeft, ChevronRight, Crosshair, Loader2, RefreshCw, Skull } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useChain } from "@/components/chain-provider";
 import { formatAttackDate, formatCombatAmount, PlayerRecordLink, ProfileNamesWarning, useKillRecordNames } from "@/components/kill-record-parts";
-import { isConfirmedKill, loadLatestAttacks, type KillAttackEntry } from "@/lib/killHistoryService";
+import { isConfirmedKill, loadAllAttacks, type KillAttackEntry } from "@/lib/killHistoryService";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 20;
 
 function killResult(entry: KillAttackEntry) {
   const { victimKilled, attackerKilled } = entry.attack;
@@ -24,6 +26,7 @@ export function KillHistoryAction({ embedded = false, searchQuery = "", refreshK
   const publicClient = usePublicClient({ chainId: chainConfig.wagmiChainId });
   const names = useKillRecordNames();
   const [kills, setKills] = useState<KillAttackEntry[]>([]);
+  const [pagination, setPagination] = useState({ query: searchQuery, page: 1 });
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,8 +38,11 @@ export function KillHistoryAction({ embedded = false, searchQuery = "", refreshK
     setIsLoading(true);
     setError(null);
     try {
-      const entries = await loadLatestAttacks({ publicClient, chainId: activeChain, length: 50 });
-      if (currentRequest === requestId.current) setKills(entries.filter((entry) => isConfirmedKill(entry, activeChain)));
+      const entries = await loadAllAttacks({ publicClient, chainId: activeChain, pageSize: 50 });
+      if (currentRequest === requestId.current) {
+        setKills(entries.filter((entry) => isConfirmedKill(entry, activeChain)));
+        setPagination({ query: "", page: 1 });
+      }
     } catch (cause) {
       if (currentRequest === requestId.current) {
         setError(cause instanceof Error ? cause.message : "Unable to load kill records.");
@@ -59,21 +65,27 @@ export function KillHistoryAction({ embedded = false, searchQuery = "", refreshK
     });
   }, [kills, names, searchQuery]);
 
+  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+  const currentPage = pagination.query === searchQuery
+    ? Math.min(pagination.page, Math.max(1, pageCount))
+    : 1;
+  const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   return (
     <div className={cn("space-y-4", !embedded && "mx-auto max-w-3xl space-y-6")}>
-      {!embedded && <header className="space-y-2 text-center"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-400">Combat / records</p><h1 className="text-2xl font-bold tracking-tight">Player kill records</h1><p className="text-sm text-muted-foreground">Recent confirmed kills in the latest 50 attacks.</p></header>}
+      {!embedded && <header className="space-y-2 text-center"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-400">Combat / records</p><h1 className="text-2xl font-bold tracking-tight">Player kill records</h1><p className="text-sm text-muted-foreground">Confirmed kills across the full attack history.</p></header>}
       {!embedded && <div className="flex justify-end"><Button variant="outline" onClick={() => void loadKills()} disabled={isLoading} className="gap-2"><RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />Refresh records</Button></div>}
       <ProfileNamesWarning error={names.error} />
       {isLoading || (!hasLoaded && !error) ? (
-        <Card className="border-border/50 bg-card/50"><CardContent className="flex items-center justify-center gap-2 py-14 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Loading kill records...</CardContent></Card>
+        <Card className="border-border/50 bg-card/50"><CardContent className="flex items-center justify-center gap-2 py-14 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Scanning all attack records...</CardContent></Card>
       ) : error ? (
         <Card className="border-red-500/30 bg-red-500/5"><CardContent className="space-y-3 py-8 text-center"><p className="text-sm text-red-400">{error}</p><Button variant="outline" size="sm" onClick={() => void loadKills()}>Try again</Button></CardContent></Card>
       ) : hasLoaded && filtered.length === 0 ? (
-        <Card className="border-border/50 bg-card/50"><CardContent className="flex flex-col items-center gap-2 py-14 text-center text-sm text-muted-foreground"><Crosshair className="h-8 w-8 opacity-40" />{searchQuery.trim() ? "No kill records match your search." : "No successful kills in the latest 50 attacks."}</CardContent></Card>
+        <Card className="border-border/50 bg-card/50"><CardContent className="flex flex-col items-center gap-2 py-14 text-center text-sm text-muted-foreground"><Crosshair className="h-8 w-8 opacity-40" />{searchQuery.trim() ? "No kill records match your search." : "No confirmed kills have been recorded yet."}</CardContent></Card>
       ) : (
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">{filtered.length} {filtered.length === 1 ? "record" : "records"}{searchQuery.trim() ? ` of ${kills.length}` : ""}</p>
-          {filtered.map((entry) => {
+          <p className="text-xs text-muted-foreground">Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} {filtered.length === 1 ? "record" : "records"}{searchQuery.trim() ? ` (${kills.length} total)` : ""}</p>
+          {visible.map((entry) => {
             const attack = entry.attack;
             const result = killResult(entry);
             const href = `/kill-result/attack/${entry.id}`;
@@ -97,6 +109,7 @@ export function KillHistoryAction({ embedded = false, searchQuery = "", refreshK
           })}
         </div>
       )}
+      {pageCount > 1 && !isLoading && !error && <div className="flex items-center justify-center gap-3"><Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPagination({ query: searchQuery, page: currentPage - 1 })}><ChevronLeft className="h-4 w-4" />Previous</Button><span className="text-xs text-muted-foreground">Page {currentPage} of {pageCount}</span><Button variant="outline" size="sm" disabled={currentPage >= pageCount} onClick={() => setPagination({ query: searchQuery, page: currentPage + 1 })}>Next<ChevronRight className="h-4 w-4" /></Button></div>}
     </div>
   );
 }

@@ -11,7 +11,7 @@ import { formatWalletAddress } from "@/lib/format";
 import { getUserAttackCounts, getUserAttacks, type KillAttackEntry } from "@/lib/killHistoryService";
 import { getKillRegistryRecord } from "@/lib/killContract";
 import type { ChainId } from "@/lib/constants/address";
-import { formatExactUnits, killTargets } from "./kill-result-logic";
+import { capRecordedDamage, formatCombatUnits, hasStatsSnapshot, killTargets } from "./kill-result-logic";
 import "@/types/mafia-globals";
 
 interface ClaimRow {
@@ -21,6 +21,7 @@ interface ClaimRow {
   victim: `0x${string}`;
   bullets: bigint;
   healthLost: bigint;
+  healthBefore?: bigint;
   inherited: boolean;
 }
 
@@ -100,6 +101,9 @@ async function loadClaims(publicClient: PublicClient, chainId: ChainId, account:
       victim: entry.attack.victim,
       bullets: fighter === "victim" ? entry.attack.bullets : entry.attack.backfireBullets,
       healthLost: fighter === "victim" ? entry.attack.healthLost : entry.attack.backfireHealthLost,
+      healthBefore: hasStatsSnapshot(entry.stats)
+        ? fighter === "victim" ? entry.stats.victimHealth : entry.stats.attackerHealth
+        : undefined,
       inherited: registry.killer.toLowerCase() !== account.toLowerCase(),
     };
   });
@@ -193,7 +197,7 @@ export function PendingClaimsPopup() {
               <Link key={`${row.attackId}:${row.killId}`} href={`/kill-result/attack/${row.attackId.toString()}`} onClick={() => setOpen(false)} className="block px-5 py-3 hover:bg-white/5">
                 <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-white/80">Kill #{row.killId.toString()} · Attack #{row.attackId.toString()}</span>{row.inherited && <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-violet-200">Inherited kill</span>}</div>
                 <p className="mt-1 truncate text-sm text-white/60">{label(row.attacker)} → {label(row.victim)}</p>
-                <p className="mt-1 font-mono text-[11px] text-white/40">{formatExactUnits(row.bullets)} bullets · {formatExactUnits(row.healthLost)} HP lost</p>
+                <p className="mt-1 font-mono text-[11px] text-white/60">{formatCombatUnits(row.bullets)} bullets · {formatCombatUnits(capRecordedDamage(row.healthLost, row.healthBefore))} HP lost</p>
               </Link>
             ))}
           </div>

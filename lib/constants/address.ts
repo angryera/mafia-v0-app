@@ -33,13 +33,14 @@ export type ChainConfig = {
         swapRouter: `0x${string}`;
         inventory: `0x${string}`;
         perkOpener: `0x${string}`;
+        perkBoxClaim: `0x${string}`;
+        perkManager: `0x${string}`;
         roulette: `0x${string}`;
         slotMachine: `0x${string}`;
         playerSubscription: `0x${string}`;
         raceXp: `0x${string}`;
         carCrusher: `0x${string}`;
         jackpot: `0x${string}`;
-        /** MafiaLotteryHall — replace zero address after deployment per chain. */
         lotteryHall: `0x${string}`;
         safehouse: `0x${string}`;
         detectiveAgency: `0x${string}`;
@@ -49,17 +50,18 @@ export type ChainConfig = {
         mafia: `0x${string}`;
         /** ERC1155 OG Crate (keys); balanceOf(account, 0), setApprovalForAll for map. */
         ogCrate: `0x${string}`;
+        ogNft: `0x${string}`;
+        ogPremium: `0x${string}`;
         map: `0x${string}`;
         /** MafiaFamily — `getPlayerInfo(player)` for familyId / level / isDead. */
         mafiaFamily: `0x${string}`;
-        /** Legacy MafiaKill address, retained for older integrations. */
-        kill: `0x${string}`;
         /** MafiaKillInitiator — attack reads, writes, and result events. */
         killInitiator: `0x${string}`;
         /** MafiaKillRegistry — kill records and asset draining. */
         killRegistry: `0x${string}`;
         /** KillLootLens — asset previews for a kill. */
         killLootLens: `0x${string}`;
+        familyBank: `0x${string}`;
         /** MafiaFamilyCashBank — family in-game cash treasury (deposit / withdraw). */
         familyGameCashBank: `0x${string}`;
         /** MafiaFamilyShareStake — stake MAFIA for family share benefits. */
@@ -77,7 +79,12 @@ export type ChainConfig = {
         xpMarket: `0x${string}`;
         inventoryMarketplace: `0x${string}`;
         raceLobby: `0x${string}`;
-        /** MafiaRebirth — `initiateRebirth` / `quoteRebirth`; zero until deployed per chain. */
+        vault: `0x${string}`;
+        vault1: `0x${string}`;
+        vaultSplitter: `0x${string}`;
+        dao: `0x${string}`;
+        giManager: `0x${string}`;
+        /** MafiaRebirth — `initiateRebirth` / `quoteRebirth`. */
         rebirth: `0x${string}`;
         /**
          * MafiaProfileUnbox. Zero address means paid unboxing is not deployed on this chain.
@@ -118,6 +125,8 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             swapRouter: getAddress("0xe7cb02aDa01A2100C83De3ab73d93ed18fbd9636"),
             inventory: getAddress("0x2CB8352Be090846d4878Faa92825188D7bf50654"),
             perkOpener: getAddress("0x26563e46A96a07e66BC01Ad6b1b41B42a33364F8"),
+            perkBoxClaim: getAddress("0x474b037904C6af5315ae37a963d8C550D97875D5"),
+            perkManager: getAddress("0x465001359458Df7812C0c0b7d186aA2843DBf9F7"),
             roulette: getAddress("0x53e579dC9BE49B6Bac08c6F9ffA83D981A9A19F3"),
             slotMachine: getAddress("0xa593553bdbA38730226aaabF07D241a16a3fc005"),
             playerSubscription: getAddress("0x3CEef7Fe3CcF730b87D0bFC651c680a7a76dCa61"),
@@ -132,12 +141,14 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             equipment: getAddress("0xa2AA522B4CCBc95Dec0aFCa2B0c645f9C126cD24"),
             mafia: getAddress("0x3cb3F4f43D4Be61AA92BB4EEFfe7142A13bf4111"),
             ogCrate: getAddress("0x16B11C057cA6d354E81D58B375CB118f7930807c"),
+            ogNft: getAddress("0xaf46bd44259b89f01B861C056C813228ADdfaD22"),
+            ogPremium: getAddress("0xA7AcE7F549BDE0b915EB06A6dAb3C9292cCa8B45"),
             map: getAddress("0x1c88060e4509c59b4064A7a9818f64AeC41ef19E"),
             mafiaFamily: getAddress("0x1bC581fe134BdC7432eF8ba75BCeEd242F90BcD2"),
-            kill: getAddress("0x0000000000000000000000000000000000000000"),
             killInitiator: getAddress("0x69895b4E783ee8CEaF9021D92906503Ac80d418f"),
             killRegistry: getAddress("0x92a74ea875954134b9cdCa21C7BBD21091e1b6f8"),
             killLootLens: getAddress("0x2906190415eD522CeCbf301AAc40c9486D37752b"),
+            familyBank: getAddress("0xA7AB556Aac595A8425dDF584f3CA11bbD1772B8b"),
             familyGameCashBank: getAddress("0x26cDB03a72Ac5866d43184526F4586D8942739F2"),
             familyShareStake: getAddress("0xbb4E73e1809a9cB0B1a6ACC885eac10ba85a7310"),
             bulletToken: getAddress("0xe92F5d948d8764904F9703ae878a3A9e6b3952eb"),
@@ -150,6 +161,11 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             xpMarket: getAddress("0x49F23822AFa248D4bE453d630F7e0dF8fcF80854"),
             inventoryMarketplace: getAddress("0x1fb8C9F810afd99A6FAE3E81aBe0806f8796ba73"),
             raceLobby: getAddress("0xE3a3892fEC9bA9457fEE08Fe3d2E7b32bCeb33Ad"),
+            vault: getAddress("0xB88Aa2B2345eb37ab21Ed9359AF1c937ca6D07aF"),
+            vault1: getAddress("0xCABDd520EeDC6736F4C057Cba275673d74766A6b"),
+            vaultSplitter: getAddress("0x46f3F348a21BFEE36E1EacA57E91C08c733b73eD"),
+            dao: getAddress("0xD772D9f127b15d81c46582D49426d319044a541d"),
+            giManager: getAddress("0xe2f0DaCf0A32B77c1d4F07C8642E90b260E66A91"),
             rebirth: getAddress("0x5D20a828693058C5370C6dCb54297f41eC3e2868"),
             profileUnbox: getAddress("0x62523f9e93432ad4DB2903233B3463Ba64D4D911"),
         },
@@ -184,6 +200,8 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             swapRouter: getAddress("0xf89DFF55EE67F4247cd0D351e75080f07c1f4D2B"),
             inventory: getAddress("0x2c60de22Ec20CcE72245311579c4aD9e5394Adc4"),
             perkOpener: getAddress("0xE3a3892fEC9bA9457fEE08Fe3d2E7b32bCeb33Ad"),
+            perkBoxClaim: getAddress("0x05BE7743913dECe53D93E22120279f0630014743"),
+            perkManager: getAddress("0xAe6311dF40FC6fE8fe9F06c7381E02eEa8B88c0F"),
             roulette: getAddress("0xD49Df542a9278464E7E18af52AB93D40D3430A9F"),
             slotMachine: getAddress("0x52A929a1D43C18c6De571189D1c56c8574AA21a3"),
             playerSubscription: getAddress("0xC6409a0113cCF6c4194FBfD8C7409589465e15EC"),
@@ -198,13 +216,15 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             equipment: getAddress("0x37edFc50908e194f05912EA0BC812Cd2f1Eb5bE4"),
             mafia: getAddress("0xa27aDe5806Ded801b93499C6fA23cc8dC9AC55EA"),
             ogCrate: getAddress("0x3325E42aA71188939216b669E8d431718e5bd790"),
+            ogNft: getAddress("0xC647421A47dc793292E880bD77782c664BD6Af2a"),
+            ogPremium: getAddress("0xf0ae11A736b90987589ce64b1D77eBc328d0622F"),
             map: getAddress("0xE571Aa670EDeEBd88887eb5687576199652A714F"),
             mafiaFamily: getAddress("0x3363cf983ae23AF2D95a81bA4A39C36084f8BEc4"),
-            kill: getAddress("0x0000000000000000000000000000000000000000"),
             killInitiator: zeroAddress,
             killRegistry: zeroAddress,
             killLootLens: zeroAddress,
-            familyGameCashBank: getAddress("0x0000000000000000000000000000000000000000"),
+            familyBank: getAddress("0xaD068Df1cedBf631A9D9B050eEBf1778E2d4A2ED"),
+            familyGameCashBank: getAddress("0x5f9D683452626fd87C8d23c3b6d239d416d3Eb63"),
             familyShareStake: getAddress("0x781373e300B0A8bE65cC7365a86318157627e58C"),
             bulletToken: getAddress("0xe193484ef0f7880eb42c3bc34c1929f2e7680D64"),
             ocLobby: getAddress("0xE9680c72817477f9e51596bD39821C670790a66E"),
@@ -216,8 +236,13 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             xpMarket: getAddress("0xc5731c6C3627F4912B54A2c6e13A8BFaeD69A39C"),
             inventoryMarketplace: getAddress("0x321e27aaB7e6F5DE221AE3eAe63306345f3A465d"),
             raceLobby: getAddress("0x10D0D93BD141a76F8cBcA1cd94CAf8081C5d0427"),
-            rebirth: getAddress("0x0000000000000000000000000000000000000000"),
-            profileUnbox: zeroAddress,
+            vault: getAddress("0x776F3D2d483580b12a2cD163bE40F649b2d1FF34"),
+            vault1: getAddress("0xCABDd520EeDC6736F4C057Cba275673d74766A6b"),
+            vaultSplitter: getAddress("0x5853EDBe3E619C73f9720ce4aF50F506340617B0"),
+            dao: getAddress("0xD772D9f127b15d81c46582D49426d319044a541d"),
+            giManager: getAddress("0xe327d64a24C1159aA5AF4df9171c5882CC9F10ff"),
+            rebirth: getAddress("0x9921C0eB6154cFc8a1C3331816Fb5B90dC06A3a7"),
+            profileUnbox: getAddress("0xE24C2629A9d898a3c00c7082EC261b2c36A9131F"),
         },
     },
 };
