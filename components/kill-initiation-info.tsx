@@ -13,9 +13,8 @@ export function KillInitiationInfo() {
       </div>
 
       <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
-        Before an attack is allowed, you and your target must pass every check
-        below, including an active rank. Confirming validates the attack only —
-        the initiate-kill contract call is disabled for now.
+        Confirming commits the attack and spends bullets on chain. After the
+        reveal block passes, finish the attack to see the result.
       </p>
 
       <div className="flex flex-col gap-2.5">
@@ -31,8 +30,8 @@ export function KillInitiationInfo() {
         />
         <Requirement
           icon={<ShieldAlert className="h-3.5 w-3.5 text-red-400" />}
-          title="Not in safehouse"
-          text="You cannot initiate an attack while you are protected in the safehouse."
+          title="Attack timer ready"
+          text="Your stored cooldown must have ended before you can initiate another attack."
         />
         <Requirement
           icon={<Search className="h-3.5 w-3.5 text-amber-400" />}
@@ -52,12 +51,12 @@ export function KillInitiationInfo() {
       </div>
 
       <div className="mt-4 rounded-lg bg-background/50 px-3 py-2.5">
-        <p className="mb-0.5 text-xs text-muted-foreground">Write (disabled)</p>
+        <p className="mb-0.5 text-xs text-muted-foreground">Combat writes</p>
         <p className="break-all font-mono text-sm text-primary">
-          initiateKill(address,uint256)
+          initiateAttack(address,uint256,string) / finishAttack(uint256)
         </p>
         <p className="mt-1 text-[10px] text-muted-foreground">
-          Contract call is disabled. Confirm validates the attack only.
+          The reveal and result are rolled by the contract.
         </p>
       </div>
     </div>

@@ -1,921 +1,462 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useAccount, usePublicClient, useReadContract } from "wagmi";
-import { isAddress, getAddress } from "viem";
-import {
-  Loader2,
-  Crosshair,
-  Zap,
-  Search,
-  ShieldAlert,
-  AlertTriangle,
-  MapPin,
-  Clock,
-  User,
-  Eye,
-  Swords,
-} from "lucide-react";
-import { formatWalletAddress } from "@/lib/format";
-import { cn } from "@/lib/utils";
-import { useChain, useChainAddresses } from "@/components/chain-provider";
+import { useAccount, usePublicClient } from "wagmi";
+import { formatUnits, getAddress, isAddress, parseEther, zeroAddress, type Abi } from "viem";
+import { AlertTriangle, Clock3, Crosshair, RefreshCw, Search, ShieldAlert, User, Zap } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useChain, useChainAddresses } from "@/components/chain-provider";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { useChainWriteContract } from "@/hooks/use-chain-write-contract";
+import { BULLET_ABI, DETECTIVE_AGENCY_ABI, RANK_ABI, RANK_STAKE_ABI } from "@/lib/contract";
+import { getEquippedWeaponInCity, type EquippedWeaponInfo } from "@/lib/equipmentContract";
+import { formatWalletAddress } from "@/lib/format";
 import {
-  getBulletBalance,
-  getPlayerCity,
-  getAttackerSafehouseStatus,
-  getUserDetectiveHires,
-  getKnownProfiles,
-  computeKillEligibility,
-  getEligibilityMessage,
-  initiateKill,
-  KILL_INITIATION_CONTRACT_ENABLED,
-  MOCK_KILL_INITIATION_ENABLED,
-  type KnownProfile,
-  type PlayerCity,
-  type DetectiveHireRecord,
-  type KillBlockReason,
+  KILL_INITIATOR_ABI, decodeAttackFinishedReceipt, decodeAttackInitiationReceipt,
+  getAttackResultMessage, getKnownProfiles, getPlayerCity, getUserDetectiveHires,
+  computeKillEligibility, getEligibilityMessage,
+  type DetectiveHireRecord, type KnownProfile, type PlayerCity,
 } from "@/lib/killContract";
-import {
-  getEquippedWeaponInCity,
-  type EquippedWeaponInfo,
-} from "@/lib/equipmentContract";
-import { useKillOutcome } from "@/components/kill-outcome-provider";
-import { RANK_STAKE_ABI } from "@/lib/contract";
 
-export function KillInitiationAction() {
-  const router = useRouter();
-  const { setKillBattle } = useKillOutcome();
-  const { address, isConnected } = useAccount();
-  const { chainConfig } = useChain();
-  const addresses = useChainAddresses();
-  const { authData, isSigning, signError, requestSignature } = useAuth();
-  const publicClient = usePublicClient();
+type Pending = { hasPending: boolean; attackId: bigint; revealBlock: bigint };
+type Timers = { attackAvailableAt: bigint; hospitalEndsAt: bigint };
+type Limits = { maxRankDifference: number; maxBulletAmount: bigint };
 
-  // ── Rank activation (must be active to initiate a kill) ────────────────────
-  const {
-    data: isRankActiveRaw,
-    refetch: refetchRankActive,
-  } = useReadContract({
-    address: addresses.rankStake,
-    abi: RANK_STAKE_ABI,
-    functionName: "isUserRankActive",
-    args: address ? [address] : undefined,
-    query: {
-      enabled: isConnected && !!address,
-      refetchInterval: 15000,
-    },
-  });
-  const rankStatusKnown = isRankActiveRaw !== undefined;
-  const isRankActive = isRankActiveRaw === true;
-
-  // ── Player reads (bullets + city/profile) ──────────────────────────────────
-  const [bulletBalance, setBulletBalance] = useState<number | null>(null);
-  const [playerCity, setPlayerCity] = useState<PlayerCity | null>(null);
-
-  const refreshBullets = useCallback(async () => {
-    if (!publicClient || !address || !authData) return;
-    try {
-      const bal = await getBulletBalance({
-        publicClient,
-        bulletsAddress: addresses.bullets,
-        wallet: address,
-        message: authData.message,
-        signature: authData.signature,
-      });
-      setBulletBalance(bal);
-    } catch (e) {
-      console.error("Failed to read bullet balance:", e);
-    }
-  }, [publicClient, address, authData, addresses.bullets]);
-
-  useEffect(() => {
-    if (!authData) {
-      setBulletBalance(null);
-      return;
-    }
-    refreshBullets();
-  }, [refreshBullets, authData]);
-
-  useEffect(() => {
-    if (!publicClient || !address || !authData) {
-      setPlayerCity(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const city = await getPlayerCity({
-          publicClient,
-          userProfileAddress: addresses.userProfile,
-          wallet: address,
-          message: authData.message,
-          signature: authData.signature,
-        });
-        if (!cancelled) setPlayerCity(city);
-      } catch (e) {
-        console.error("Failed to read player profile:", e);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [publicClient, address, authData, addresses.userProfile]);
-
-  // ── Weapon equipped in current city ───────────────────────────────────────
-  const inventoryScriptReady = useMafiaUtilsScript("MafiaInventory") === "ready";
-  const [weaponChecking, setWeaponChecking] = useState(false);
-  const [equippedWeapon, setEquippedWeapon] = useState<EquippedWeaponInfo | null>(
-    null,
-  );
-
-  const loadEquippedWeapon = useCallback(async (): Promise<EquippedWeaponInfo | null> => {
-    if (
-      !publicClient ||
-      !address ||
-      !authData ||
-      playerCity?.cityId === undefined ||
-      !inventoryScriptReady
-    ) {
-      return null;
-    }
-    return getEquippedWeaponInCity({
-      publicClient,
-      equipmentAddress: addresses.equipment,
-      inventoryAddress: addresses.inventory,
-      chain: chainConfig.id,
-      account: address,
-      cityId: playerCity.cityId,
-      signMsg: authData.message,
-      signature: authData.signature,
-    });
-  }, [
-    publicClient,
-    address,
-    authData,
-    playerCity?.cityId,
-    addresses.equipment,
-    addresses.inventory,
-    chainConfig.id,
-    inventoryScriptReady,
-  ]);
-
-  useEffect(() => {
-    if (!authData || playerCity?.cityId === undefined || !inventoryScriptReady) {
-      setEquippedWeapon(null);
-      setWeaponChecking(false);
-      return;
-    }
-    let cancelled = false;
-    setWeaponChecking(true);
-    (async () => {
-      try {
-        const weapon = await loadEquippedWeapon();
-        if (!cancelled) setEquippedWeapon(weapon);
-      } catch (e) {
-        console.error("Failed to read equipped weapon:", e);
-        if (!cancelled) setEquippedWeapon(null);
-      } finally {
-        if (!cancelled) setWeaponChecking(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loadEquippedWeapon, authData, playerCity?.cityId, inventoryScriptReady]);
-
-  const hasWeaponEquipped = equippedWeapon !== null;
-
-  // ── Known profiles (autocomplete) ───────────────────────────────────────────
-  const [knownProfiles, setKnownProfiles] = useState<KnownProfile[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const profiles = await getKnownProfiles({ chain: chainConfig.id });
-        if (!cancelled) setKnownProfiles(profiles);
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [chainConfig.id]);
-
-  // ── Detective hires (on-chain, same source as Detective Agency page) ────────
-  const [hires, setHires] = useState<DetectiveHireRecord[]>([]);
-  const [hiresLoading, setHiresLoading] = useState(false);
-
-  const loadDetectiveHires = useCallback(async () => {
-    if (!publicClient || !address || !authData) return;
-    setHiresLoading(true);
-    try {
-      const list = await getUserDetectiveHires({
-        publicClient,
-        detectiveAgencyAddress: addresses.detectiveAgency,
-        wallet: address,
-        message: authData.message,
-        signature: authData.signature,
-      });
-      setHires(list);
-    } catch (e) {
-      console.error("Failed to read detective hires:", e);
-      setHires([]);
-    } finally {
-      setHiresLoading(false);
-    }
-  }, [
-    publicClient,
-    address,
-    authData,
-    addresses.detectiveAgency,
-  ]);
-
-  useEffect(() => {
-    if (!authData) {
-      setHires([]);
-      return;
-    }
-    loadDetectiveHires();
-  }, [loadDetectiveHires, authData]);
-
-  // Attach profile names so name-based victim entry can match detective hires.
-  const hiresWithNames = useMemo(
-    () =>
-      hires.map((h) => {
-        const profile = knownProfiles.find(
-          (p) => p.address.toLowerCase() === h.target.toLowerCase(),
-        );
-        return profile ? { ...h, targetName: profile.name } : h;
-      }),
-    [hires, knownProfiles],
-  );
-
-  // ── Victim field + target resolution ────────────────────────────────────────
-  const [victim, setVictim] = useState("");
-  const [targetAddress, setTargetAddress] = useState<`0x${string}` | null>(null);
-  const [targetName, setTargetName] = useState<string | null>(null);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const fieldRef = useRef<HTMLDivElement>(null);
-
-  // Resolve the entered victim into an address whenever it (or the profile list)
-  // changes. Pasting a valid 0x address resolves immediately; a name resolves on
-  // an exact (case-insensitive) match against the known profiles.
-  useEffect(() => {
-    const trimmed = victim.trim();
-    if (trimmed.length === 0) {
-      setTargetAddress(null);
-      setTargetName(null);
-      return;
-    }
-    if (isAddress(trimmed)) {
-      const checksummed = getAddress(trimmed);
-      setTargetAddress(checksummed);
-      const known = knownProfiles.find(
-        (p) => p.address.toLowerCase() === checksummed.toLowerCase(),
-      );
-      setTargetName(known?.name ?? null);
-      return;
-    }
-    const exact = knownProfiles.find(
-      (p) => p.name.toLowerCase() === trimmed.toLowerCase(),
-    );
-    if (exact) {
-      setTargetAddress(exact.address);
-      setTargetName(exact.name);
-    } else {
-      setTargetAddress(null);
-      setTargetName(null);
-    }
-  }, [victim, knownProfiles]);
-
-  // Autocomplete suggestions (prefix match on name, max 10).
-  const suggestions = useMemo(() => {
-    const trimmed = victim.trim().toLowerCase();
-    if (trimmed.length === 0 || isAddress(victim.trim())) return [];
-    return knownProfiles
-      .filter((p) => p.name.toLowerCase().startsWith(trimmed))
-      .slice(0, 10);
-  }, [victim, knownProfiles]);
-
-  // Close dropdown on outside click.
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (fieldRef.current && !fieldRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
-  }, []);
-
-  const selectProfile = (p: KnownProfile) => {
-    setVictim(p.name);
-    setTargetAddress(p.address);
-    setTargetName(p.name);
-    setShowDropdown(false);
-  };
-
-  // Is the resolved target the player themselves?
-  const isSelfTarget = useMemo(() => {
-    if (!targetAddress) return false;
-    if (address && targetAddress.toLowerCase() === address.toLowerCase()) return true;
-    if (
-      playerCity?.username &&
-      targetName &&
-      playerCity.username.toLowerCase() === targetName.toLowerCase()
-    ) {
-      return true;
-    }
-    return false;
-  }, [targetAddress, address, playerCity?.username, targetName]);
-
-  const hasValidTarget = !!targetAddress && !isSelfTarget;
-
-  // ── Bullet spend field ──────────────────────────────────────────────────────
-  const [bulletInput, setBulletInput] = useState("");
-  const bulletAmount = Number(bulletInput);
-  const isValidBulletAmount =
-    bulletInput.length > 0 && Number.isFinite(bulletAmount) && bulletAmount >= 1;
-
-  // ── Live safehouse status for the attacker (connected player) ───────────────
-  const [safehouseChecking, setSafehouseChecking] = useState(false);
-  const [attackerInSafehouse, setAttackerInSafehouse] = useState(false);
-
-  const refreshAttackerSafehouse = useCallback(async () => {
-    if (!publicClient || !address || !authData) return false;
-    const status = await getAttackerSafehouseStatus({
-      publicClient,
-      safehouseAddress: addresses.safehouse,
-      wallet: address,
-      message: authData.message,
-      signature: authData.signature,
-    });
-    setAttackerInSafehouse(status.inSafehouse);
-    return status.inSafehouse;
-  }, [publicClient, address, authData, addresses.safehouse]);
-
-  useEffect(() => {
-    if (!publicClient || !address || !authData) {
-      setAttackerInSafehouse(false);
-      setSafehouseChecking(false);
-      return;
-    }
-    let cancelled = false;
-    setSafehouseChecking(true);
-    (async () => {
-      try {
-        await refreshAttackerSafehouse();
-      } catch (e) {
-        console.error("Failed to read attacker safehouse status:", e);
-        if (!cancelled) setAttackerInSafehouse(false);
-      } finally {
-        if (!cancelled) setSafehouseChecking(false);
-      }
-    })();
-    const id = setInterval(() => {
-      refreshAttackerSafehouse().catch(() => {
-        /* ignore tick errors */
-      });
-    }, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [publicClient, address, authData, refreshAttackerSafehouse]);
-
-  // ── Ticking clock (for kill-window expiry) ──────────────────────────────────
-  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
-  useEffect(() => {
-    const id = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  // ── Live detective eligibility ──────────────────────────────────────────────
-  const eligibility = useMemo(
-    () =>
-      computeKillEligibility({
-        hires: hiresWithNames,
-        targetAddress,
-        targetName,
-        playerCityId: playerCity?.cityId ?? null,
-        now,
-      }),
-    [hiresWithNames, targetAddress, targetName, playerCity?.cityId, now],
-  );
-
-  const detectiveState: KillBlockReason = hiresLoading ? "checking" : eligibility.reason;
-  const detectiveBlocked =
-    hasValidTarget && detectiveState !== "eligible";
-
-  // ── Confirm ─────────────────────────────────────────────────────────────────
-  const [confirming, setConfirming] = useState(false);
-
-  const confirmDisabled =
-    confirming ||
-    !hasValidTarget ||
-    !isValidBulletAmount ||
-    safehouseChecking ||
-    attackerInSafehouse ||
-    hiresLoading ||
-    detectiveBlocked ||
-    weaponChecking ||
-    !hasWeaponEquipped ||
-    (isConnected && !isRankActive);
-
-  const handleConfirm = async () => {
-    // 1) Wallet connected
-    if (!isConnected || !address) {
-      toast.error("Account not connected");
-      return;
-    }
-    // 2) Signed / signature present
-    if (!authData) {
-      toast.error("Please sign the message in your wallet to verify your identity.");
-      requestSignature();
-      return;
-    }
-    // 3) Rank must be activated
-    let rankActive = isRankActive;
-    try {
-      const refreshed = await refetchRankActive();
-      rankActive = refreshed.data === true;
-    } catch (e) {
-      console.error("Rank activation re-check failed:", e);
-    }
-    if (!rankActive) {
-      toast.error("Activate your rank before initiating a kill.");
-      return;
-    }
-    // 4) Weapon equipped in current city — fresh read
-    let weapon = equippedWeapon;
-    try {
-      weapon = await loadEquippedWeapon();
-      setEquippedWeapon(weapon);
-    } catch (e) {
-      console.error("Weapon re-check failed:", e);
-    }
-    if (!weapon) {
-      toast.error(
-        playerCity?.cityName
-          ? `Equip a weapon in ${playerCity.cityName} before initiating a kill.`
-          : "Equip a weapon in your current city before initiating a kill.",
-      );
-      return;
-    }
-    // 5) Empty victim
-    const trimmed = victim.trim();
-    if (trimmed.length === 0) {
-      toast.error("Please enter a victim name or wallet address.");
-      return;
-    }
-    // 6) No resolved target
-    if (!targetAddress) {
-      toast.error("Target not found. Select a valid profile or wallet address.");
-      return;
-    }
-    // 7) Self-target
-    if (isSelfTarget) {
-      toast.error("You cannot target yourself.");
-      return;
-    }
-    // 8) Safehouse — attacker must not be protected (fresh read)
-    let inSafehouse = attackerInSafehouse;
-    if (publicClient) {
-      try {
-        inSafehouse = await refreshAttackerSafehouse();
-      } catch (e) {
-        console.error("Safehouse re-check failed:", e);
-      }
-    }
-    if (inSafehouse) {
-      toast.error("You are in the safehouse and cannot initiate an attack.");
-      return;
-    }
-    // 9) Detective-agency eligibility
-    const elig = computeKillEligibility({
-      hires: hiresWithNames,
-      targetAddress,
-      targetName,
-      playerCityId: playerCity?.cityId ?? null,
-      now: Math.floor(Date.now() / 1000),
-    });
-    if (elig.reason !== "eligible") {
-      toast.error(getEligibilityMessage(elig.reason, elig.targetCityName));
-      return;
-    }
-    // 10) Bullet amount valid
-    if (!Number.isFinite(bulletAmount) || bulletAmount < 1) {
-      toast.error("Enter a valid bullet amount to spend on this attack.");
-      return;
-    }
-    // 11) Enough bullets
-    if (bulletBalance !== null && bulletAmount > bulletBalance) {
-      toast.error("You don't have enough bullets for this attack.");
-      return;
-    }
-
-    // All checks passed. The initiateKill write stays off until re-enabled.
-    if (!KILL_INITIATION_CONTRACT_ENABLED) {
-      toast.success(
-        "Attack validated. Kill initiation is disabled for now — no contract call was sent.",
-      );
-      setVictim("");
-      setBulletInput("");
-      setTargetAddress(null);
-      setTargetName(null);
-      return;
-    }
-
-    // All checks passed → initiate the attack.
-    setConfirming(true);
-    try {
-      const outcome = await initiateKill({
-        targetAddress,
-        bulletAmount,
-        attackerAddress: address,
-        attackerName: playerCity?.username || formatWalletAddress(address),
-        victimName: targetName || formatWalletAddress(targetAddress),
-        cityName: playerCity?.cityName ?? "Unknown city",
-      });
-
-      if (MOCK_KILL_INITIATION_ENABLED && outcome) {
-        setKillBattle(outcome);
-        router.push("/kill-outcome");
-        return;
-      }
-
-      toast.success(
-        "Attack validated. On-chain kill initiation will be enabled in an upcoming update.",
-      );
-      setVictim("");
-      setBulletInput("");
-      setTargetAddress(null);
-      setTargetName(null);
-    } catch (e) {
-      console.error("Kill initiation failed:", e);
-      toast.error("Could not initiate the attack. Please try again.");
-    } finally {
-      setConfirming(false);
-    }
-  };
-
-  // Helper label under the victim field.
-  const victimHelper = (() => {
-    if (victim.trim().length === 0) return null;
-    if (isSelfTarget) return "You cannot target yourself.";
-    if (targetAddress) return `Target: ${formatWalletAddress(targetAddress)}`;
-    return "Please select a valid profile name.";
-  })();
-
+function parsePending(raw: unknown): Pending {
+  const tuple = raw as readonly [boolean, bigint, bigint];
+  return { hasPending: Boolean(tuple[0]), attackId: BigInt(tuple[1]), revealBlock: BigInt(tuple[2]) };
+}
+function parseTimers(raw: unknown): Timers {
+  const tuple = raw as readonly [bigint, bigint];
+  return { attackAvailableAt: BigInt(tuple[0]), hospitalEndsAt: BigInt(tuple[1]) };
+}
+function displayTime(seconds: bigint): string {
+  return new Date(Number(seconds) * 1000).toLocaleString("en-US", { timeZone: "UTC", dateStyle: "medium", timeStyle: "short" }) + " UTC";
+}
+function bulletWei(input: string): bigint | null {
+  if (!/^[1-9]\d*$/.test(input)) return null;
+  try { return parseEther(input); } catch { return null; }
+}
+function Alert({ children, href, title }: { children: React.ReactNode; href?: string; title: string }) {
   return (
-    <div>
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
-            <Crosshair className="h-5 w-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold tracking-tight text-foreground">
-              Kill Initiation
-            </h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Target a player and spend bullets to launch your attack.
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-          <Zap className="h-4 w-4 text-amber-400" />
-          <div className="text-right">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Your bullets
-            </p>
-            <p className="font-mono text-sm font-bold tabular-nums text-foreground">
-              {bulletBalance !== null ? bulletBalance.toLocaleString() : "—"}
-            </p>
-          </div>
-        </div>
+    <div className="flex items-start gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-amber-300">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="text-xs leading-relaxed">
+        <p className="font-semibold">{title}</p>
+        <p className="mt-0.5 text-amber-200/80">{children}</p>
+        {href && <Link href={href} className="mt-1 inline-block font-semibold underline">Open page</Link>}
       </div>
-
-      <div className="rounded-xl border border-border bg-card p-6">
-        {/* Rank activation requirement */}
-        {isConnected && !rankStatusKnown && (
-          <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-400">
-            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-            <span>Checking rank activation…</span>
-          </div>
-        )}
-        {isConnected && rankStatusKnown && !isRankActive && (
-          <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-400/30 bg-red-400/10 p-3.5">
-            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <div>
-              <p className="text-sm font-semibold text-red-400">
-                Rank not activated
-              </p>
-              <p className="mt-0.5 text-xs text-red-400/80">
-                Activate your rank before initiating a kill.{" "}
-                <Link href="/rank-activation" className="font-medium hover:underline">
-                  Go to Rank Activation
-                </Link>
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Weapon requirement (player readiness) */}
-        {authData && playerCity && (
-          <div className="mb-4">
-            {weaponChecking ? (
-              <div className="flex items-center gap-2 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-400">
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                <span>Checking weapon in {playerCity.cityName}…</span>
-              </div>
-            ) : hasWeaponEquipped && equippedWeapon ? (
-              <div className="flex items-center gap-2 rounded-md border border-green-400/30 bg-green-400/10 px-3 py-2">
-                <Swords className="h-3.5 w-3.5 shrink-0 text-green-400" />
-                <span className="min-w-0 flex-1 truncate text-xs text-foreground">
-                  <span className="font-medium">{equippedWeapon.name}</span>
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · #{equippedWeapon.itemId} ·{" "}
-                  </span>
-                  <span className="font-mono text-red-400/90">
-                    {equippedWeapon.offense} OFF
-                  </span>
-                  <span className="text-muted-foreground"> / </span>
-                  <span className="font-mono text-cyan-400/90">
-                    {equippedWeapon.defense} DEF
-                  </span>
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · {playerCity.cityName}
-                  </span>
-                </span>
-                <Link
-                  href="/equipment"
-                  className="shrink-0 text-[10px] font-medium text-green-400 hover:underline"
-                >
-                  Change
-                </Link>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 rounded-md border border-red-400/30 bg-red-400/10 px-3 py-2 text-xs text-red-400">
-                <Swords className="h-3.5 w-3.5 shrink-0" />
-                <span className="min-w-0 flex-1">
-                  No weapon in {playerCity.cityName}.{" "}
-                  <Link href="/equipment" className="font-medium hover:underline">
-                    Equip
-                  </Link>
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Fields: victim + bullets side by side */}
-        <div className="flex flex-col gap-4 sm:flex-row">
-          {/* Victim */}
-          <div className="flex-1" ref={fieldRef}>
-            <label
-              htmlFor="victim"
-              className="mb-1.5 block text-xs font-medium text-muted-foreground"
-            >
-              Victim
-            </label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
-                id="victim"
-                type="text"
-                autoComplete="off"
-                placeholder="Player name or 0x address"
-                value={victim}
-                onChange={(e) => {
-                  setVictim(e.target.value);
-                  setShowDropdown(true);
-                }}
-                onFocus={() => setShowDropdown(true)}
-                disabled={confirming}
-                className={cn(
-                  "w-full rounded-lg border bg-background/50 px-3 py-2.5 pl-9 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors",
-                  victim.trim().length > 0 && !targetAddress && !isSelfTarget
-                    ? "border-red-400/40 focus:border-red-400"
-                    : "border-border focus:border-primary",
-                )}
-              />
-
-              {/* Autocomplete dropdown */}
-              {showDropdown && suggestions.length > 0 && (
-                <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-border bg-card shadow-xl shadow-black/30">
-                  {suggestions.map((p) => (
-                    <button
-                      key={p.address}
-                      type="button"
-                      onClick={() => selectProfile(p)}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-secondary/70"
-                    >
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
-                        <User className="h-3.5 w-3.5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {p.name}
-                        </p>
-                        <p className="truncate font-mono text-[10px] text-muted-foreground">
-                          {formatWalletAddress(p.address)}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            {victimHelper && (
-              <p
-                className={cn(
-                  "mt-1.5 text-[11px]",
-                  isSelfTarget
-                    ? "text-red-400"
-                    : targetAddress
-                      ? "text-green-400"
-                      : "text-muted-foreground",
-                )}
-              >
-                {victimHelper}
-              </p>
-            )}
-          </div>
-
-          {/* Bullets */}
-          <div className="sm:w-48">
-            <label
-              htmlFor="bullets"
-              className="mb-1.5 block text-xs font-medium text-muted-foreground"
-            >
-              Bullets to spend
-            </label>
-            <div className="relative">
-              <Zap className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-400" />
-              <input
-                id="bullets"
-                type="number"
-                inputMode="numeric"
-                min={1}
-                step={1}
-                placeholder="1"
-                value={bulletInput}
-                onChange={(e) => setBulletInput(e.target.value)}
-                disabled={confirming}
-                className={cn(
-                  "w-full rounded-lg border bg-background/50 px-3 py-2.5 pl-9 font-mono text-sm tabular-nums text-foreground placeholder:text-muted-foreground/50 outline-none transition-colors",
-                  bulletInput.length > 0 && !isValidBulletAmount
-                    ? "border-red-400/40 focus:border-red-400"
-                    : "border-border focus:border-primary",
-                )}
-              />
-            </div>
-            {bulletInput.length > 0 && !isValidBulletAmount && (
-              <p className="mt-1.5 text-[11px] text-red-400">
-                Enter at least 1 bullet.
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Attacker safehouse block (independent of target) */}
-        {attackerInSafehouse && (
-          <div className="mt-4 flex items-start gap-3 rounded-lg border border-red-400/30 bg-red-400/10 p-3.5">
-            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            <div>
-              <p className="text-sm font-semibold text-red-400">
-                You are in the safehouse
-              </p>
-              <p className="mt-0.5 text-xs text-red-400/80">
-                Leave the safehouse before initiating an attack.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Conditional alerts (only once a valid target is entered) */}
-        {hasValidTarget && !attackerInSafehouse && (
-          <div className="mt-4 flex flex-col gap-3">
-            {/* Detective requirement alert */}
-            {detectiveState === "checking" && (
-              <DetectiveAlert
-                icon={<Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-amber-400" />}
-                title="Checking detective records"
-                message="Verifying whether this target has been located."
-              />
-            )}
-            {detectiveState === "not_found" && (
-              <DetectiveAlert
-                icon={<Search className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
-                title="Target not located"
-                message={getEligibilityMessage("not_found", null)}
-              />
-            )}
-            {detectiveState === "not_revealed" && (
-              <DetectiveAlert
-                icon={<Eye className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
-                title="Location not revealed"
-                message={getEligibilityMessage("not_revealed", null)}
-              />
-            )}
-            {detectiveState === "wrong_city" && (
-              <DetectiveAlert
-                icon={<MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
-                title="Wrong city"
-                message={getEligibilityMessage("wrong_city", eligibility.targetCityName)}
-              />
-            )}
-            {detectiveState === "expired" && (
-              <DetectiveAlert
-                icon={<Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
-                title="Location expired"
-                message={getEligibilityMessage("expired", null)}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Confirm */}
-        <div className="mt-6 flex justify-center">
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={confirmDisabled}
-            className={cn(
-              "flex min-w-[200px] items-center justify-center gap-2 rounded-lg px-6 py-2.5 text-sm font-semibold transition-all duration-200",
-              !confirmDisabled
-                ? "bg-red-500 text-white hover:bg-red-500/90 active:scale-[0.98]"
-                : "cursor-not-allowed bg-secondary text-muted-foreground",
-            )}
-          >
-            {confirming ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Confirming...
-              </>
-            ) : (
-              <>
-                <Crosshair className="h-4 w-4" />
-                Confirm attack
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Signature hint (non-blocking) */}
-      {isConnected && !authData && (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
-          <p className="text-xs text-muted-foreground">
-            {signError
-              ? "A wallet signature is required to verify your identity."
-              : isSigning
-                ? "Awaiting wallet signature..."
-                : "Sign the message to load your bullets and city."}
-          </p>
-          <button
-            type="button"
-            onClick={requestSignature}
-            disabled={isSigning}
-            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
-          >
-            {isSigning ? "Signing..." : "Sign Message"}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 
-function DetectiveAlert({
-  icon,
-  title,
-  message,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  message: string;
-}) {
+export function KillInitiationAction() {
+  const router = useRouter();
+  const { address, isConnected } = useAccount();
+  const { activeChain, chainConfig } = useChain();
+  const addresses = useChainAddresses();
+  const publicClient = usePublicClient({ chainId: chainConfig.wagmiChainId });
+  const write = useChainWriteContract();
+  const { authData, isSigning, signError, requestSignature } = useAuth();
+  const profileScriptReady = useMafiaUtilsScript("MafiaProfile") === "ready";
+  const inventoryScriptReady = useMafiaUtilsScript("MafiaInventory") === "ready";
+  const initiatorReady = addresses.killInitiator !== zeroAddress;
+
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [pendingError, setPendingError] = useState<string | null>(null);
+  const [timers, setTimers] = useState<Timers | null>(null);
+  const [timerError, setTimerError] = useState<string | null>(null);
+  const [chainTime, setChainTime] = useState<{ timestamp: number; fetchedAt: number } | null>(null);
+  const [currentBlock, setCurrentBlock] = useState<bigint | null>(null);
+  const [blockError, setBlockError] = useState<string | null>(null);
+  const [limits, setLimits] = useState<Limits | null>(null);
+  const [limitsError, setLimitsError] = useState<string | null>(null);
+  const [rankActive, setRankActive] = useState<boolean | null>(null);
+  const [rankError, setRankError] = useState<string | null>(null);
+  const [attackerRank, setAttackerRank] = useState<number | null>(null);
+  const [victimRank, setVictimRank] = useState<number | null>(null);
+  const [bulletRaw, setBulletRaw] = useState<bigint | null>(null);
+  const [bulletDecimals, setBulletDecimals] = useState<number | null>(null);
+  const [playerCity, setPlayerCity] = useState<PlayerCity | null>(null);
+  const [playerError, setPlayerError] = useState<string | null>(null);
+  const [equippedWeapon, setEquippedWeapon] = useState<EquippedWeaponInfo | null>(null);
+  const [weaponChecking, setWeaponChecking] = useState(false);
+  const [weaponError, setWeaponError] = useState<string | null>(null);
+  const [knownProfiles, setKnownProfiles] = useState<KnownProfile[]>([]);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [hires, setHires] = useState<DetectiveHireRecord[]>([]);
+  const [victimInput, setVictimInput] = useState("");
+  const [bullets, setBullets] = useState("");
+  const [message, setMessage] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [leadUntil, setLeadUntil] = useState<bigint | null>(null);
+  const [leadError, setLeadError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+  const victimField = useRef<HTMLDivElement>(null);
+  const readScope = `${activeChain}:${address?.toLowerCase() ?? ""}`;
+  const readScopeRef = useRef(readScope);
+  readScopeRef.current = readScope;
+  const pendingRequest = useRef(0);
+  const timerRequest = useRef(0);
+  const blockRequest = useRef(0);
+
+  const refreshPending = useCallback(async (): Promise<Pending> => {
+    if (!publicClient || !address || !initiatorReady) throw new Error("Kill initiator unavailable");
+    const request = ++pendingRequest.current;
+    try {
+      const raw = await publicClient.readContract({ address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi, functionName: "getPendingAttack", args: [address] });
+      const next = parsePending(raw);
+      if (readScopeRef.current === readScope && request === pendingRequest.current) {
+        setPending(next);
+        setPendingError(null);
+      }
+      return next;
+    } catch (error) {
+      if (readScopeRef.current === readScope && request === pendingRequest.current) {
+        setPendingError(error instanceof Error ? error.message : "Pending attack unavailable");
+      }
+      throw error;
+    }
+  }, [publicClient, address, initiatorReady, addresses.killInitiator, readScope]);
+
+  useEffect(() => {
+    if (!isConnected || !address || !initiatorReady) { setPending(null); setPendingError(null); return; }
+    setPending(null);
+    const run = () => { void refreshPending().catch(() => undefined); };
+    run();
+    const timer = window.setInterval(run, 12000);
+    return () => window.clearInterval(timer);
+  }, [isConnected, address, initiatorReady, refreshPending]);
+
+  const refreshTimers = useCallback(async (): Promise<Timers> => {
+    if (!publicClient || !address || !initiatorReady) throw new Error("Kill timer unavailable");
+    const request = ++timerRequest.current;
+    try {
+      const [raw, block] = await Promise.all([
+        publicClient.readContract({ address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi, functionName: "getAttackTimers", args: [address] }),
+        publicClient.getBlock({ blockTag: "latest" }),
+      ]);
+      const next = parseTimers(raw);
+      if (readScopeRef.current === readScope && request === timerRequest.current) {
+        setTimers(next);
+        setChainTime({ timestamp: Number(block.timestamp), fetchedAt: Date.now() });
+        setTimerError(null);
+      }
+      return next;
+    } catch (error) {
+      if (readScopeRef.current === readScope && request === timerRequest.current) {
+        setTimerError(error instanceof Error ? error.message : "Timer unavailable");
+      }
+      throw error;
+    }
+  }, [publicClient, address, initiatorReady, addresses.killInitiator, readScope]);
+
+  useEffect(() => {
+    if (!isConnected || !address || !initiatorReady) { setTimers(null); setChainTime(null); setTimerError(null); return; }
+    setTimers(null);
+    setChainTime(null);
+    const run = () => { void refreshTimers().catch(() => undefined); };
+    run();
+    const timer = window.setInterval(run, 30000);
+    return () => window.clearInterval(timer);
+  }, [isConnected, address, initiatorReady, refreshTimers]);
+
+  const refreshBlock = useCallback(async () => {
+    if (!publicClient) throw new Error("Block status unavailable");
+    const request = ++blockRequest.current;
+    try {
+      const number = await publicClient.getBlockNumber();
+      if (readScopeRef.current === readScope && request === blockRequest.current) {
+        setCurrentBlock(number);
+        setBlockError(null);
+      }
+      return number;
+    } catch (error) {
+      if (readScopeRef.current === readScope && request === blockRequest.current) {
+        setCurrentBlock(null);
+        setBlockError(error instanceof Error ? error.message : "Block status unavailable");
+      }
+      throw error;
+    }
+  }, [publicClient, readScope]);
+  useEffect(() => {
+    if (!pending?.hasPending) { setCurrentBlock(null); setBlockError(null); return; }
+    const run = () => { void refreshBlock().catch(() => undefined); };
+    run();
+    const timer = window.setInterval(run, 3000);
+    return () => window.clearInterval(timer);
+  }, [pending?.hasPending, refreshBlock]);
+
+  useEffect(() => {
+    if (!publicClient || !initiatorReady) { setLimits(null); setLimitsError(null); return; }
+    let cancelled = false;
+    Promise.all([
+      publicClient.readContract({ address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi, functionName: "maxRankDifference" }),
+      publicClient.readContract({ address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi, functionName: "maxBulletAmount" }),
+    ]).then(([gap, max]) => { if (!cancelled) { setLimits({ maxRankDifference: Number(gap), maxBulletAmount: BigInt(max as bigint) }); setLimitsError(null); } })
+      .catch((error) => { if (!cancelled) setLimitsError(error instanceof Error ? error.message : "Attack limits unavailable"); });
+    return () => { cancelled = true; };
+  }, [publicClient, initiatorReady, addresses.killInitiator]);
+
+  useEffect(() => {
+    if (!publicClient || !address) { setRankActive(null); setAttackerRank(null); return; }
+    let cancelled = false;
+    Promise.all([
+      publicClient.readContract({ address: addresses.rankStake, abi: RANK_STAKE_ABI, functionName: "isUserRankActive", args: [address] }),
+      publicClient.readContract({ address: addresses.rankXp, abi: RANK_ABI, functionName: "getRankLevel", args: [address] }),
+    ]).then(([active, rank]) => { if (!cancelled) { setRankActive(active === true); setAttackerRank(Number(rank)); setRankError(null); } })
+      .catch((error) => { if (!cancelled) { setRankActive(null); setAttackerRank(null); setRankError(error instanceof Error ? error.message : "Rank unavailable"); } });
+    return () => { cancelled = true; };
+  }, [publicClient, address, addresses.rankStake, addresses.rankXp]);
+
+  useEffect(() => {
+    if (!publicClient || !address || !authData) { setBulletRaw(null); setBulletDecimals(null); setPlayerCity(null); setHires([]); return; }
+    let cancelled = false;
+    Promise.all([
+      publicClient.readContract({ address: addresses.bullets, abi: BULLET_ABI, functionName: "balanceOf", args: [address, authData.message, authData.signature] }),
+      publicClient.readContract({ address: addresses.bullets, abi: BULLET_ABI, functionName: "decimals" }),
+      getPlayerCity({ publicClient, userProfileAddress: addresses.userProfile, wallet: address, message: authData.message, signature: authData.signature }),
+      getUserDetectiveHires({ publicClient, detectiveAgencyAddress: addresses.detectiveAgency, wallet: address, message: authData.message, signature: authData.signature }).catch(() => []),
+    ]).then(([balance, decimals, city, userHires]) => { if (!cancelled) { setBulletRaw(BigInt(balance as bigint)); setBulletDecimals(Number(decimals)); setPlayerCity(city); setHires(userHires); setPlayerError(null); } })
+      .catch((error) => { if (!cancelled) setPlayerError(error instanceof Error ? error.message : "Player data unavailable"); });
+    return () => { cancelled = true; };
+  }, [publicClient, address, authData, addresses.bullets, addresses.userProfile, addresses.detectiveAgency]);
+
+  useEffect(() => {
+    if (!profileScriptReady) { setKnownProfiles([]); return; }
+    let cancelled = false;
+    getKnownProfiles({ chain: activeChain }).then((profiles) => { if (!cancelled) { setKnownProfiles(profiles); setProfileError(null); } })
+      .catch((error) => { if (!cancelled) setProfileError(error instanceof Error ? error.message : "Player picker unavailable"); });
+    return () => { cancelled = true; };
+  }, [profileScriptReady, activeChain]);
+
+  useEffect(() => {
+    if (!publicClient || !address || !authData || playerCity === null || !inventoryScriptReady) { setEquippedWeapon(null); setWeaponChecking(false); return; }
+    let cancelled = false;
+    setWeaponChecking(true);
+    getEquippedWeaponInCity({ publicClient, equipmentAddress: addresses.equipment, inventoryAddress: addresses.inventory, chain: activeChain, account: address, cityId: playerCity.cityId, signMsg: authData.message, signature: authData.signature, throwOnError: true })
+      .then((weapon) => { if (!cancelled) { setEquippedWeapon(weapon); setWeaponError(null); } })
+      .catch((error) => { if (!cancelled) { setEquippedWeapon(null); setWeaponError(error instanceof Error ? error.message : "Weapon unavailable"); } })
+      .finally(() => { if (!cancelled) setWeaponChecking(false); });
+    return () => { cancelled = true; };
+  }, [publicClient, address, authData, playerCity, inventoryScriptReady, addresses.equipment, addresses.inventory, activeChain]);
+
+  const target = useMemo((): KnownProfile | null => {
+    const input = victimInput.trim();
+    if (!input) return null;
+    if (isAddress(input)) {
+      const addr = getAddress(input);
+      return knownProfiles.find((p) => p.address.toLowerCase() === addr.toLowerCase()) ?? { address: addr, name: "" };
+    }
+    return knownProfiles.find((p) => p.name.toLowerCase() === input.toLowerCase()) ?? null;
+  }, [victimInput, knownProfiles]);
+  const targetAddress = target?.address ?? null;
+  const isSelf = Boolean(address && targetAddress && address.toLowerCase() === targetAddress.toLowerCase());
+  const suggestions = useMemo(() => {
+    const input = victimInput.trim().toLowerCase();
+    if (!input || isAddress(input)) return [];
+    return knownProfiles.filter((p) => p.name.toLowerCase().startsWith(input)).slice(0, 10);
+  }, [victimInput, knownProfiles]);
+  useEffect(() => {
+    const close = (event: MouseEvent) => { if (victimField.current && !victimField.current.contains(event.target as Node)) setShowSuggestions(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  useEffect(() => {
+    if (!publicClient || !targetAddress) { setVictimRank(null); return; }
+    let cancelled = false;
+    setVictimRank(null);
+    publicClient.readContract({ address: addresses.rankXp, abi: RANK_ABI, functionName: "getRankLevel", args: [targetAddress] })
+      .then((rank) => { if (!cancelled) setVictimRank(Number(rank)); })
+      .catch((error) => { if (!cancelled) { setVictimRank(null); console.error("Target rank read failed", error); } });
+    return () => { cancelled = true; };
+  }, [publicClient, targetAddress, addresses.rankXp]);
+
+  useEffect(() => {
+    if (!publicClient || !address || !targetAddress || !playerCity) { setLeadUntil(null); setLeadError(null); return; }
+    let cancelled = false;
+    setLeadUntil(null);
+    const run = () => publicClient.readContract({ address: addresses.detectiveAgency, abi: DETECTIVE_AGENCY_ABI, functionName: "canKillUntil", args: [address, targetAddress, playerCity.cityId] })
+      .then((until) => { if (!cancelled) { setLeadUntil(BigInt(until as bigint)); setLeadError(null); } })
+      .catch((error) => { if (!cancelled) { setLeadUntil(null); setLeadError(error instanceof Error ? error.message : "Detective lead unavailable"); } });
+    run();
+    const timer = window.setInterval(run, 15000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [publicClient, address, targetAddress, playerCity, addresses.detectiveAgency]);
+
+  const chainNow = chainTime === null ? null : chainTime.timestamp + Math.max(0, now - Math.floor(chainTime.fetchedAt / 1000));
+  const spendWei = bulletWei(bullets);
+  const messageBytes = new TextEncoder().encode(message.trim()).length;
+  const gapValid = attackerRank !== null && victimRank !== null && limits !== null && Math.abs(attackerRank - victimRank) <= limits.maxRankDifference;
+  const leadValid = leadUntil !== null && leadUntil > BigInt(chainNow ?? now);
+  const cooldownActive = timers !== null && chainNow !== null && BigInt(chainNow) < timers.attackAvailableAt;
+  const bulletsValid = spendWei !== null && bulletRaw !== null && limits !== null && spendWei <= bulletRaw && spendWei <= limits.maxBulletAmount;
+  const canConfirm = Boolean(isConnected && address && authData && initiatorReady && pending?.hasPending === false && !pendingError && timers && !timerError && chainNow !== null && !cooldownActive && rankActive === true && !rankError && !playerError && !weaponError && (weaponChecking || equippedWeapon !== null) && targetAddress && !isSelf && leadValid && attackerRank !== null && victimRank !== null && victimRank <= 13 && gapValid && bulletsValid && messageBytes <= 280 && !submitting);
+
+  const hireEligibility = useMemo(() => computeKillEligibility({
+    hires: hires.map((hire) => ({ ...hire, targetName: knownProfiles.find((p) => p.address.toLowerCase() === hire.target.toLowerCase())?.name })),
+    targetAddress, targetName: target?.name ?? null, playerCityId: playerCity?.cityId ?? null, now,
+  }), [hires, knownProfiles, targetAddress, target?.name, playerCity?.cityId, now]);
+  const confirmLabel = submitting ? "Confirming..." : !initiatorReady ? "Coming soon" : timerError ? "Timer unavailable" : !timers || chainNow === null ? "Checking timer..." : cooldownActive ? "Cooldown active" : "Confirm attack";
+
+  const handleConfirm = async () => {
+    if (!publicClient || !address || !authData || !targetAddress || !canConfirm || !spendWei || !playerCity) return;
+    setSubmitting(true);
+    try {
+      // Re-read pending and timer state on the selected chain immediately before spending bullets.
+      const [freshPending, freshTimersRaw, block, freshLead] = await Promise.all([
+        publicClient.readContract({ address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi, functionName: "getPendingAttack", args: [address] }),
+        publicClient.readContract({ address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi, functionName: "getAttackTimers", args: [address] }),
+        publicClient.getBlock({ blockTag: "latest" }),
+        publicClient.readContract({ address: addresses.detectiveAgency, abi: DETECTIVE_AGENCY_ABI, functionName: "canKillUntil", args: [address, targetAddress, playerCity.cityId] }),
+      ]);
+      if (readScopeRef.current !== readScope) throw new Error("Wallet or network changed. Check the attack form again.");
+      const nextPending = parsePending(freshPending);
+      const nextTimers = parseTimers(freshTimersRaw);
+      setPending(nextPending);
+      setTimers(nextTimers);
+      setChainTime({ timestamp: Number(block.timestamp), fetchedAt: Date.now() });
+      if (nextPending.hasPending) { toast.error("Finish your pending attack first."); return; }
+      if (block.timestamp < nextTimers.attackAvailableAt) { toast.error("Your attack cooldown is active."); return; }
+      if (BigInt(freshLead as bigint) <= block.timestamp) { toast.error("Your detective lead has expired."); return; }
+      if (messageBytes > 280) { toast.error("Message exceeds 280 UTF-8 bytes."); return; }
+      const hash = await write.writeContractAsync({
+        address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi,
+        functionName: "initiateAttack", args: [targetAddress, spendWei, message.trim()],
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error("Attack transaction reverted");
+      const outcome = decodeAttackInitiationReceipt(receipt, addresses.killInitiator);
+      if (readScopeRef.current !== readScope) return;
+      if (outcome.result !== 0) { toast.error(getAttackResultMessage(outcome.result)); return; }
+      if (outcome.attackId === null || outcome.revealBlock === null) throw new Error("AttackRequested event missing");
+      setPending({ hasPending: true, attackId: outcome.attackId, revealBlock: outcome.revealBlock });
+      setVictimInput(""); setBullets(""); setMessage(""); setLeadUntil(null);
+      setBulletRaw((balance) => balance === null ? null : balance - spendWei);
+      toast.success("Attack committed. Bullets were spent in this transaction.");
+    } catch (error) {
+      console.error("Attack initiation failed", error);
+      toast.error(error instanceof Error ? error.message : "Could not initiate attack");
+    } finally { setSubmitting(false); }
+  };
+
+  const lastEligibleBlock = pending ? pending.revealBlock + 256n : null;
+  const expired = Boolean(pending?.hasPending && currentBlock !== null && lastEligibleBlock !== null && currentBlock > lastEligibleBlock);
+  const canFinish = Boolean(pending?.hasPending && currentBlock !== null && currentBlock > pending.revealBlock);
+  const pendingTitle = blockError ? "Block status unavailable" : currentBlock === null ? "Checking the latest block" : expired ? "256-block window missed" : canFinish ? "Finish your attack" : "Waiting for the reveal block";
+
+  const handleFinish = async () => {
+    if (!publicClient || !address || !pending?.hasPending || !canFinish || finishing) return;
+    setFinishing(true);
+    try {
+      const id = pending.attackId;
+      const fresh = parsePending(await publicClient.readContract({
+        address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi,
+        functionName: "getPendingAttack", args: [address],
+      }));
+      if (readScopeRef.current !== readScope) throw new Error("Wallet or network changed. Check the pending attack again.");
+      if (!fresh.hasPending || fresh.attackId !== id) {
+        setPending(fresh);
+        toast.error("The pending attack changed. Review it before finishing.");
+        return;
+      }
+      let gas: bigint;
+      try {
+        const estimate = await publicClient.estimateContractGas({ account: address, address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi, functionName: "finishAttack", args: [id] });
+        gas = estimate * 120n / 100n;
+      } catch {
+        gas = activeChain === "bnb" ? 16_777_216n : 30_000_000n;
+      }
+      if (readScopeRef.current !== readScope) throw new Error("Wallet or network changed. Check the pending attack again.");
+      const hash = await write.writeContractAsync({ address: addresses.killInitiator, abi: KILL_INITIATOR_ABI as Abi, functionName: "finishAttack", args: [id], gas });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error("Finish transaction reverted");
+      const finished = decodeAttackFinishedReceipt(receipt, addresses.killInitiator);
+      if (finished.attackId !== id) throw new Error("Finish event attack id mismatch");
+      if (readScopeRef.current !== readScope) return;
+      window.sessionStorage.setItem(`kill-finish-tx:${activeChain}:${id}`, hash);
+      router.push(`/kill-result/attack/${id}`);
+    } catch (error) {
+      console.error("Finish attack failed", error);
+      toast.error(error instanceof Error ? error.message : "Could not finish attack");
+      refreshPending().catch(() => undefined);
+    } finally { setFinishing(false); }
+  };
+
+  const checklist = [
+    ["Target", targetAddress && !isSelf ? "Ready" : "Choose a player", Boolean(targetAddress && !isSelf)],
+    ["Bullets", bulletsValid ? "Ready" : "Enter a whole amount within your balance", bulletsValid],
+    ["Active rank", rankActive === true ? "Ready" : rankActive === false ? "Inactive" : "Checking", rankActive === true],
+    ["Weapon", weaponChecking ? "Checking" : equippedWeapon ? equippedWeapon.name : "None equipped", weaponChecking || equippedWeapon !== null],
+    ["Detective lead", leadValid ? "Ready" : leadError ? "Unavailable" : leadUntil === 0n ? "No lock" : "Checking or expired", leadValid],
+  ] as const;
+
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3.5">
-      {icon}
-      <div>
-        <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-400">
-          <AlertTriangle className="h-3.5 w-3.5" />
-          {title}
-        </p>
-        <p className="mt-0.5 text-xs text-amber-400/80">{message}</p>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="min-w-0">
+        <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-400">Combat / attack</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground">Kill initiation</h1></div>
+        {!initiatorReady && <div className="mb-4"><Alert title="Kill contract not deployed">Kill initiation is unavailable on {chainConfig.label}.</Alert></div>}
+        {isConnected && pendingError && <div className="mb-4"><Alert title="Pending attack unavailable">{pendingError}</Alert></div>}
+        {isConnected && timerError && <div className="mb-4"><Alert title="Timer unavailable">{timerError}</Alert></div>}
+        {limitsError && <div className="mb-4"><Alert title="Attack limits unavailable">{limitsError}</Alert></div>}
+        {rankError && <div className="mb-4"><Alert title="Rank unavailable">{rankError}</Alert></div>}
+        {playerError && <div className="mb-4"><Alert title="Player data unavailable">{playerError}</Alert></div>}
+        {weaponError && <div className="mb-4"><Alert title="Weapon status unavailable">{weaponError}</Alert></div>}
+        {profileError && <div className="mb-4"><Alert title="Player picker unavailable">{profileError}</Alert></div>}
+        {isConnected && pending?.hasPending ? (
+          <div className="rounded-xl border border-red-500/25 bg-card p-6">
+            <div className="flex items-center gap-2 text-red-400"><Clock3 className="h-5 w-5" /><h2 className="text-xl font-bold">{pendingTitle}</h2></div>
+            <p className="mt-2 text-sm text-muted-foreground">{expired ? "The reveal window was missed. Finishing clears the attack and does not refund bullets." : "Finish your connected wallet's attack after its reveal block."}</p>
+            <dl className="mt-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+              {[["Attack id", pending.attackId.toString()], ["Reveal block", pending.revealBlock.toString()], ["Current block", currentBlock?.toString() ?? "—"], ["Last eligible", lastEligibleBlock?.toString() ?? "—"]].map(([label, value]) => <div key={label} className="rounded-lg bg-background/70 p-3"><dt className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</dt><dd className="mt-1 break-all font-mono font-semibold text-foreground">{value}</dd></div>)}
+            </dl>
+            {blockError && <p className="mt-3 text-xs text-red-400">{blockError}</p>}
+            <div className="mt-6 flex flex-wrap gap-2">
+              <button type="button" disabled={!canFinish || finishing} onClick={handleFinish} className="rounded-lg bg-red-500 px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{finishing ? "Finishing..." : expired ? "Clear attack" : "Finish attack"}</button>
+              <button type="button" onClick={() => { refreshPending().catch(() => undefined); refreshBlock().catch(() => undefined); }} className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm text-foreground"><RefreshCw className="h-4 w-4" /> Refresh</button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4 rounded-xl border border-border bg-card p-5 sm:p-6">
+            {timers && chainNow !== null && BigInt(chainNow) < timers.hospitalEndsAt && <Alert title="You are in hospital">Hospital ends {displayTime(timers.hospitalEndsAt)}.</Alert>}
+            {cooldownActive && timers && <Alert title="Attack cooldown active">Next attack available {displayTime(timers.attackAvailableAt)}.</Alert>}
+            {rankActive === false && <Alert title="Rank inactive" href="/rank-activation">Activate your rank before attacking.</Alert>}
+            {!weaponChecking && playerCity && !equippedWeapon && <Alert title="No weapon equipped" href="/equipment">Equip a weapon in {playerCity.cityName}.</Alert>}
+            {victimRank !== null && victimRank > 13 && <Alert title="Target rank too high">Victims must be Lieutenant rank or below.</Alert>}
+            {attackerRank !== null && victimRank !== null && limits && !gapValid && <Alert title="Rank gap too wide">The maximum rank difference is {limits.maxRankDifference}.</Alert>}
+            {targetAddress && !leadValid && <Alert title="Detective lead required" href="/biz-detective-agency">{leadUntil === 0n ? getEligibilityMessage(hireEligibility.reason === "eligible" ? "not_found" : hireEligibility.reason, hireEligibility.targetCityName) : leadError ?? "Find, reveal, and reach the target's city before the lock expires."}</Alert>}
+            <div ref={victimField} className="relative">
+              <label htmlFor="kill-victim" className="mb-1.5 block text-xs font-medium text-muted-foreground">Victim</label>
+              <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><input id="kill-victim" value={victimInput} onChange={(event) => { setVictimInput(event.target.value); setShowSuggestions(true); }} onFocus={() => setShowSuggestions(true)} placeholder="Player name or 0x address" autoComplete="off" disabled={submitting} className="w-full rounded-lg border border-border bg-background/60 py-2.5 pl-9 pr-3 text-sm text-foreground outline-none focus:border-primary" /></div>
+              {showSuggestions && suggestions.length > 0 && <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-xl">{suggestions.map((profile) => <button key={profile.address} type="button" onClick={() => { setVictimInput(profile.name); setShowSuggestions(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-secondary"><User className="h-4 w-4 text-primary" /><span className="min-w-0 flex-1 truncate text-sm text-foreground">{profile.name}</span><span className="font-mono text-[10px] text-muted-foreground">{formatWalletAddress(profile.address)}</span></button>)}</div>}
+              {victimInput && <p className="mt-1 text-xs text-muted-foreground">{isSelf ? "You cannot target yourself." : targetAddress ? `Target: ${formatWalletAddress(targetAddress)}` : "Select a player or enter a valid address."}</p>}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><label htmlFor="kill-bullets" className="mb-1.5 block text-xs font-medium text-muted-foreground">Whole bullets to spend</label><input id="kill-bullets" type="text" inputMode="numeric" value={bullets} onChange={(event) => setBullets(event.target.value)} placeholder="1" disabled={submitting} className="w-full rounded-lg border border-border bg-background/60 px-3 py-2.5 font-mono text-sm text-foreground outline-none focus:border-primary" /></div>
+              <div><label htmlFor="kill-message" className="mb-1.5 block text-xs font-medium text-muted-foreground">Message (optional)</label><input id="kill-message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Leave a message" disabled={submitting} className="w-full rounded-lg border border-border bg-background/60 px-3 py-2.5 text-sm text-foreground outline-none focus:border-primary" /><p className={`mt-1 text-xs ${messageBytes > 280 ? "text-red-400" : "text-muted-foreground"}`}>{messageBytes}/280 UTF-8 bytes</p></div>
+            </div>
+            <button type="button" onClick={handleConfirm} disabled={!canConfirm} className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-500 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"><Crosshair className="h-4 w-4" />{confirmLabel}</button>
+            {!isConnected && <p className="text-center text-xs text-muted-foreground">Connect your wallet to prepare an attack.</p>}
+            {isConnected && !authData && <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"><span className="text-xs text-muted-foreground">{signError ? "A wallet signature is required." : isSigning ? "Awaiting signature..." : "Sign to read bullets and equipment."}</span><button type="button" onClick={requestSignature} disabled={isSigning} className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50">{isSigning ? "Signing..." : "Sign message"}</button></div>}
+          </div>
+        )}
       </div>
+      <aside className="space-y-4">
+        <div className="rounded-xl border border-border bg-card p-5"><div className="flex items-center gap-2 text-sm font-semibold text-foreground"><Zap className="h-4 w-4 text-amber-400" /> Bullets available</div><p className="mt-3 font-mono text-2xl font-bold tabular-nums text-foreground">{bulletRaw !== null && bulletDecimals !== null ? Number(formatUnits(bulletRaw, bulletDecimals)).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—"}</p>{limits && <p className="mt-1 text-xs text-muted-foreground">Maximum attack: {Number(formatUnits(limits.maxBulletAmount, 18)).toLocaleString()} bullets</p>}</div>
+        <div className="rounded-xl border border-border bg-card p-5"><h2 className="text-sm font-semibold text-foreground">Attack checklist</h2><ul className="mt-3 space-y-3">{checklist.map(([name, detail, ready]) => <li key={name} className="flex items-start justify-between gap-2 text-xs"><span className="text-muted-foreground">{name}</span><span className={ready ? "text-green-400 text-right" : "text-amber-400 text-right"}>{detail}</span></li>)}</ul></div>
+        <div className="rounded-xl border border-border bg-card p-5 text-xs text-muted-foreground"><div className="flex items-center gap-2 font-semibold text-foreground"><ShieldAlert className="h-4 w-4 text-red-400" /> On-chain result</div><p className="mt-2 leading-relaxed">The contract rolls the attack when you finish after the reveal block. A confirmed attack spends bullets when it is initiated.</p><div className="mt-3 flex flex-wrap gap-2"><Link href="/biz-detective-agency" className="text-primary hover:underline">Detectives</Link><Link href="/equipment" className="text-primary hover:underline">Equipment</Link><Link href="/rank-activation" className="text-primary hover:underline">Rank</Link></div></div>
+      </aside>
     </div>
   );
 }

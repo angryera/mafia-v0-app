@@ -1,22 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Kill initiation — data service layer
-//
-// This module is the SINGLE place where the Kill Initiation page reads/writes
-// game data. Every function returns a promise so that a real smart-contract call
-// is a drop-in replacement: keep the signature, swap the body where the TODOs
-// are marked.
-//
-// Status of each contract today:
-//   • Bullet balance      → DEPLOYED  (real read implemented below)
-//   • Player profile/city → DEPLOYED  (real read implemented below)
-//   • Attacker safehouse  → DEPLOYED  (real read via getUserInfo; attacker cannot
-//                            initiate while protected)
-//   • Detective hires      → DEPLOYED  (real read via getUserDetectiveHires)
-//   • initiate kill (write)→ DISABLED (validates only; no contract call)
+// Kill contract bindings and profile/detective helpers shared by the kill flow.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { formatEther, isAddress, type Abi } from "viem";
-import { sleep } from "@/lib/utils";
 import {
   BULLET_ABI,
   DETECTIVE_AGENCY_ABI,
@@ -25,6 +11,8 @@ import {
 } from "@/lib/contract";
 import { getTravelCityName } from "@/lib/format";
 import "@/types/mafia-globals";
+export * from "@/lib/killChain";
+export * from "@/lib/killLootService";
 
 // Minimal shape of the viem/wagmi public client we rely on (readContract only).
 type ReadClient = {
@@ -123,24 +111,17 @@ async function resolveCanKillUntilTime(params: {
   detectiveAgencyAddress: `0x${string}`;
   wallet: `0x${string}`;
   hire: OnChainDetectiveHire;
-  targetFoundDuration: bigint;
 }): Promise<number | null> {
-  const { publicClient, detectiveAgencyAddress, wallet, hire, targetFoundDuration } =
+  const { publicClient, detectiveAgencyAddress, wallet, hire } =
     params;
   if (!hire.isTargetRevealed) return null;
-
-  try {
-    const until = await publicClient.readContract({
-      address: detectiveAgencyAddress,
-      abi: DETECTIVE_AGENCY_ABI as Abi,
-      functionName: "canKillUntil",
-      args: [wallet, hire.target, hire.targetCityId],
-    });
-    return Number(until as bigint);
-  } catch {
-    const foundTime = Number(hire.startedAt) + Number(hire.targetNumber) * 60;
-    return foundTime + Number(targetFoundDuration);
-  }
+  const until = await publicClient.readContract({
+    address: detectiveAgencyAddress,
+    abi: DETECTIVE_AGENCY_ABI as Abi,
+    functionName: "canKillUntil",
+    args: [wallet, hire.target, hire.targetCityId],
+  });
+  return Number(until as bigint);
 }
 
 export type KillBlockReason =
@@ -156,28 +137,6 @@ export interface KillEligibility {
   targetCityId: number | null;
   targetCityName: string | null;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Mock fixtures (development only)
-// ─────────────────────────────────────────────────────────────────────────────
-export const MOCK_TARGETS = {
-  eligible: "0x1111111111111111111111111111111111111111" as `0x${string}`,
-  wrongCity: "0x2222222222222222222222222222222222222222" as `0x${string}`,
-  expired: "0x3333333333333333333333333333333333333333" as `0x${string}`,
-  notLocated: "0x4444444444444444444444444444444444444444" as `0x${string}`,
-};
-
-// Known profiles that power the victim-name autocomplete. The mock targets are
-// included so the eligibility scenarios are reachable by name in development.
-const MOCK_PROFILES: KnownProfile[] = [
-  { name: "Lucky Luciano", address: MOCK_TARGETS.eligible },
-  { name: "Frank Costello", address: MOCK_TARGETS.wrongCity },
-  { name: "Meyer Lansky", address: MOCK_TARGETS.expired },
-  { name: "Bugsy Siegel", address: MOCK_TARGETS.notLocated },
-  { name: "Al Capone", address: "0x5555555555555555555555555555555555555555" },
-  { name: "Carlo Gambino", address: "0x6666666666666666666666666666666666666666" },
-  { name: "Vito Genovese", address: "0x7777777777777777777777777777777777777777" },
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reads
@@ -281,12 +240,6 @@ export async function getUserDetectiveHires(params: {
     signature,
   } = params;
 
-  const targetFoundDuration = (await publicClient.readContract({
-    address: detectiveAgencyAddress,
-    abi: DETECTIVE_AGENCY_ABI as Abi,
-    functionName: "targetFoundDuration",
-  })) as bigint;
-
   const pageSize = 20;
   let startIndex = 0;
   const onChainHires: OnChainDetectiveHire[] = [];
@@ -317,7 +270,6 @@ export async function getUserDetectiveHires(params: {
       detectiveAgencyAddress,
       wallet,
       hire,
-      targetFoundDuration,
     });
 
     records.push({
@@ -335,33 +287,24 @@ export async function getUserDetectiveHires(params: {
 /**
  * Known profiles for the victim-name autocomplete.
  *
- * Returns the mock fixtures immediately and, when the MafiaProfile helper script
- * is available, merges in live on-chain profiles. Mock entries win on address
- * collisions so the development scenarios always resolve.
+ * Uses the app's contract-backed MafiaProfile helper. No preview profiles are
+ * returned if the script or its RPC request fails.
  */
 export async function getKnownProfiles(params: {
   chain: string;
 }): Promise<KnownProfile[]> {
+  if (typeof window === "undefined" || !window.MafiaProfile) {
+    throw new Error("MafiaProfile is unavailable");
+  }
   const byAddress = new Map<string, KnownProfile>();
-  for (const p of MOCK_PROFILES) byAddress.set(p.address.toLowerCase(), p);
-
-  // TODO(script/contract): this live merge is best-effort. Once a dedicated
-  // name→address resolver contract exists, prefer it over the bulk script.
-  if (typeof window !== "undefined" && window.MafiaProfile) {
-    try {
-      const users = await window.MafiaProfile.getUsersInfo({ chain: params.chain });
-      for (const u of users as Array<{ name?: string; user?: string }>) {
-        if (!u?.name || !u?.user || !isAddress(u.user)) continue;
-        const key = u.user.toLowerCase();
-        if (!byAddress.has(key)) {
-          byAddress.set(key, { name: u.name, address: u.user as `0x${string}` });
-        }
-      }
-    } catch {
-      // Ignore — fall back to mock profiles only.
+  const users = await window.MafiaProfile.getUsersInfo({ chain: params.chain });
+  for (const u of users as Array<{ name?: string; user?: string }>) {
+    if (!u?.name || !u?.user || !isAddress(u.user)) continue;
+    const key = u.user.toLowerCase();
+    if (!byAddress.has(key)) {
+      byAddress.set(key, { name: u.name, address: u.user as `0x${string}` });
     }
   }
-
   return Array.from(byAddress.values());
 }
 
@@ -452,76 +395,4 @@ export function getEligibilityMessage(
     default:
       return "";
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Write
-// ─────────────────────────────────────────────────────────────────────────────
-
-import {
-  buildKillBattlePayload,
-  type KillBattlePayload,
-} from "@/lib/killOutcome";
-
-/** When true, `initiateKill` builds a mock battle payload for the outcome page. */
-export const MOCK_KILL_INITIATION_ENABLED = true;
-
-/**
- * When false, the kill initiation page validates the attack but does not call
- * `initiateKill` (mock or on-chain).
- */
-export const KILL_INITIATION_CONTRACT_ENABLED: boolean = false;
-
-/**
- * Initiate a kill against `targetAddress`, spending `bulletAmount` bullets.
- *
- * MOCK: the MafiaKill contract is not deployed yet. This validates inputs and
- * resolves after a short delay to simulate a pending → success tx. When
- * `MOCK_KILL_INITIATION_ENABLED` is true, returns a deterministic battle payload
- * for the kill-outcome page.
- *
- * TODO(contract): replace with a real wallet write + tx confirmation, e.g.
- *   const hash = await walletClient.writeContract({
- *     address: addresses.kill, abi: KILL_ABI,
- *     functionName: "initiateKill",
- *     args: [targetAddress, BigInt(bulletAmount), message, signature],
- *   });
- *   await publicClient.waitForTransactionReceipt({ hash });
- * then map KillSucceeded / KillFailed events into KillBattlePayload.
- */
-export async function initiateKill(params: {
-  targetAddress: `0x${string}`;
-  bulletAmount: number;
-  attackerAddress: `0x${string}`;
-  attackerName: string;
-  victimName: string;
-  cityName: string;
-}): Promise<KillBattlePayload | void> {
-  const {
-    targetAddress,
-    bulletAmount,
-    attackerAddress,
-    attackerName,
-    victimName,
-    cityName,
-  } = params;
-  if (!isAddress(targetAddress)) {
-    throw new Error("Invalid target address");
-  }
-  if (!Number.isFinite(bulletAmount) || bulletAmount < 1) {
-    throw new Error("Invalid bullet amount");
-  }
-  await sleep(900);
-
-  if (!MOCK_KILL_INITIATION_ENABLED) {
-    return;
-  }
-
-  return buildKillBattlePayload({
-    attacker: { name: attackerName, address: attackerAddress },
-    victim: { name: victimName, address: targetAddress },
-    bulletsFired: bulletAmount,
-    cityName,
-    txHash: `0x${"ab".repeat(32)}`,
-  });
 }

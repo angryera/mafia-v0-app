@@ -54,6 +54,19 @@ import {
   buildNavigationSections,
   type NavItem,
 } from "@/components/navigation-config";
+import { getKillOpenTime } from "@/lib/killContract";
+
+function useKillOpen(): boolean {
+  const { activeChain } = useChain();
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    const tick = () => setNow(Math.floor(Date.now() / 1000));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now !== null && now >= getKillOpenTime(activeChain);
+}
 
 // Hook to read the connected user's city name
 function useCityName(): string | null {
@@ -615,7 +628,7 @@ export function Sidebar({
   cooldowns: CooldownMap;
 }) {
   const cityName = useCityName();
-  const sections = buildNavigationSections(cityName);
+  const sections = buildNavigationSections(cityName, useKillOpen());
   const activeSection = sections.find((section) => section.items.some((item) => item.id === activeTab))?.label;
   const [openSections, setOpenSections] = useState<Set<string>>(() => new Set(activeSection ? [activeSection] : ["Crime"]));
 
@@ -812,7 +825,7 @@ function MobileHeader({
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [mobileAssetsOpen, setMobileAssetsOpen] = useState(false);
   const cityName = useCityName();
-  const sections = buildNavigationSections(cityName);
+  const sections = buildNavigationSections(cityName, useKillOpen());
 
   const handleMobileNav = (tab: Tab) => {
     router.push(getTabUrl(tab));

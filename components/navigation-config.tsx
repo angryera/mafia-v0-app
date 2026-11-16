@@ -73,7 +73,8 @@ const KILL_SECTION: readonly NavItem[] = [
   { id: "kill-initiation", label: "Kill Initiation", icon: <Target className="h-4 w-4" /> },
   { id: "backfire-settings", label: "Backfire", icon: <Target className="h-4 w-4" /> },
   { id: "graveyard", label: "Graveyard", icon: <Skull className="h-4 w-4" /> },
-  { id: "kill-attempt", label: "Kill Attempt", icon: <Swords className="h-4 w-4" /> },
+  { id: "kill-leaderboard", label: "Kill Leaderboard", icon: <Trophy className="h-4 w-4" /> },
+  { id: "attempted-kills", label: "Attempted Kills", icon: <Swords className="h-4 w-4" /> },
   { id: "rebirth", label: "Rebirth", icon: <Skull className="h-4 w-4" /> },
 ];
 
@@ -128,10 +129,10 @@ const BUY_SECTION: readonly NavItem[] = [
   { id: "buy-premium", label: "Premium", icon: <Crown className="h-4 w-4" /> },
 ];
 
-export function buildNavigationSections(cityLabel: string | null): readonly NavigationSection[] {
+export function buildNavigationSections(cityLabel: string | null, killOpen = true): readonly NavigationSection[] {
   return [
     { label: "Crime", items: CRIME_SECTION },
-    { label: "Kill", items: KILL_SECTION },
+    { label: "Kill", items: KILL_SECTION.map((item) => item.id === "kill-initiation" && !killOpen ? { ...item, id: "kill-start" as const } : item) },
     { label: cityLabel ?? "City", items: CITY_SECTION },
     { label: "Game", items: GAME_SECTION },
     { label: "Buy", items: BUY_SECTION },

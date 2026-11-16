@@ -1,316 +1,141 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
-import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { usePublicClient } from "wagmi";
+import { formatEther, zeroAddress } from "viem";
+import { ChevronLeft, ChevronRight, Loader2, Skull, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Search,
-  RefreshCw,
-  Skull,
-  Loader2,
-  Crown,
-  Shield,
-  User,
-} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { useChain } from "@/components/chain-provider";
-import { formatWalletAddress } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { useMafiaUtilsScript } from "@/hooks/use-mafia-utils-script";
+import { PlayerRecordLink, ProfileNamesWarning, useKillRecordNames } from "@/components/kill-record-parts";
 import "@/types/mafia-globals";
 
-type FamilyMemberRole = "Don" | "Consigliere" | "Capodecina" | "Capo" | "Successor" | "Member";
+const FAMILY_ABI = [
+  { type: "function", name: "familyIds", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint256" }] },
+  { type: "function", name: "getFamily", stateMutability: "view", inputs: [{ name: "familyId", type: "uint256" }], outputs: [{ name: "", type: "tuple", components: [
+    { name: "familyId", type: "uint256" },
+    { name: "leaders", type: "address[]" },
+    { name: "successor", type: "address" },
+    { name: "leaveFee", type: "uint256" },
+    { name: "memberCount", type: "uint256" },
+    { name: "isDead", type: "bool" },
+  ] }] },
+] as const;
 
-interface GraveyardMember {
-  address: string;
+interface DeadFamily {
+  familyId: bigint;
+  leaders: readonly `0x${string}`[];
+  leaveFee: bigint;
+  memberCount: bigint;
   name: string;
-  familyId: number;
-  familyName: string;
-  level: number;
-  role: FamilyMemberRole;
 }
 
-interface FamilyPayload {
-  familyId: number;
-  name: string;
-  leaders?: Array<{
-    address: string;
-    name: string;
-    level: number;
-    isDead: boolean;
-    role: string;
-  }>;
-  successor?: {
-    address: string;
-    name: string;
-    level: number;
-    isDead: boolean;
-  } | null;
-  players?: Array<{
-    address: string;
-    name: string;
-    level: number;
-    isDead: boolean;
-  }>;
+interface FamilyNameRecord { familyId: number; name: string; }
+
+async function getFamilyNames(chain: string, count: number): Promise<Map<number, string>> {
+  const helper = window.MafiaFamily as (typeof window.MafiaFamily & {
+    getFamilies?: (options: { chain: string; maxFamilies?: number }) => Promise<FamilyNameRecord[]>;
+  }) | undefined;
+  if (!helper?.getFamilies) return new Map();
+  const list = await helper.getFamilies({ chain, maxFamilies: count });
+  return new Map(list.map((family) => [family.familyId, family.name.trim()]));
 }
 
-function roleIcon(role: FamilyMemberRole) {
-  switch (role) {
-    case "Don":
-      return <Crown className="h-3.5 w-3.5 text-yellow-500" />;
-    case "Consigliere":
-      return <Shield className="h-3.5 w-3.5 text-purple-500" />;
-    case "Capodecina":
-      return <Shield className="h-3.5 w-3.5 text-blue-500" />;
-    case "Capo":
-      return <Shield className="h-3.5 w-3.5 text-cyan-500" />;
-    case "Successor":
-      return <User className="h-3.5 w-3.5 text-amber-400" />;
-    default:
-      return <User className="h-3.5 w-3.5 text-muted-foreground" />;
-  }
-}
-
-function collectDeadMembers(families: FamilyPayload[]): GraveyardMember[] {
-  const byAddress = new Map<string, GraveyardMember>();
-
-  for (const family of families) {
-    const familyName = family.name?.trim() || `Family #${family.familyId}`;
-
-    for (const leader of family.leaders ?? []) {
-      if (!leader?.isDead || !leader.address) continue;
-      const key = leader.address.toLowerCase();
-      byAddress.set(key, {
-        address: leader.address,
-        name: leader.name || formatWalletAddress(leader.address),
-        familyId: family.familyId,
-        familyName,
-        level: Number(leader.level) || 0,
-        role: (leader.role as FamilyMemberRole) || "Member",
-      });
-    }
-
-    const successor = family.successor;
-    if (successor?.isDead && successor.address) {
-      const key = successor.address.toLowerCase();
-      if (!byAddress.has(key)) {
-        byAddress.set(key, {
-          address: successor.address,
-          name: successor.name || formatWalletAddress(successor.address),
-          familyId: family.familyId,
-          familyName,
-          level: Number(successor.level) || 0,
-          role: "Successor",
-        });
-      }
-    }
-
-    for (const player of family.players ?? []) {
-      if (!player?.isDead || !player.address) continue;
-      const key = player.address.toLowerCase();
-      if (byAddress.has(key)) continue;
-      byAddress.set(key, {
-        address: player.address,
-        name: player.name || formatWalletAddress(player.address),
-        familyId: family.familyId,
-        familyName,
-        level: Number(player.level) || 0,
-        role: "Member",
-      });
-    }
-  }
-
-  return Array.from(byAddress.values()).sort((a, b) => {
-    if (a.familyId !== b.familyId) return a.familyId - b.familyId;
-    return a.name.localeCompare(b.name);
-  });
-}
-
-export function GraveyardFamilyAction() {
-  const { chainConfig } = useChain();
+export function GraveyardFamilyAction({ searchQuery = "", refreshKey = 0 }: { searchQuery?: string; refreshKey?: number }) {
+  const router = useRouter();
+  const { activeChain, chainConfig } = useChain();
+  const publicClient = usePublicClient({ chainId: chainConfig.wagmiChainId });
   const familyScript = useMafiaUtilsScript("MafiaFamily");
-  const scriptLoaded = familyScript === "ready";
-  const [members, setMembers] = useState<GraveyardMember[]>([]);
+  const names = useKillRecordNames();
+  const [families, setFamilies] = useState<DeadFamily[]>([]);
+  const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [fetchError, setError] = useState<string | null>(null);
-  const error =
-    familyScript === "error" ? "Failed to load family data script" : fetchError;
-  const [loadProgress, setLoadProgress] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
 
-  const loadDeadMembers = useCallback(async () => {
-    if (!window.MafiaFamily) {
-      setError("MafiaFamily not available");
-      return;
-    }
-
+  const loadFamilies = useCallback(async () => {
+    const currentRequest = ++requestId.current;
+    if (!publicClient) { setIsLoading(false); setError("Chain RPC is unavailable."); setHasLoaded(true); return; }
+    if (familyScript === "error") { setIsLoading(false); setError("Family data helper is unavailable."); setHasLoaded(true); return; }
+    if (familyScript !== "ready") { setIsLoading(false); setError(null); setHasLoaded(false); return; }
     setIsLoading(true);
     setError(null);
-    setLoadProgress("Loading families...");
-
     try {
-      const families = (await window.MafiaFamily.getFamiliesWithPlayers({
-        chain: chainConfig.id,
-        onProgress: (info) => {
-          if (info.step === "families") {
-            setLoadProgress(`Loading families... ${info.fetched}`);
-          } else {
-            setLoadProgress(`Loading player info... ${info.fetched}`);
-          }
-        },
-      })) as FamilyPayload[];
-
-      setMembers(collectDeadMembers(families));
-      setLoadProgress("");
-    } catch (err) {
-      console.error("Failed to load graveyard:", err);
-      setError(err instanceof Error ? err.message : "Failed to load killed family");
-      setMembers([]);
+      const count = await publicClient.readContract({ address: chainConfig.addresses.mafiaFamily, abi: FAMILY_ABI, functionName: "familyIds" });
+      if (count > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Family count exceeds the supported range.");
+      const total = Number(count);
+      const dead: DeadFamily[] = [];
+      for (let start = 1; start <= total; start += 50) {
+        const end = Math.min(start + 50, total + 1);
+        const batch = await Promise.all(Array.from({ length: end - start }, (_, index) =>
+          publicClient.readContract({ address: chainConfig.addresses.mafiaFamily, abi: FAMILY_ABI, functionName: "getFamily", args: [BigInt(start + index)] }),
+        ));
+        for (const family of batch) {
+          if (!family.isDead) continue;
+          dead.push({ familyId: family.familyId, leaders: family.leaders, leaveFee: family.leaveFee, memberCount: family.memberCount, name: "" });
+        }
+      }
+      const labels = dead.length ? await getFamilyNames(activeChain, total) : new Map<number, string>();
+      if (currentRequest === requestId.current) {
+        setFamilies(dead.map((family) => ({ ...family, name: labels.get(Number(family.familyId)) || `Family #${family.familyId}` })).sort((a, b) => a.familyId < b.familyId ? 1 : a.familyId > b.familyId ? -1 : 0));
+        setPage(1);
+      }
+    } catch (cause) {
+      if (currentRequest === requestId.current) {
+        setError(cause instanceof Error ? cause.message : "Unable to load dead families.");
+        setFamilies([]);
+      }
     } finally {
-      setIsLoading(false);
-      setHasLoaded(true);
+      if (currentRequest === requestId.current) { setIsLoading(false); setHasLoaded(true); }
     }
-  }, [chainConfig.id]);
+  }, [activeChain, chainConfig.addresses.mafiaFamily, familyScript, publicClient]);
 
-  useEffect(() => {
-    if (scriptLoaded) {
-      loadDeadMembers();
-    }
-  }, [scriptLoaded, loadDeadMembers]);
+  useEffect(() => { void loadFamilies(); }, [loadFamilies, refreshKey]);
 
   const filtered = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.familyName.toLowerCase().includes(q) ||
-        m.familyId.toString().includes(q) ||
-        m.address.toLowerCase().includes(q) ||
-        m.role.toLowerCase().includes(q),
-    );
-  }, [members, searchQuery]);
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return families;
+    return families.filter((family) => {
+      const don = family.leaders[0];
+      return [family.name, family.familyId.toString(), `family #${family.familyId}`, don ? names.label(don) : "", don || ""]
+        .some((value) => value.toLowerCase().includes(query));
+    });
+  }, [families, names, searchQuery]);
 
-  const familyCount = useMemo(
-    () => new Set(members.map((m) => m.familyId)).size,
-    [members],
-  );
+  useEffect(() => { setPage(1); }, [searchQuery]);
+  const pageCount = Math.ceil(filtered.length / 20);
+  const currentPage = Math.min(page, Math.max(1, pageCount));
+  const visible = filtered.slice((currentPage - 1) * 20, currentPage * 20);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, family, role, or address..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
+      <div><h2 className="text-lg font-semibold">Fallen families</h2><p className="text-xs text-muted-foreground">{filtered.length} dead {filtered.length === 1 ? "family" : "families"}</p></div>
+      <ProfileNamesWarning error={names.error} />
+      {isLoading || (!hasLoaded && !error) ? (
+        <Card className="border-border/50 bg-card/50"><CardContent className="flex items-center justify-center gap-2 py-14 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Loading families...</CardContent></Card>
+      ) : error ? (
+        <Card className="border-red-500/30 bg-red-500/5"><CardContent className="space-y-3 py-8 text-center"><p className="text-sm text-red-400">{error}</p><Button variant="outline" size="sm" onClick={() => void loadFamilies()}>Try again</Button></CardContent></Card>
+      ) : hasLoaded && filtered.length === 0 ? (
+        <Card className="border-border/50 bg-card/50"><CardContent className="flex flex-col items-center gap-2 py-14 text-center text-sm text-muted-foreground"><Skull className="h-8 w-8 opacity-40" />{searchQuery.trim() ? "No dead families match your search." : "No dead families have been recorded yet."}</CardContent></Card>
+      ) : (
+        <div className="space-y-3">
+          {visible.map((family) => {
+            const don = family.leaders[0];
+            const hasDon = Boolean(don && don.toLowerCase() !== zeroAddress);
+            return <Card key={family.familyId.toString()} role="link" tabIndex={0} aria-label={`Open family #${family.familyId}`} onClick={() => router.push(`/families/${family.familyId}`)} onKeyDown={(event) => { if (event.key === "Enter" && event.target === event.currentTarget) router.push(`/families/${family.familyId}`); }} className="cursor-pointer border-border/50 bg-card/50 transition-colors hover:border-red-500/40 hover:bg-secondary/30">
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-5 sm:p-5">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-400"><Skull className="h-6 w-6" /></div>
+                <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-semibold">{family.name}</h3><span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-xs font-semibold text-red-400">Dead</span></div><p className="text-xs text-muted-foreground">Family #{family.familyId.toString()}</p></div>
+                <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-xs sm:min-w-52"><span className="text-muted-foreground">Don</span><span>{hasDon ? <PlayerRecordLink address={don} name={names.label(don)} /> : "—"}</span><span className="flex items-center gap-1 text-muted-foreground"><Users className="h-3 w-3" />Members</span><span className="font-mono">{family.memberCount.toString()}</span><span className="text-muted-foreground">Leave fee</span><span className="font-mono">{Number(formatEther(family.leaveFee)).toLocaleString(undefined, { maximumFractionDigits: 4 })}</span></div>
+              </CardContent>
+            </Card>;
+          })}
         </div>
-        <div className="flex items-center gap-3">
-          <p className="text-xs text-muted-foreground">
-            {members.length} dead · {familyCount}{" "}
-            {familyCount === 1 ? "family" : "families"}
-          </p>
-          <Button
-            variant="outline"
-            onClick={loadDeadMembers}
-            disabled={isLoading || !scriptLoaded}
-            className="gap-2"
-          >
-            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-            {isLoading ? "Loading..." : "Refresh"}
-          </Button>
-        </div>
-      </div>
-
-      <Card className="border-border/50 bg-card/50 backdrop-blur overflow-hidden">
-        {isLoading ? (
-          <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin text-red-400" />
-            <span className="text-sm">{loadProgress || "Loading killed family..."}</span>
-          </CardContent>
-        ) : error ? (
-          <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <Skull className="h-10 w-10 text-red-400/60" />
-            <p className="text-sm text-red-400">{error}</p>
-            <Button variant="outline" size="sm" onClick={loadDeadMembers}>
-              Try again
-            </Button>
-          </CardContent>
-        ) : filtered.length === 0 && hasLoaded ? (
-          <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <Skull className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">
-              {searchQuery.trim()
-                ? "No killed family members match your search."
-                : "No killed family members found."}
-            </p>
-          </CardContent>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead>Name</TableHead>
-                  <TableHead>Family</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Level</TableHead>
-                  <TableHead>Address</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((member) => (
-                  <TableRow
-                    key={`${member.familyId}-${member.address}`}
-                    className="border-border/30 hover:bg-secondary/30"
-                  >
-                    <TableCell>
-                      <span className="text-sm font-medium text-muted-foreground line-through decoration-red-500/70 decoration-2">
-                        {member.name}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        href={`/families/${member.familyId}`}
-                        className="text-sm text-foreground hover:text-primary hover:underline"
-                      >
-                        {member.familyName}
-                        <span className="ml-1.5 text-xs text-muted-foreground">
-                          #{member.familyId}
-                        </span>
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
-                        {roleIcon(member.role)}
-                        {member.role}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm tabular-nums text-muted-foreground">
-                      {member.level}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {formatWalletAddress(member.address)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </Card>
+      )}
+      {pageCount > 1 && !isLoading && !error && <div className="flex items-center justify-center gap-3"><Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft className="h-4 w-4" />Previous</Button><span className="text-xs text-muted-foreground">Page {currentPage} of {pageCount}</span><Button variant="outline" size="sm" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>Next<ChevronRight className="h-4 w-4" /></Button></div>}
     </div>
   );
 }

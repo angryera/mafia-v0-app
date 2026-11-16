@@ -1647,7 +1647,7 @@ export function RacingAction() {
     setRacesLoading(true);
     try {
       const races = await window.MafiaRaceLobby.getRaces({
-        chain: chainConfig.id === "bnb" ? "bnb" : "pls",
+        chain: chainConfig.id === "bnb" ? "bnb" : "pulse",
         pageSize: 200,
       });
 
@@ -1761,9 +1761,10 @@ export function RacingAction() {
     setCarsLoading(true);
     try {
       const items = await window.MafiaInventory.getItemsByCategory({
-        chain: chainConfig.id === "bnb" ? "bnb" : "pls",
+        chain: chainConfig.id === "bnb" ? "bnb" : "pulse",
         contractAddress: addresses.inventory,
         categoryId: 15, // CAR_ITEM
+        owner: address,
         maxItems: Number.MAX_SAFE_INTEGER,
       });
 

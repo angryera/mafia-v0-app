@@ -52,8 +52,14 @@ export type ChainConfig = {
         map: `0x${string}`;
         /** MafiaFamily — `getPlayerInfo(player)` for familyId / level / isDead. */
         mafiaFamily: `0x${string}`;
-        /** MafiaKill — `KillSucceeded` events; zero address until deployed. */
+        /** Legacy MafiaKill address, retained for older integrations. */
         kill: `0x${string}`;
+        /** MafiaKillInitiator — attack reads, writes, and result events. */
+        killInitiator: `0x${string}`;
+        /** MafiaKillRegistry — kill records and asset draining. */
+        killRegistry: `0x${string}`;
+        /** KillLootLens — asset previews for a kill. */
+        killLootLens: `0x${string}`;
         /** MafiaFamilyCashBank — family in-game cash treasury (deposit / withdraw). */
         familyGameCashBank: `0x${string}`;
         /** MafiaFamilyShareStake — stake MAFIA for family share benefits. */
@@ -129,6 +135,9 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             map: getAddress("0x1c88060e4509c59b4064A7a9818f64AeC41ef19E"),
             mafiaFamily: getAddress("0x1bC581fe134BdC7432eF8ba75BCeEd242F90BcD2"),
             kill: getAddress("0x0000000000000000000000000000000000000000"),
+            killInitiator: getAddress("0x69895b4E783ee8CEaF9021D92906503Ac80d418f"),
+            killRegistry: getAddress("0x92a74ea875954134b9cdCa21C7BBD21091e1b6f8"),
+            killLootLens: getAddress("0x2906190415eD522CeCbf301AAc40c9486D37752b"),
             familyGameCashBank: getAddress("0x26cDB03a72Ac5866d43184526F4586D8942739F2"),
             familyShareStake: getAddress("0xbb4E73e1809a9cB0B1a6ACC885eac10ba85a7310"),
             bulletToken: getAddress("0xe92F5d948d8764904F9703ae878a3A9e6b3952eb"),
@@ -192,6 +201,9 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             map: getAddress("0xE571Aa670EDeEBd88887eb5687576199652A714F"),
             mafiaFamily: getAddress("0x3363cf983ae23AF2D95a81bA4A39C36084f8BEc4"),
             kill: getAddress("0x0000000000000000000000000000000000000000"),
+            killInitiator: zeroAddress,
+            killRegistry: zeroAddress,
+            killLootLens: zeroAddress,
             familyGameCashBank: getAddress("0x0000000000000000000000000000000000000000"),
             familyShareStake: getAddress("0x781373e300B0A8bE65cC7365a86318157627e58C"),
             bulletToken: getAddress("0xe193484ef0f7880eb42c3bc34c1929f2e7680D64"),

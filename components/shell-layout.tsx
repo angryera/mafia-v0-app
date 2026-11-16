@@ -11,6 +11,7 @@ import { TopBar, Sidebar } from "@/components/header";
 import { JailRedirect } from "@/components/jail-redirect";
 import { getTabFromPath } from "@/lib/navigation";
 import { useCooldowns } from "@/hooks/use-cooldowns";
+import { PendingClaimsPopup } from "@/components/kill-result/pending-claims-popup";
 
 interface ShellLayoutProps {
   children: React.ReactNode;
@@ -18,6 +19,16 @@ interface ShellLayoutProps {
 
 export function ShellLayout({ children }: ShellLayoutProps) {
   const pathname = usePathname();
+  if (pathname === "/kill-start") {
+    return <main className="min-h-screen bg-background">{children}</main>;
+  }
+  if (pathname.startsWith("/kill-result/")) {
+    return <><main className="min-h-screen bg-background">{children}</main><PendingClaimsPopup /></>;
+  }
+  return <GameShellLayout pathname={pathname}>{children}</GameShellLayout>;
+}
+
+function GameShellLayout({ children, pathname }: ShellLayoutProps & { pathname: string }) {
   const activeTab = getTabFromPath(pathname);
   const { isDead, profileLoaded } = usePlayerDeadState();
   const cooldowns = useCooldowns();
@@ -38,6 +49,7 @@ export function ShellLayout({ children }: ShellLayoutProps) {
         <main className="flex-1 overflow-y-auto">
           <ProfileGate>{children}</ProfileGate>
         </main>
+        <PendingClaimsPopup />
       </div>
     );
   }
@@ -55,6 +67,7 @@ export function ShellLayout({ children }: ShellLayoutProps) {
           <ProfileGate>{children}</ProfileGate>
         </main>
       </div>
+      <PendingClaimsPopup />
     </div>
   );
 }

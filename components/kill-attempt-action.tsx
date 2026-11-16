@@ -1,272 +1,123 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { format } from "date-fns";
-import { Card, CardContent } from "@/components/ui/card";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePublicClient } from "wagmi";
+import { Heart, Loader2, RefreshCw, Search, Swords, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Swords, Loader2, RefreshCw, Zap, Heart } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useChain } from "@/components/chain-provider";
+import { formatAttackDate, formatCombatAmount, PlayerRecordLink, ProfileNamesWarning, useKillRecordNames } from "@/components/kill-record-parts";
+import { loadAttemptedAttacks, type KillAttackEntry } from "@/lib/killHistoryService";
 import { cn } from "@/lib/utils";
 
-// ────────────────────────────────────────────────────────────────
-// Data model
-//
-// A kill attempt is a non-fatal exchange: the attacker fires at the
-// victim and the victim's backfire returns fire at the attacker, but
-// neither player dies. Both bullets spent and health lost are tracked
-// per player so every figure is clearly attributed.
-// ────────────────────────────────────────────────────────────────
-interface KillAttemptEntry {
-  id: string;
-  timestamp: number; // unix seconds
-  attackerName: string;
-  victimName: string;
-  attackerBulletsSpent: number;
-  victimBulletsSpent: number;
-  attackerHealthLost: number;
-  victimHealthLost: number;
-}
-
-// ────────────────────────────────────────────────────────────────
-// Mock data source
-//
-// TODO: Replace this mock with on-chain data. Once the `MafiaKill`
-// contract is deployed, this should read its kill-attempt events (the
-// non-fatal counterpart to `KillSucceeded`) and map them into
-// KillAttemptEntry objects. Names are already included in the event
-// payload, so no address→name resolution is needed here. Map the
-// event's per-side bullet and health-delta fields onto the attacker/
-// victim fields below so each figure stays attributed to one player.
-// ────────────────────────────────────────────────────────────────
-const NOW = Math.floor(Date.now() / 1000);
-const HOUR = 3600;
-
-const MOCK_ATTEMPTS: KillAttemptEntry[] = [
-  {
-    id: "attempt-1",
-    timestamp: NOW - 2 * HOUR,
-    attackerName: "TonySoprano",
-    victimName: "PaulieWalnuts",
-    attackerBulletsSpent: 12500,
-    victimBulletsSpent: 4000,
-    attackerHealthLost: 6,
-    victimHealthLost: 38,
-  },
-  {
-    id: "attempt-2",
-    timestamp: NOW - 8 * HOUR,
-    attackerName: "VitoCorleone",
-    victimName: "Salvatore",
-    attackerBulletsSpent: 22000,
-    victimBulletsSpent: 9500,
-    attackerHealthLost: 12,
-    victimHealthLost: 54,
-  },
-  {
-    id: "attempt-3",
-    timestamp: NOW - 14 * HOUR,
-    attackerName: "Christopher",
-    victimName: "Silvio",
-    attackerBulletsSpent: 8500,
-    victimBulletsSpent: 7000,
-    attackerHealthLost: 21,
-    victimHealthLost: 15,
-  },
-  {
-    id: "attempt-4",
-    timestamp: NOW - 26 * HOUR,
-    attackerName: "Adriana",
-    victimName: "Carmela",
-    attackerBulletsSpent: 48000,
-    victimBulletsSpent: 16000,
-    attackerHealthLost: 9,
-    victimHealthLost: 72,
-  },
-  {
-    id: "attempt-5",
-    timestamp: NOW - 36 * HOUR,
-    attackerName: "Salvatore",
-    victimName: "VitoCorleone",
-    attackerBulletsSpent: 96000,
-    victimBulletsSpent: 60000,
-    attackerHealthLost: 43,
-    victimHealthLost: 51,
-  },
-  {
-    id: "attempt-6",
-    timestamp: NOW - 52 * HOUR,
-    attackerName: "PaulieWalnuts",
-    victimName: "Christopher",
-    attackerBulletsSpent: 150000,
-    victimBulletsSpent: 31000,
-    attackerHealthLost: 26,
-    victimHealthLost: 89,
-  },
-];
-
-// Simulates an async data source so the loading state can be exercised.
-function fetchKillAttempts(): Promise<KillAttemptEntry[]> {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(MOCK_ATTEMPTS), 700);
-  });
-}
-
-// ────────────────────────────────────────────────────────────────
-// Per-player cell: name + bullets spent + health lost
-// ────────────────────────────────────────────────────────────────
-function PlayerCell({
-  name,
-  bulletsSpent,
-  healthLost,
-}: {
-  name: string;
-  bulletsSpent: number;
-  healthLost: number;
-}) {
-  return (
-    <div>
-      <div className="text-sm font-medium text-foreground">{name}</div>
-      <div className="mt-1.5 flex flex-col gap-0.5 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1.5">
-          <Zap className="h-3 w-3 shrink-0 text-amber-400" />
-          <span className="font-mono tabular-nums font-medium text-foreground">
-            {bulletsSpent.toLocaleString()}
-          </span>
-          <span className="text-muted-foreground/60">bullets spent</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Heart className="h-3 w-3 shrink-0 text-red-400" />
-          <span className="font-mono tabular-nums font-medium text-red-400">
-            -{healthLost.toLocaleString()}
-          </span>
-          <span className="text-muted-foreground/60">health lost</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function KillAttemptAction() {
-  const [attempts, setAttempts] = useState<KillAttemptEntry[]>([]);
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const urlQuery = params.get("q") ?? "";
+  const [search, setSearch] = useState(urlQuery);
+  const currentInput = useRef(urlQuery);
+  const lastWrittenQuery = useRef<string | null>(null);
+  const { activeChain, chainConfig } = useChain();
+  const publicClient = usePublicClient({ chainId: chainConfig.wagmiChainId });
+  const names = useKillRecordNames();
+  const [entries, setEntries] = useState<KillAttackEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
 
-  const loadAttempts = useCallback(async () => {
+  const load = useCallback(async () => {
+    const currentRequest = ++requestId.current;
+    if (!publicClient) { setIsLoading(false); setError("Chain RPC is unavailable."); setHasLoaded(true); return; }
     setIsLoading(true);
+    setError(null);
     try {
-      const data = await fetchKillAttempts();
-      setAttempts(data);
+      const result = await loadAttemptedAttacks({ publicClient, chainId: activeChain, maxPages: 4, pageSize: 25, maxRows: 25 });
+      if (currentRequest === requestId.current) setEntries(result);
+    } catch (cause) {
+      if (currentRequest === requestId.current) {
+        setError(cause instanceof Error ? cause.message : "Unable to load attack reports.");
+        setEntries([]);
+      }
     } finally {
-      setIsLoading(false);
-      setHasLoaded(true);
+      if (currentRequest === requestId.current) { setIsLoading(false); setHasLoaded(true); }
     }
-  }, []);
+  }, [activeChain, publicClient]);
 
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    loadAttempts();
-  }, [loadAttempts]);
+    if (lastWrittenQuery.current === urlQuery) {
+      lastWrittenQuery.current = null;
+      return;
+    }
+    if (currentInput.current !== urlQuery) {
+      currentInput.current = urlQuery;
+      setSearch(urlQuery);
+    }
+  }, [urlQuery]);
+  useEffect(() => {
+    if (search === urlQuery) return;
+    const timer = window.setTimeout(() => {
+      const next = new URLSearchParams(params.toString());
+      if (search) next.set("q", search);
+      else next.delete("q");
+      const suffix = next.toString();
+      lastWrittenQuery.current = search;
+      router.replace(suffix ? `${pathname}?${suffix}` : pathname, { scroll: false });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [search, urlQuery, params, pathname, router]);
 
-  // Newest first.
-  const sortedAttempts = useMemo(
-    () => [...attempts].sort((a, b) => b.timestamp - a.timestamp),
-    [attempts]
-  );
+  const updateSearch = (value: string) => {
+    currentInput.current = value;
+    setSearch(value);
+  };
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return entries;
+    return entries.filter((entry) => {
+      const attack = entry.attack;
+      const date = formatAttackDate(attack.resolvedAt || attack.requestedAt);
+      return [names.label(attack.attacker), names.label(attack.victim), attack.attacker, attack.victim, `attack #${entry.id}`, attack.attackerKilled ? "backfire kill" : "target survived", date]
+        .some((value) => value.toLowerCase().includes(query));
+    });
+  }, [entries, names, search]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      {/* Header */}
-      <div className="text-center">
-        <div className="flex items-center justify-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
-            <Swords className="h-5 w-5" />
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Kill attempts
-          </h2>
-        </div>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-          Preview data — on-chain kill attempts where both players survived will
-          load here after the contract is deployed.
-        </p>
-      </div>
-
-      {/* Refresh control */}
-      <div className="flex justify-center">
-        <Button
-          variant="outline"
-          onClick={loadAttempts}
-          disabled={isLoading}
-          className="gap-2"
-        >
-          <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
-          {isLoading ? "Loading..." : "Refresh"}
-        </Button>
-      </div>
-
-      {/* Content */}
-      <Card className="border-border/50 bg-card/50 backdrop-blur overflow-hidden">
-        {isLoading ? (
-          <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin text-amber-400" />
-            <span className="text-sm">Loading kill attempts...</span>
-          </CardContent>
-        ) : sortedAttempts.length === 0 && hasLoaded ? (
-          <CardContent className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <Swords className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">
-              No kill attempts recorded yet.
-            </p>
-          </CardContent>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <header className="space-y-2 text-center">
+        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400"><Swords className="h-6 w-6" /></div>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">Combat / records</p>
+        <h1 className="text-3xl font-bold tracking-tight">Attempted kills</h1>
+        <p className="text-sm text-muted-foreground">Recent on-chain attacks where the target survived.</p>
+      </header>
+      <section className="space-y-4">
+        <ProfileNamesWarning error={names.error} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold">Attack reports</h2><p className="text-xs text-muted-foreground">{search.trim() ? `${filtered.length} of ${entries.length} reports match` : `${entries.length} recent reports`}</p></div><div className="flex flex-1 flex-col gap-2 sm:max-w-lg sm:flex-row"><div className="relative flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => updateSearch(event.target.value)} placeholder="Player, address, result, or attack #" aria-label="Search attack reports" className="pl-9 pr-8" />{search && <button type="button" aria-label="Clear search" onClick={() => updateSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>}</div><Button variant="outline" onClick={() => void load()} disabled={isLoading} className="gap-2"><RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />Refresh reports</Button></div></div>
+        {isLoading || (!hasLoaded && !error) ? (
+          <Card className="border-border/50 bg-card/50"><CardContent className="flex items-center justify-center gap-2 py-14 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Loading attack reports...</CardContent></Card>
+        ) : error ? (
+          <Card className="border-red-500/30 bg-red-500/5"><CardContent className="space-y-3 py-8 text-center"><p className="text-sm text-red-400">{error}</p><Button variant="outline" size="sm" onClick={() => void load()}>Try again</Button></CardContent></Card>
+        ) : hasLoaded && filtered.length === 0 ? (
+          <Card className="border-border/50 bg-card/50"><CardContent className="flex flex-col items-center gap-2 py-14 text-center text-sm text-muted-foreground"><Swords className="h-8 w-8 opacity-40" />{search.trim() ? "No reports match your search." : "There are no recent survived attacks."}</CardContent></Card>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent border-border/50">
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>Attacker</TableHead>
-                  <TableHead>Victim</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedAttempts.map((entry) => (
-                  <TableRow
-                    key={entry.id}
-                    className="border-border/30 hover:bg-secondary/30 align-top"
-                  >
-                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                      {format(
-                        new Date(entry.timestamp * 1000),
-                        "MMM d, yyyy · HH:mm"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <PlayerCell
-                        name={entry.attackerName}
-                        bulletsSpent={entry.attackerBulletsSpent}
-                        healthLost={entry.attackerHealthLost}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <PlayerCell
-                        name={entry.victimName}
-                        bulletsSpent={entry.victimBulletsSpent}
-                        healthLost={entry.victimHealthLost}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <div className="space-y-3">{filtered.map((entry) => {
+            const attack = entry.attack;
+            const href = `/kill-result/attack/${entry.id}`;
+            return <Card key={entry.id.toString()} role="link" tabIndex={0} aria-label={`Open attack #${entry.id} result`} onClick={() => router.push(href)} onKeyDown={(event) => { if (event.key === "Enter" && event.target === event.currentTarget) router.push(href); }} className="cursor-pointer border-border/50 bg-card/50 transition-colors hover:border-amber-500/40 hover:bg-secondary/30">
+              <CardContent className="space-y-3 p-4 sm:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span className="font-semibold uppercase tracking-wide">Attack #{entry.id.toString()}</span><time>{formatAttackDate(attack.resolvedAt || attack.requestedAt)}</time></div>
+                <div className="flex flex-wrap items-center gap-2 text-sm"><PlayerRecordLink address={attack.attacker} name={names.label(attack.attacker)} dead={attack.attackerKilled} /><span className="text-muted-foreground">→</span><PlayerRecordLink address={attack.victim} name={names.label(attack.victim)} /><span className={cn("ml-auto rounded-full border px-2 py-0.5 text-xs font-semibold", attack.attackerKilled ? "border-purple-500/40 bg-purple-500/10 text-purple-400" : "border-amber-500/40 bg-amber-500/10 text-amber-400")}>{attack.attackerKilled ? "Backfire kill" : "Target survived"}</span></div>
+                <div className="grid gap-x-5 gap-y-2 border-t border-border/40 pt-3 text-xs sm:grid-cols-2"><div className="flex items-center gap-2"><Zap className="h-3.5 w-3.5 text-amber-400" /><span className="text-muted-foreground">Attacker bullets</span><strong className="ml-auto font-mono text-foreground">{formatCombatAmount(attack.bullets)}</strong></div>{attack.backfireBullets > 0n && <div className="flex items-center gap-2"><Zap className="h-3.5 w-3.5 text-purple-400" /><span className="text-muted-foreground">Target bullets</span><strong className="ml-auto font-mono text-foreground">{formatCombatAmount(attack.backfireBullets)}</strong></div>}<div className="flex items-center gap-2"><Heart className="h-3.5 w-3.5 text-red-400" /><span className="text-muted-foreground">Target health lost</span><strong className="ml-auto font-mono text-foreground">{formatCombatAmount(attack.healthLost)}</strong></div>{attack.backfireHealthLost > 0n && <div className="flex items-center gap-2"><Heart className="h-3.5 w-3.5 text-red-400" /><span className="text-muted-foreground">Attacker health lost</span><strong className="ml-auto font-mono text-foreground">{formatCombatAmount(attack.backfireHealthLost)}</strong></div>}</div>
+              </CardContent>
+            </Card>;
+          })}</div>
         )}
-      </Card>
+      </section>
     </div>
   );
 }

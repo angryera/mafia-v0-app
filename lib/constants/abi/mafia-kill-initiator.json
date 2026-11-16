@@ -1,0 +1,742 @@
+[
+  {
+    "type": "event",
+    "name": "AttackInitiated",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "killer",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "victim",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "bulletAmount",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "result",
+        "type": "uint8",
+        "indexed": false
+      },
+      {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "AttackRequested",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "attackId",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "killer",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "victim",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "bulletAmount",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "revealBlock",
+        "type": "uint256",
+        "indexed": false
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "AttackFinished",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "attackId",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "killer",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "victim",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "status",
+        "type": "uint8",
+        "indexed": false
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "BackfireConfigured",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "policy",
+        "type": "uint8",
+        "indexed": false
+      },
+      {
+        "name": "fixedAmount",
+        "type": "uint256",
+        "indexed": false
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "initiateAttack",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "name": "victim",
+        "type": "address"
+      },
+      {
+        "name": "bulletAmount",
+        "type": "uint256"
+      },
+      {
+        "name": "message",
+        "type": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "attackId",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "finishAttack",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "name": "attackId",
+        "type": "uint256"
+      }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "getPendingAttack",
+    "stateMutability": "view",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hasPending",
+        "type": "bool"
+      },
+      {
+        "name": "attackId",
+        "type": "uint256"
+      },
+      {
+        "name": "revealBlock",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "getAttackTimers",
+    "stateMutability": "view",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "attackAvailableAt",
+        "type": "uint256"
+      },
+      {
+        "name": "hospitalEndsAt",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "getAttack",
+    "stateMutability": "view",
+    "inputs": [
+      {
+        "name": "attackId",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "record",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "attacker",
+            "type": "address"
+          },
+          {
+            "name": "requestBlock",
+            "type": "uint64"
+          },
+          {
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "name": "cityId",
+            "type": "uint8"
+          },
+          {
+            "name": "outcome",
+            "type": "uint8"
+          },
+          {
+            "name": "lossLevel",
+            "type": "uint8"
+          },
+          {
+            "name": "victim",
+            "type": "address"
+          },
+          {
+            "name": "requestedAt",
+            "type": "uint48"
+          },
+          {
+            "name": "resolvedAt",
+            "type": "uint48"
+          },
+          {
+            "name": "bullets",
+            "type": "uint128"
+          },
+          {
+            "name": "healthLost",
+            "type": "uint128"
+          },
+          {
+            "name": "backfireBullets",
+            "type": "uint128"
+          },
+          {
+            "name": "backfireHealthLost",
+            "type": "uint128"
+          },
+          {
+            "name": "victimKillId",
+            "type": "uint64"
+          },
+          {
+            "name": "attackerKillId",
+            "type": "uint64"
+          },
+          {
+            "name": "victimKilled",
+            "type": "bool"
+          },
+          {
+            "name": "attackerKilled",
+            "type": "bool"
+          },
+          {
+            "name": "backfire",
+            "type": "uint8"
+          },
+          {
+            "name": "backfirePolicy",
+            "type": "uint8"
+          },
+          {
+            "name": "backfireOutcome",
+            "type": "uint8"
+          },
+          {
+            "name": "backfireLossLevel",
+            "type": "uint8"
+          },
+          {
+            "name": "message",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "stats",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "attackerHealth",
+            "type": "uint128"
+          },
+          {
+            "name": "victimHealth",
+            "type": "uint128"
+          },
+          {
+            "name": "attackerDefense",
+            "type": "uint128"
+          },
+          {
+            "name": "attackerOffense",
+            "type": "uint128"
+          },
+          {
+            "name": "victimDefense",
+            "type": "uint128"
+          },
+          {
+            "name": "victimOffense",
+            "type": "uint128"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "getAttackCount",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "getAttacks",
+    "stateMutability": "view",
+    "inputs": [
+      {
+        "name": "start",
+        "type": "uint256"
+      },
+      {
+        "name": "length",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ids",
+        "type": "uint256[]"
+      },
+      {
+        "name": "list",
+        "type": "tuple[]",
+        "components": [
+          {
+            "name": "attacker",
+            "type": "address"
+          },
+          {
+            "name": "requestBlock",
+            "type": "uint64"
+          },
+          {
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "name": "cityId",
+            "type": "uint8"
+          },
+          {
+            "name": "outcome",
+            "type": "uint8"
+          },
+          {
+            "name": "lossLevel",
+            "type": "uint8"
+          },
+          {
+            "name": "victim",
+            "type": "address"
+          },
+          {
+            "name": "requestedAt",
+            "type": "uint48"
+          },
+          {
+            "name": "resolvedAt",
+            "type": "uint48"
+          },
+          {
+            "name": "bullets",
+            "type": "uint128"
+          },
+          {
+            "name": "healthLost",
+            "type": "uint128"
+          },
+          {
+            "name": "backfireBullets",
+            "type": "uint128"
+          },
+          {
+            "name": "backfireHealthLost",
+            "type": "uint128"
+          },
+          {
+            "name": "victimKillId",
+            "type": "uint64"
+          },
+          {
+            "name": "attackerKillId",
+            "type": "uint64"
+          },
+          {
+            "name": "victimKilled",
+            "type": "bool"
+          },
+          {
+            "name": "attackerKilled",
+            "type": "bool"
+          },
+          {
+            "name": "backfire",
+            "type": "uint8"
+          },
+          {
+            "name": "backfirePolicy",
+            "type": "uint8"
+          },
+          {
+            "name": "backfireOutcome",
+            "type": "uint8"
+          },
+          {
+            "name": "backfireLossLevel",
+            "type": "uint8"
+          },
+          {
+            "name": "message",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "stats",
+        "type": "tuple[]",
+        "components": [
+          {
+            "name": "attackerHealth",
+            "type": "uint128"
+          },
+          {
+            "name": "victimHealth",
+            "type": "uint128"
+          },
+          {
+            "name": "attackerDefense",
+            "type": "uint128"
+          },
+          {
+            "name": "attackerOffense",
+            "type": "uint128"
+          },
+          {
+            "name": "victimDefense",
+            "type": "uint128"
+          },
+          {
+            "name": "victimOffense",
+            "type": "uint128"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "getUserAttackCounts",
+    "stateMutability": "view",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "asAttacker",
+        "type": "uint256"
+      },
+      {
+        "name": "asVictim",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "getUserAttacks",
+    "stateMutability": "view",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "name": "asVictim",
+        "type": "bool"
+      },
+      {
+        "name": "start",
+        "type": "uint256"
+      },
+      {
+        "name": "length",
+        "type": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ids",
+        "type": "uint256[]"
+      },
+      {
+        "name": "list",
+        "type": "tuple[]",
+        "components": [
+          {
+            "name": "attacker",
+            "type": "address"
+          },
+          {
+            "name": "requestBlock",
+            "type": "uint64"
+          },
+          {
+            "name": "status",
+            "type": "uint8"
+          },
+          {
+            "name": "cityId",
+            "type": "uint8"
+          },
+          {
+            "name": "outcome",
+            "type": "uint8"
+          },
+          {
+            "name": "lossLevel",
+            "type": "uint8"
+          },
+          {
+            "name": "victim",
+            "type": "address"
+          },
+          {
+            "name": "requestedAt",
+            "type": "uint48"
+          },
+          {
+            "name": "resolvedAt",
+            "type": "uint48"
+          },
+          {
+            "name": "bullets",
+            "type": "uint128"
+          },
+          {
+            "name": "healthLost",
+            "type": "uint128"
+          },
+          {
+            "name": "backfireBullets",
+            "type": "uint128"
+          },
+          {
+            "name": "backfireHealthLost",
+            "type": "uint128"
+          },
+          {
+            "name": "victimKillId",
+            "type": "uint64"
+          },
+          {
+            "name": "attackerKillId",
+            "type": "uint64"
+          },
+          {
+            "name": "victimKilled",
+            "type": "bool"
+          },
+          {
+            "name": "attackerKilled",
+            "type": "bool"
+          },
+          {
+            "name": "backfire",
+            "type": "uint8"
+          },
+          {
+            "name": "backfirePolicy",
+            "type": "uint8"
+          },
+          {
+            "name": "backfireOutcome",
+            "type": "uint8"
+          },
+          {
+            "name": "backfireLossLevel",
+            "type": "uint8"
+          },
+          {
+            "name": "message",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "stats",
+        "type": "tuple[]",
+        "components": [
+          {
+            "name": "attackerHealth",
+            "type": "uint128"
+          },
+          {
+            "name": "victimHealth",
+            "type": "uint128"
+          },
+          {
+            "name": "attackerDefense",
+            "type": "uint128"
+          },
+          {
+            "name": "attackerOffense",
+            "type": "uint128"
+          },
+          {
+            "name": "victimDefense",
+            "type": "uint128"
+          },
+          {
+            "name": "victimOffense",
+            "type": "uint128"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "maxRankDifference",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "minBulletAmount",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "maxBulletAmount",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "attackCooldown",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "attackWaitBlocks",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "setBackfire",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      {
+        "name": "policy",
+        "type": "uint8"
+      },
+      {
+        "name": "fixedAmount",
+        "type": "uint256"
+      }
+    ],
+    "outputs": []
+  }
+]

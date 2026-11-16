@@ -133,6 +133,8 @@ export async function getEquipmentInfo(params: {
   cityId: number;
   signMsg: string;
   signature: `0x${string}`;
+  /** Preserve RPC errors for flows that must distinguish an unavailable read from an empty slot. */
+  throwOnError?: boolean;
 }): Promise<EquipmentInfo | null> {
   const {
     publicClient,
@@ -151,7 +153,8 @@ export async function getEquipmentInfo(params: {
       args: [account, cityId, signMsg, signature],
     });
     return parseEquipmentInfo(raw);
-  } catch {
+  } catch (error) {
+    if (params.throwOnError) throw error;
     return null;
   }
 }
@@ -196,6 +199,7 @@ export async function getEquippedWeaponInCity(params: {
   cityId: number;
   signMsg: string;
   signature: `0x${string}`;
+  throwOnError?: boolean;
 }): Promise<EquippedWeaponInfo | null> {
   const info = await getEquipmentInfo(params);
   if (!info) return null;

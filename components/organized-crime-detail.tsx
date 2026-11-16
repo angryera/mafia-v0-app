@@ -90,7 +90,7 @@ interface InventoryItem {
     speed: number;
     seats: number;
   };
-  /** Present when categoryId is 15 (cars); from getCarItemsByCategory */
+  /** Present when categoryId is 15 (cars); from carDamagePercent */
   damagePercent?: number;
 }
 
@@ -327,6 +327,7 @@ function JoinRoleDialog({
           chain: string;
           contractAddress: string;
           categoryId: number;
+          owner?: string;
           maxItems: number;
           onProgress?: (info: { fetched: number; batchIndex: number }) => void;
         }) => Promise<InventoryItem[]>;
@@ -355,9 +356,10 @@ function JoinRoleDialog({
       const allItems: InventoryItem[] = [];
       for (const categoryId of categoryIds) {
         const categoryItems = await MafiaInventory.getItemsByCategory({
-          chain: chainConfig.id === "bnb" ? "bnb" : "pls",
+          chain: chainConfig.id === "bnb" ? "bnb" : "pulse",
           contractAddress: addresses.inventory,
           categoryId,
+          ...(categoryId === 15 ? { owner: address } : {}),
           maxItems: 100000,
         });
         allItems.push(...categoryItems);
@@ -922,6 +924,7 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
             chain: string;
             contractAddress: string;
             categoryId: number;
+            damageItemIds?: readonly number[];
             maxItems: number;
             onProgress?: (info: { fetched: number; batchIndex: number }) => void;
           }) => Promise<InventoryItem[]>;
@@ -940,9 +943,10 @@ export function OrganizedCrimeDetail({ lobbyId }: { lobbyId: number }) {
         const all: InventoryItem[] = [];
         for (const categoryId of neededCategories) {
           const items = await MafiaInventory.getItemsByCategory({
-            chain: chainConfig.id === "bnb" ? "bnb" : "pls",
+            chain: chainConfig.id === "bnb" ? "bnb" : "pulse",
             contractAddress: addresses.inventory,
             categoryId,
+            ...(categoryId === 15 ? { damageItemIds: [...neededItemIds] } : {}),
             maxItems: 20000,
           });
           all.push(...items);

@@ -64,6 +64,10 @@ export function PlayersAction() {
   const error =
     profileScript === "error" ? "Failed to load MafiaProfile script" : fetchError;
   const [searchQuery, setSearchQuery] = useState("");
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search).get("q");
+    if (query) setSearchQuery(query);
+  }, []);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);

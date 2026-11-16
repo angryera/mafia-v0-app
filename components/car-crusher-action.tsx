@@ -235,6 +235,7 @@ export function CarCrusherAction() {
         chain: chainName,
         contractAddress: chainConfig.addresses.inventory,
         categoryId: 15,
+        owner: address,
         maxItems: 100000,
         onProgress: (info) => {
           setProgress(`Fetched ${info.fetched} items (batch ${info.batchIndex})...`);

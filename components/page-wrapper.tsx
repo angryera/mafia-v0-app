@@ -449,8 +449,29 @@ const TAB_CONFIG: Record<
   "kill-initiation": {
     title: "Kill Initiation",
     description:
-      "Target a player and spend bullets to launch your attack. Your rank must be activated, you must be out of the safehouse with a weapon equipped, and the target must be located via the Detective Agency and in your city. The initiate-kill contract call is disabled for now.",
-    codeSample: "initiateKill(address,uint256)",
+      "Target a player, commit your bullets, and finish the attack after its reveal block.",
+    codeSample: "initiateAttack(address,uint256,string) / finishAttack(uint256)",
+    contractAddress: "",
+    contractShort: "",
+  },
+  "kill-start": {
+    title: "Kill initiation opens soon.",
+    description: "The countdown to combat is running in UTC.",
+    codeSample: "",
+    contractAddress: "",
+    contractShort: "",
+  },
+  "kill-leaderboard": {
+    title: "Kill leaderboard",
+    description: "Players with the most confirmed kills in attack history.",
+    codeSample: "",
+    contractAddress: "",
+    contractShort: "",
+  },
+  "attempted-kills": {
+    title: "Attempted kills",
+    description: "Recent on-chain attacks where the target survived.",
+    codeSample: "",
     contractAddress: "",
     contractShort: "",
   },

@@ -1,0 +1,84 @@
+.stage {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 4%, rgba(172, 38, 38, .22), transparent 50%),
+    linear-gradient(130deg, #090b0e, #17191e 55%, #0b0c10);
+}
+
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .14;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, #fff 4px, transparent 5px 8px);
+}
+
+.stage::after {
+  content: "";
+  position: absolute;
+  inset: -45%;
+  z-index: -1;
+  pointer-events: none;
+  background: conic-gradient(from 10deg, transparent, rgba(190, 48, 48, .14), transparent 28%, transparent 75%, rgba(255, 196, 88, .08), transparent);
+  animation: sweep 12s linear infinite;
+}
+
+.slate {
+  transition: opacity 700ms ease;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(137, 29, 29, .2), transparent 47%),
+    #080a0d;
+}
+
+.slateExit { opacity: 0; }
+
+.portrait {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 20px 65px rgba(0, 0, 0, .5);
+  transition: transform 450ms ease, filter 450ms ease, box-shadow 450ms ease;
+}
+
+.fighterDown .portrait {
+  filter: grayscale(1) brightness(.55);
+  transform: translateY(10px) rotate(-3deg);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, .35), 0 20px 65px rgba(101, 13, 13, .28);
+}
+
+.shot .portrait {
+  animation: recoil 580ms ease-out 1;
+}
+
+.shot::after {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  inset: 18% -10%;
+  pointer-events: none;
+  background: radial-gradient(circle at center, #fff8 0, #f98e41a8 9%, transparent 35%);
+  mix-blend-mode: screen;
+  animation: flash 560ms ease-out 1;
+}
+
+.impact {
+  animation: impact 550ms ease-out 1;
+}
+
+.verdict {
+  animation: verdict 850ms cubic-bezier(.17, .67, .23, 1.1) both;
+}
+
+.healthFill { transition: width 750ms cubic-bezier(.2, .8, .2, 1); }
+
+@keyframes sweep { to { transform: rotate(360deg); } }
+@keyframes recoil { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(14px) scale(1.025); } }
+@keyframes flash { 0% { opacity: 0; transform: scale(.65); } 15% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
+@keyframes impact { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-12px); } 55% { transform: translateX(7px); } }
+@keyframes verdict { from { opacity: 0; transform: translateY(25px) scale(1.08); filter: blur(8px); } to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .stage::after, .shot .portrait, .shot::after, .impact, .verdict { animation: none; }
+  .portrait, .healthFill, .slate { transition: none; }
+}

@@ -876,6 +876,7 @@ export function GarageAction() {
         chain: "bnb",
         contractAddress: chainConfig.addresses.inventory,
         categoryId: 15,
+        owner: address,
         maxItems: 100000,
         onProgress: (info) => {
           setProgress(info);

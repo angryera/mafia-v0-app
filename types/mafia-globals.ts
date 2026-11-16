@@ -6,6 +6,8 @@ declare global {
       chain: string;
       contractAddress: string;
       categoryId: number;
+      owner?: string;
+      damageItemIds?: readonly number[];
       maxItems?: number;
       onProgress?: (info: { fetched: number; batchIndex: number }) => void;
     }) => Promise<any[]>;
