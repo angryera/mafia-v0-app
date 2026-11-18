@@ -8,3 +8,4 @@ export * from "./casino";
 export * from "./family";
 export * from "./organized-crime";
 export * from "./markets";
+export * from "./hitlist";

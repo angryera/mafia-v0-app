@@ -71,6 +71,7 @@ const CRIME_SECTION: readonly NavItem[] = [
 const KILL_SECTION: readonly NavItem[] = [
   { id: "killskill", label: "Kill Skill", icon: <Swords className="h-4 w-4" /> },
   { id: "kill-initiation", label: "Kill Initiation", icon: <Target className="h-4 w-4" /> },
+  { id: "hitlist", label: "Hitlist", icon: <Crosshair className="h-4 w-4" /> },
   { id: "backfire-settings", label: "Backfire", icon: <Target className="h-4 w-4" /> },
   { id: "graveyard", label: "Graveyard", icon: <Skull className="h-4 w-4" /> },
   { id: "kill-leaderboard", label: "Kill Leaderboard", icon: <Trophy className="h-4 w-4" /> },

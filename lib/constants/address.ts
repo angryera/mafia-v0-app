@@ -91,6 +91,8 @@ export type ChainConfig = {
          * Do not invent an address for a chain that has no deployment.
          */
         profileUnbox: `0x${string}`;
+        /** MafiaHitlist — player/protocol bounties; kill payouts happen inside the kill tx. */
+        hitlist: `0x${string}`;
     };
 };
 
@@ -168,6 +170,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             giManager: getAddress("0xe2f0DaCf0A32B77c1d4F07C8642E90b260E66A91"),
             rebirth: getAddress("0x5D20a828693058C5370C6dCb54297f41eC3e2868"),
             profileUnbox: getAddress("0x62523f9e93432ad4DB2903233B3463Ba64D4D911"),
+            hitlist: getAddress("0xF711061254AaD9aFa097c269c45F4DbdFa8d756E"),
         },
     },
     pulse: {
@@ -243,6 +246,7 @@ export const CHAIN_CONFIGS: Record<ChainId, ChainConfig> = {
             giManager: getAddress("0xe327d64a24C1159aA5AF4df9171c5882CC9F10ff"),
             rebirth: getAddress("0x9921C0eB6154cFc8a1C3331816Fb5B90dC06A3a7"),
             profileUnbox: getAddress("0xE24C2629A9d898a3c00c7082EC261b2c36A9131F"),
+            hitlist: getAddress("0x5503c1Cc1C4d283Aa90D32B63F9D62Cdb065b725"),
         },
     },
 };

@@ -454,6 +454,15 @@ const TAB_CONFIG: Record<
     contractAddress: "",
     contractShort: "",
   },
+  hitlist: {
+    title: "Hitlist",
+    description:
+      "Put a cash bounty on a player, settle expired rewards, or reveal a protocol listing. Kill rewards pay automatically inside the kill transaction.",
+    codeSample:
+      "createListing(address,uint256,uint48) / requestProtocolListing() / fulfillProtocolListing() / settle(uint256)",
+    contractAddress: "0xF711061254AaD9aFa097c269c45F4DbdFa8d756E",
+    contractShort: "0xF711...756E",
+  },
   "kill-start": {
     title: "Kill initiation opens soon.",
     description: "The countdown to combat is running in UTC.",

@@ -34,6 +34,7 @@ const CONTRACT_REGISTRY = [
       { key: "killInitiator", label: "Kill Initiator" },
       { key: "killRegistry", label: "Kill Registry" },
       { key: "killLootLens", label: "Kill Loot Lens" },
+      { key: "hitlist", label: "Hitlist" },
       { key: "rebirth", label: "Rebirth" },
       { key: "storyMode", label: "Story Mode" },
       { key: "weeklyMission", label: "Weekly Missions" },

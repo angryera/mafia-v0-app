@@ -8,3 +8,4 @@ export * from "./cities";
 export * from "./items";
 export * from "./casino";
 export * from "./exchange";
+export * from "./admins";

@@ -66,6 +66,7 @@ export const TABS = [
   "attempted-kills",
   "kill-outcome",
   "kill-attempt",
+  "hitlist",
   "rebirth",
   "unstake-mafia",
 ] as const;
